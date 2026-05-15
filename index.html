@@ -37,6 +37,14 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 .hdr-right{display:flex;align-items:center;gap:10px}
 .sel{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);padding:7px 12px;font-family:var(--font);font-size:13px;cursor:pointer;outline:none}
 .sel:focus{border-color:var(--blue)}
+/* ---- sync indicator ---- */
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;transition:background .3s}
+.sync-dot.syncing{background:var(--amber);animation:pulseDot 1s infinite}
+.sync-dot.err{background:var(--red)}
+@keyframes pulseDot{0%,100%{opacity:1}50%{opacity:.3}}
+/* ---- offline banner ---- */
+#offlineBanner{display:none;background:rgba(245,158,11,.15);border-bottom:1px solid var(--amber-bd);padding:6px 16px;text-align:center;font-size:12px;color:var(--amber);position:sticky;top:54px;z-index:98}
+#offlineBanner.show{display:block}
 .nav{display:flex;gap:2px;background:var(--bg2);border-radius:var(--r2);padding:3px;margin-bottom:16px;position:sticky;top:54px;z-index:99;border:1px solid var(--border)}
 .nav-btn{flex:1;padding:9px 6px;border:none;background:transparent;color:var(--text3);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;border-radius:var(--r);transition:all .12s;white-space:nowrap;display:flex;flex-direction:column;align-items:center;gap:2px}
 .nav-btn i{font-size:17px}
@@ -64,8 +72,11 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 .b-pal{background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-bd)}
 .b-done{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)}
 .b-live{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);animation:pulse 2s infinite}
+.b-saving{background:rgba(245,158,11,.15);color:var(--amber);border:1px solid var(--amber-bd);animation:pulse 1.2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-.btn{padding:9px 16px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:5px}
+
+/* ---- Action buttons — bigger & clearer ---- */
+.btn{padding:9px 16px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:5px;position:relative;overflow:hidden}
 .btn:hover{background:var(--bg4);border-color:var(--text3)}.btn:active{transform:scale(.97)}
 .btn-blue{background:var(--blue);color:#fff;border-color:var(--blue)}.btn-blue:hover{background:var(--blue2)}
 .btn-green{background:var(--green);color:#fff;border-color:var(--green)}
@@ -73,8 +84,12 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 .btn-purple{background:var(--purple);color:#fff;border-color:var(--purple)}
 .btn-teal{background:var(--teal);color:#fff;border-color:var(--teal)}
 .btn-sm{padding:5px 10px;font-size:11px}
-.btn-block{width:100%;justify-content:center;padding:11px}
-.btn:disabled{opacity:.3;cursor:not-allowed;pointer-events:none}
+.btn-lg{padding:14px 20px;font-size:14px;border-radius:10px}
+.btn-block{width:100%;justify-content:center;padding:13px}
+.btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+/* saving shimmer */
+.btn.saving::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);animation:shimmer 1s infinite}
+@keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 .action-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .fg{margin-bottom:10px}
 .fl{display:block;font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600}
@@ -108,13 +123,38 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 .modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;padding:24px}
 .empty{text-align:center;padding:32px 20px;color:var(--text3);font-size:13px}
 .empty i{font-size:28px;display:block;margin-bottom:6px;opacity:.4}
-.we{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);padding:12px 14px;margin-bottom:6px}
-.we-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:4px}
+
+/* ---- Work entry card — improved ---- */
+.we{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);padding:14px 16px;margin-bottom:8px;transition:border-color .2s,opacity .2s}
+.we.optimistic{border-color:var(--amber-bd);opacity:.92}
+.we.optimistic-done{border-color:var(--green-bd)}
+.we-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:4px}
 .we-id{font-family:var(--mono);font-weight:700;font-size:13px}
 .we-info{font-size:12px;color:var(--text2)}
+.we-meta{display:flex;gap:12px;font-size:11px;color:var(--text3);margin-top:4px;flex-wrap:wrap}
+.we-meta span{display:flex;align-items:center;gap:3px}
+
 .loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
 .spinner{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---- Pending queue counter badge ---- */
+.nav-badge{position:absolute;top:3px;right:8px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center}
+
+/* ---- Step indicator in pick form ---- */
+.step-ind{display:flex;gap:0;margin-bottom:16px;border-radius:var(--r);overflow:hidden;border:1px solid var(--border2)}
+.step-ind-item{flex:1;padding:8px 4px;text-align:center;font-size:10px;font-weight:700;color:var(--text3);background:var(--bg3);border-right:1px solid var(--border2);letter-spacing:.04em;text-transform:uppercase}
+.step-ind-item:last-child{border-right:none}
+.step-ind-item.active{background:var(--blue-bg);color:var(--blue)}
+.step-ind-item.done{background:var(--green-bg);color:var(--green)}
+
+/* ---- Quick status bar ---- */
+.status-bar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;font-size:12px;flex-wrap:wrap}
+.status-bar-item{display:flex;align-items:center;gap:5px;color:var(--text2)}
+.status-bar-sep{color:var(--border2);font-size:16px}
+
+/* bigger action buttons in work cards */
+.btn-action{padding:12px 18px;font-size:13px;font-weight:700;border-radius:var(--r);letter-spacing:.02em}
 </style>
 </head>
 <body>
@@ -123,6 +163,8 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
   <div style="font-size:13px;color:var(--text2)">Connecting to server...</div>
 </div>
 
+<div id="offlineBanner"><i class="ri-wifi-off-line"></i> Offline — changes will sync when reconnected</div>
+
 <div class="shell" style="display:none" id="appShell">
   <header class="hdr">
     <div class="hdr-left">
@@ -130,17 +172,18 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
+      <span id="syncDot" class="sync-dot" title="Sync status"></span>
       <select class="sel" id="selW" onchange="swW()"></select>
       <button class="btn btn-sm" onclick="refreshData()" title="Refresh"><i class="ri-refresh-line"></i></button>
     </div>
   </header>
   <nav class="nav">
-    <button class="nav-btn on" data-p="dash"><i class="ri-dashboard-3-line"></i>Dashboard</button>
-    <button class="nav-btn" data-p="pick"><i class="ri-route-line"></i>Picking</button>
-    <button class="nav-btn" data-p="insp"><i class="ri-search-eye-line"></i>Inspection</button>
-    <button class="nav-btn" data-p="pall"><i class="ri-stack-line"></i>Palletizing</button>
-    <button class="nav-btn" data-p="kpi"><i class="ri-bar-chart-grouped-line"></i>KPI</button>
-    <button class="nav-btn" data-p="mgr"><i class="ri-shield-keyhole-line"></i>Manager</button>
+    <button class="nav-btn on" data-p="dash" style="position:relative"><i class="ri-dashboard-3-line"></i>Dashboard</button>
+    <button class="nav-btn" data-p="pick" style="position:relative"><i class="ri-route-line"></i>Picking</button>
+    <button class="nav-btn" data-p="insp" style="position:relative"><i class="ri-search-eye-line"></i>Inspection</button>
+    <button class="nav-btn" data-p="pall" style="position:relative"><i class="ri-stack-line"></i>Palletizing</button>
+    <button class="nav-btn" data-p="kpi" style="position:relative"><i class="ri-bar-chart-grouped-line"></i>KPI</button>
+    <button class="nav-btn" data-p="mgr" style="position:relative"><i class="ri-shield-keyhole-line"></i>Manager</button>
   </nav>
   <div class="pg on" id="pg-dash">
     <div id="dMetrics"></div>
@@ -251,12 +294,42 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbw-rEUoQz5c38k0I7P6ykyh
 let S = { orders: [], works: [], workers: [], pin: '1234' };
 let CW = '';
 let _mgrOK = false;
-let _busy = false;
+// Optimistic update queue — tracks in-flight ops
+let _pending = {};  // key: entryId/tempId → { op, data, originalState }
+let _syncCount = 0; // number of in-flight requests
 
 // ==========================================
-// API CALLS
+// SYNC INDICATOR
 // ==========================================
-// JSONP-style API call (Apps Script CORS workaround)
+function setSyncing(active) {
+  const dot = document.getElementById('syncDot');
+  if (!dot) return;
+  if (active) dot.className = 'sync-dot syncing';
+  else dot.className = 'sync-dot';
+}
+function setSyncErr() {
+  const dot = document.getElementById('syncDot'); if (dot) dot.className = 'sync-dot err';
+  setTimeout(() => { const d = document.getElementById('syncDot'); if(d) d.className='sync-dot'; }, 4000);
+}
+
+// ==========================================
+// UTILS — local time helpers
+// ==========================================
+function nowHHmm() {
+  // Returns current time in LA timezone HH:mm
+  try {
+    const s = new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12:false, timeZone:'America/Los_Angeles' });
+    return s;
+  } catch(e) {
+    const d = new Date();
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+}
+function genTempId() { return 'W' + Date.now() + Math.floor(Math.random()*1000); }
+
+// ==========================================
+// API CALLS — JSONP
+// ==========================================
 let _jsonpCounter = 0;
 function apiCall(url) {
   return new Promise((resolve, reject) => {
@@ -266,17 +339,15 @@ function apiCall(url) {
       if (script.parentNode) script.parentNode.removeChild(script);
       reject(new Error('Request timeout'));
     }, 30000);
-
     window[callbackName] = function(data) {
       clearTimeout(timeout);
       delete window[callbackName];
       if (script.parentNode) script.parentNode.removeChild(script);
       resolve(data);
     };
-
     const script = document.createElement('script');
-    const separator = url.includes('?') ? '&' : '?';
-    script.src = url + separator + 'callback=' + callbackName;
+    const sep = url.includes('?') ? '&' : '?';
+    script.src = url + sep + 'callback=' + callbackName;
     script.onerror = function() {
       clearTimeout(timeout);
       delete window[callbackName];
@@ -287,8 +358,34 @@ function apiCall(url) {
   });
 }
 
+// Fire-and-forget background save — never blocks UI
+async function apiBackground(op, data, onSuccess, onError) {
+  _syncCount++;
+  setSyncing(true);
+  try {
+    const url = API_URL + '?op=' + encodeURIComponent(op) + '&data=' + encodeURIComponent(JSON.stringify(data || {}));
+    const result = await apiCall(url);
+    if (result && result.ok) {
+      if (onSuccess) onSuccess(result);
+    } else {
+      console.error('API bg error:', result);
+      setSyncErr();
+      if (onError) onError(result);
+    }
+    return result;
+  } catch (err) {
+    console.error('API bg exception:', err);
+    setSyncErr();
+    if (onError) onError({ error: err.message });
+    return { ok: false, error: err.message };
+  } finally {
+    _syncCount--;
+    if (_syncCount <= 0) { _syncCount = 0; setSyncing(false); }
+  }
+}
+
+// Blocking API call — for data load, settings
 async function api(op, data) {
-  _busy = true;
   try {
     const url = API_URL + '?op=' + encodeURIComponent(op) + '&data=' + encodeURIComponent(JSON.stringify(data || {}));
     const result = await apiCall(url);
@@ -297,7 +394,7 @@ async function api(op, data) {
     console.error('API error:', err);
     toast('Server error: ' + err.message, 'err');
     return { ok: false, error: err.message };
-  } finally { _busy = false; }
+  }
 }
 
 async function apiGet(op) {
@@ -317,8 +414,19 @@ async function loadData() {
     S.works = result.works || [];
     S.workers = result.workers || [];
     S.pin = result.pin || '1234';
+    // Re-apply any optimistic states still pending
+    applyPendingOptimistic();
   }
   return result.ok;
+}
+
+// Re-apply pending optimistic updates on top of fresh server data
+function applyPendingOptimistic() {
+  for (const key in _pending) {
+    const p = _pending[key];
+    const w = S.works.find(x => x.id === key);
+    if (w && p.patch) Object.assign(w, p.patch);
+  }
 }
 
 async function refreshData() {
@@ -335,7 +443,8 @@ async function refreshData() {
 function toast(m, c) {
   const t = document.getElementById('toast');
   t.textContent = m; t.className = 'toast show' + (c ? ' ' + c : '');
-  setTimeout(() => t.className = 'toast', 2800);
+  clearTimeout(t._to);
+  t._to = setTimeout(() => t.className = 'toast', 2800);
 }
 function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
 
@@ -382,6 +491,26 @@ function popW() {
   CW = s.value;
 }
 function swW() { CW = document.getElementById('selW').value; _mgrOK = false; go(curP()); }
+
+// Update nav badges (pending queue counts)
+function updateNavBadges() {
+  // Inspection badge: entries pending inspection for current worker
+  const inspPending = S.works.filter(w => w.w === CW && w.e && !w.is).length;
+  const pallPending = S.works.filter(w => w.w === CW && w.ie && !w.ps).length;
+  const setB = (p, n) => {
+    const btn = document.querySelector(`[data-p="${p}"]`);
+    if (!btn) return;
+    let b = btn.querySelector('.nav-badge');
+    if (n > 0) {
+      if (!b) { b = document.createElement('span'); b.className='nav-badge'; btn.appendChild(b); }
+      b.textContent = n;
+    } else {
+      if (b) b.remove();
+    }
+  };
+  setB('insp', inspPending);
+  setB('pall', pallPending);
+}
 
 // ==========================================
 // NAV
@@ -494,16 +623,20 @@ window.saveEdits = async function(oid) {
       const newSku = parseInt(sEl.value) || w.sku;
       const newQty = parseInt(qEl.value) || w.qty;
       if (newSku !== w.sku || newQty !== w.qty) {
-        await api('editEntry', { entryId: w.id, items: newSku, qty: newQty });
+        // Optimistic update local state
+        w.sku = newSku; w.qty = newQty;
+        apiBackground('editEntry', { entryId: w.id, items: newSku, qty: newQty });
       }
     }
   }
   toast('Updated', 'ok');
   closeModal();
-  await refreshData();
+  go(curP());
 };
 
-// PICKING
+// ==========================================
+// PICKING  — with Optimistic Update
+// ==========================================
 let _pickSel = '';
 R.pick = function() {
   const myActive = S.works.filter(w => w.w === CW && w.s && !w.e);
@@ -520,23 +653,37 @@ R.pick = function() {
         <div class="fg"><label class="fl">SKU count (Items)</label><input class="fi" type="number" id="pSku" placeholder="e.g. 15" min="1"></div>
         <div class="fg"><label class="fl">Total QTY</label><input class="fi" type="number" id="pQty" placeholder="e.g. 120" min="1"></div>
       </div>
-      <button class="btn btn-blue btn-block" onclick="startPick()"><i class="ri-play-line"></i> Start picking</button></div>`;
+      <button class="btn btn-blue btn-block btn-lg" id="btnStartPick" onclick="startPick()"><i class="ri-play-circle-line"></i> Start Picking</button></div>`;
     const sel = document.getElementById('pOrd');
     if (sel) sel.addEventListener('change', pOrdChg);
     if (_pickSel) pOrdChg();
   }
+  // Render active picking cards
   document.getElementById('pickMy').innerHTML = myActive.length ? myActive.map(w =>
-    `<div class="we" style="border-color:var(--blue-bd)"><div class="we-top"><span class="we-id">${w.oid} · SKU ${w.sku} Items / ${w.qty} QTY</span><span class="badge b-live">Picking</span></div>
-      <div class="we-info" style="margin-bottom:8px">Started: ${w.s}</div>
-      <button class="btn btn-green btn-block" onclick="endPick('${w.id}')"><i class="ri-stop-line"></i> End picking</button></div>`
+    `<div class="we${_pending[w.id] ? ' optimistic' : ''}" id="we_${w.id}">
+      <div class="we-top">
+        <span class="we-id">${w.oid}</span>
+        ${_pending[w.id] ? '<span class="badge b-saving"><i class="ri-loader-4-line"></i> Saving...</span>' : '<span class="badge b-live"><i class="ri-record-circle-line"></i> Picking</span>'}
+      </div>
+      <div class="we-meta">
+        <span><i class="ri-box-3-line"></i> ${w.sku} items</span>
+        <span><i class="ri-stack-line"></i> ${w.qty} QTY</span>
+        <span><i class="ri-time-line"></i> Started: ${w.s}</span>
+      </div>
+      <button class="btn btn-green btn-block btn-action" style="margin-top:12px" onclick="endPick('${w.id}')" ${_pending[w.id]?'disabled':''}>
+        <i class="ri-checkbox-circle-line"></i> End Picking
+      </button>
+    </div>`
   ).join('') : '<div style="font-size:12px;color:var(--text3);padding:6px 0">No active picking</div>';
   updatePickAll();
 };
+
 function updatePickAll() {
   if (!_pickSel) { document.getElementById('pickAll').innerHTML = ''; return; }
   const all = S.works.filter(w => w.oid === _pickSel);
   document.getElementById('pickAll').innerHTML = all.length ? `<div class="card" style="padding:0;overflow:hidden"><table class="tbl"><tr><th>Worker</th><th>Items</th><th>QTY</th><th>Status</th><th>Start</th><th>End</th></tr>${all.map(w => `<tr><td>${w.w}</td><td class="mono">${w.sku}</td><td class="mono">${w.qty}</td><td>${w.e?'<span class="badge b-done">Done</span>':'<span class="badge b-live">Active</span>'}</td><td class="mono">${w.s||'-'}</td><td class="mono">${w.e||'-'}</td></tr>`).join('')}</table></div>` : '';
 }
+
 function pOrdChg() {
   const sel = document.getElementById('pOrd'); if (!sel) return;
   _pickSel = sel.value;
@@ -548,6 +695,7 @@ function pOrdChg() {
   info.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;margin-bottom:10px;font-size:12px"><span style="font-weight:600">${o.ch} · ${o.cu}</span> · ${act} worker(s) active · Items ${ws.reduce((s,w)=>s+w.sku,0)} / QTY ${ws.reduce((s,w)=>s+w.qty,0)}</div>`;
   updatePickAll();
 }
+
 window.startPick = async function() {
   const oid = document.getElementById('pOrd')?.value;
   const sku = parseInt(document.getElementById('pSku')?.value);
@@ -555,32 +703,119 @@ window.startPick = async function() {
   if (!oid) { toast('Select an order', 'err'); return; }
   if (!sku || sku < 1) { toast('Enter item count', 'err'); return; }
   if (!qty || qty < 1) { toast('Enter total QTY', 'err'); return; }
-  toast('Starting pick...', '');
-  const res = await api('startPick', { orderId: oid, worker: CW, items: sku, qty: qty });
-  if (res.ok) { _pickSel = oid; toast('Picking started!', 'ok'); await loadData(); R.pick(); }
-  else toast('Error: ' + res.error, 'err');
-};
-window.endPick = async function(wid) {
-  toast('Ending pick...', '');
-  const res = await api('endPick', { entryId: wid });
-  if (res.ok) { toast('Picking done → Inspection queue', 'ok'); await loadData(); R.pick(); }
-  else toast('Error: ' + res.error, 'err');
+
+  // ── OPTIMISTIC UPDATE ──
+  const tempId = genTempId();
+  const hhmm = nowHHmm();
+  const newEntry = { id: tempId, oid, w: CW, sku, qty, s: hhmm, e: '', is: '', ie: '', ps: '', pe: '', pickMin: '', inspMin: '', pallMin: '', totalMin: '' };
+  S.works.push(newEntry);
+  _pickSel = oid;
+  _pending[tempId] = { patch: null };
+  toast('✓ Picking started!', 'ok');
+  R.pick(); // instant UI update
+
+  // ── BACKGROUND SAVE ──
+  apiBackground('startPick', { orderId: oid, worker: CW, items: sku, qty: qty },
+    (res) => {
+      // Replace temp entry with server-assigned ID
+      const idx = S.works.findIndex(w => w.id === tempId);
+      if (idx >= 0 && res.entryId) {
+        S.works[idx].id = res.entryId;
+        if (res.pickStart) S.works[idx].s = res.pickStart;
+      }
+      delete _pending[tempId];
+      if (_pending[res.entryId]) delete _pending[res.entryId];
+      R.pick();
+    },
+    (err) => {
+      // Rollback
+      S.works = S.works.filter(w => w.id !== tempId);
+      delete _pending[tempId];
+      toast('⚠ Failed to save — please try again', 'err');
+      R.pick();
+    }
+  );
 };
 
-// INSPECTION
+window.endPick = async function(wid) {
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  if (_pending[wid]) return; // already in-flight
+
+  // ── OPTIMISTIC UPDATE ──
+  const hhmm = nowHHmm();
+  const original = { e: w.e };
+  w.e = hhmm;
+  _pending[wid] = { patch: { e: hhmm } };
+  toast('✓ Picking done → Inspection queue', 'ok');
+  updateNavBadges();
+  R.pick();
+
+  // ── BACKGROUND SAVE ──
+  apiBackground('endPick', { entryId: wid },
+    (res) => {
+      if (res.pickEnd) w.e = res.pickEnd;
+      delete _pending[wid];
+      R.pick();
+    },
+    (err) => {
+      // Rollback
+      Object.assign(w, original);
+      delete _pending[wid];
+      toast('⚠ Failed to save — please try again', 'err');
+      R.pick();
+    }
+  );
+};
+
+// ==========================================
+// INSPECTION  — with Optimistic Update
+// ==========================================
 R.insp = function() {
   const myPending = S.works.filter(w => w.w === CW && w.e && !w.is);
   const el = document.getElementById('inspMyForm');
-  el.innerHTML = myPending.length ? `<div class="card"><div class="card-t"><i class="ri-search-eye-line" style="color:var(--purple)"></i> My entries — Ready for inspection</div>${myPending.map(w => {const o=S.orders.find(x=>x.id===w.oid);return`<div class="we" style="margin-bottom:6px"><div class="we-top"><span class="we-id">${w.oid}</span><span style="font-size:11px;color:var(--text2)">${o?.ch}·${o?.cu} · Items ${w.sku} / QTY ${w.qty}</span></div><button class="btn btn-purple btn-block btn-sm" style="margin-top:6px" onclick="startInspEntry('${w.id}')"><i class="ri-play-line"></i> Start inspection</button></div>`}).join('')}</div>` : '';
+  el.innerHTML = myPending.length ? `<div class="card"><div class="card-t"><i class="ri-search-eye-line" style="color:var(--purple)"></i> My entries — Ready for inspection</div>${myPending.map(w => {
+    const o = S.orders.find(x => x.id === w.oid);
+    const inFlight = !!_pending[w.id];
+    return`<div class="we${inFlight?' optimistic':''}">
+      <div class="we-top">
+        <span class="we-id">${w.oid}</span>
+        ${inFlight ? '<span class="badge b-saving"><i class="ri-loader-4-line"></i> Saving...</span>' : '<span class="badge b-insp">Ready</span>'}
+      </div>
+      <div class="we-meta">
+        <span><i class="ri-store-2-line"></i> ${o?.ch}·${o?.cu}</span>
+        <span><i class="ri-box-3-line"></i> ${w.sku} items / ${w.qty} QTY</span>
+        <span><i class="ri-time-line"></i> Pick: ${w.s} → ${w.e}</span>
+      </div>
+      <button class="btn btn-purple btn-block btn-action" style="margin-top:12px" onclick="startInspEntry('${w.id}')" ${inFlight?'disabled':''}>
+        <i class="ri-play-circle-line"></i> Start Inspection
+      </button>
+    </div>`
+  }).join('')}</div>` : '';
+
   const sel = document.getElementById('inspOrd'), cur = sel.value;
   const avail = S.orders.filter(o => S.works.some(w => w.oid === o.id && w.e && !w.is && w.w !== CW));
   sel.innerHTML = '<option value="">— Select order —</option>' + avail.map(o => `<option value="${o.id}"${o.id===cur?' selected':''}>${o.id}</option>`).join('');
   sel.onchange = updateInspInfo; updateInspInfo();
+
   const active = S.works.filter(w => w.is && !w.ie);
-  document.getElementById('inspList').innerHTML = active.length ? active.map(w =>
-    `<div class="we" style="border-color:var(--purple-bd)"><div class="we-top"><span class="we-id">${w.oid} · ${w.w}</span><span class="badge b-live">Inspecting</span></div><div class="we-info" style="margin-bottom:8px">Items ${w.sku} / QTY ${w.qty} · Started: ${w.is}</div><button class="btn btn-green btn-block" onclick="endInsp('${w.id}')"><i class="ri-stop-line"></i> End inspection</button></div>`
-  ).join('') : '<div style="font-size:12px;color:var(--text3);padding:6px 0">No active inspections</div>';
+  document.getElementById('inspList').innerHTML = active.length ? active.map(w => {
+    const inFlight = !!_pending[w.id];
+    return `<div class="we${inFlight?' optimistic-done':''}" style="border-color:var(--purple-bd)">
+      <div class="we-top">
+        <span class="we-id">${w.oid} · ${w.w}</span>
+        ${inFlight ? '<span class="badge b-saving">Saving...</span>' : '<span class="badge b-live">Inspecting</span>'}
+      </div>
+      <div class="we-meta">
+        <span><i class="ri-box-3-line"></i> ${w.sku} items / ${w.qty} QTY</span>
+        <span><i class="ri-time-line"></i> Started: ${w.is}</span>
+      </div>
+      <button class="btn btn-green btn-block btn-action" style="margin-top:12px" onclick="endInsp('${w.id}')" ${inFlight?'disabled':''}>
+        <i class="ri-checkbox-circle-line"></i> End Inspection
+      </button>
+    </div>`;
+  }).join('') : '<div style="font-size:12px;color:var(--text3);padding:6px 0">No active inspections</div>';
 };
+
 function updateInspInfo() {
   const oid = document.getElementById('inspOrd')?.value;
   const info = document.getElementById('inspInfo'), acts = document.getElementById('inspActs');
@@ -588,38 +823,109 @@ function updateInspInfo() {
   const ws = S.works.filter(w => w.oid === oid && w.e && w.w !== CW);
   const pending = ws.filter(w => !w.is).length;
   info.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;margin-bottom:8px;font-size:12px">${ws.length} entries · ${pending} pending</div>`;
-  acts.innerHTML = pending > 0 ? `<button class="btn btn-purple btn-block" onclick="startInspBatch('${oid}')"><i class="ri-play-line"></i> Start inspection (${pending})</button>` : '<div style="font-size:12px;color:var(--green)">All inspected</div>';
+  acts.innerHTML = pending > 0 ? `<button class="btn btn-purple btn-block btn-action" onclick="startInspBatch('${oid}')"><i class="ri-play-circle-line"></i> Start Inspection (${pending})</button>` : '<div style="font-size:12px;color:var(--green)">All inspected</div>';
 }
+
 window.startInspEntry = async function(wid) {
-  toast('Starting inspection...', '');
-  const res = await api('startInsp', { entryId: wid });
-  if (res.ok) { toast('Inspection started!', 'ok'); await loadData(); R.insp(); } else toast('Error: ' + res.error, 'err');
-};
-window.startInspBatch = async function(oid) {
-  const ws = S.works.filter(w => w.oid === oid && w.e && !w.is && w.w !== CW);
-  for (const w of ws) await api('startInsp', { entryId: w.id });
-  toast('Inspection started!', 'ok'); await loadData(); R.insp();
-};
-window.endInsp = async function(wid) {
-  toast('Ending inspection...', '');
-  const res = await api('endInsp', { entryId: wid });
-  if (res.ok) { toast('Inspection done', 'ok'); await loadData(); R.insp(); } else toast('Error: ' + res.error, 'err');
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  if (_pending[wid]) return;
+
+  // ── OPTIMISTIC ──
+  const hhmm = nowHHmm();
+  const original = { is: w.is };
+  w.is = hhmm;
+  _pending[wid] = { patch: { is: hhmm } };
+  toast('✓ Inspection started!', 'ok');
+  updateNavBadges();
+  R.insp();
+
+  apiBackground('startInsp', { entryId: wid },
+    (res) => { if (res.inspStart) w.is = res.inspStart; delete _pending[wid]; R.insp(); },
+    () => { Object.assign(w, original); delete _pending[wid]; toast('⚠ Failed to save — please try again', 'err'); R.insp(); }
+  );
 };
 
-// PALLETIZING
+window.startInspBatch = async function(oid) {
+  const ws = S.works.filter(w => w.oid === oid && w.e && !w.is && w.w !== CW);
+  if (!ws.length) return;
+  const hhmm = nowHHmm();
+  ws.forEach(w => { w.is = hhmm; _pending[w.id] = { patch: { is: hhmm } }; });
+  toast(`✓ Inspection started (${ws.length})!`, 'ok');
+  updateNavBadges(); R.insp();
+  for (const w of ws) {
+    apiBackground('startInsp', { entryId: w.id },
+      (res) => { if (res.inspStart) w.is = res.inspStart; delete _pending[w.id]; },
+      () => { w.is = ''; delete _pending[w.id]; toast('⚠ Partial save failure', 'err'); }
+    );
+  }
+};
+
+window.endInsp = async function(wid) {
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  if (_pending[wid]) return;
+
+  const hhmm = nowHHmm();
+  const original = { ie: w.ie };
+  w.ie = hhmm;
+  _pending[wid] = { patch: { ie: hhmm } };
+  toast('✓ Inspection done → Palletizing queue', 'ok');
+  updateNavBadges(); R.insp();
+
+  apiBackground('endInsp', { entryId: wid },
+    (res) => { if (res.inspEnd) w.ie = res.inspEnd; delete _pending[wid]; R.insp(); },
+    () => { Object.assign(w, original); delete _pending[wid]; toast('⚠ Failed to save — please try again', 'err'); R.insp(); }
+  );
+};
+
+// ==========================================
+// PALLETIZING  — with Optimistic Update
+// ==========================================
 R.pall = function() {
   const myPending = S.works.filter(w => w.w === CW && w.ie && !w.ps);
   const el = document.getElementById('pallMyForm');
-  el.innerHTML = myPending.length ? `<div class="card"><div class="card-t"><i class="ri-stack-line" style="color:var(--teal)"></i> My entries — Ready for palletizing</div>${myPending.map(w => {const o=S.orders.find(x=>x.id===w.oid);return`<div class="we" style="margin-bottom:6px"><div class="we-top"><span class="we-id">${w.oid}</span><span style="font-size:11px;color:var(--text2)">${o?.ch}·${o?.cu} · Items ${w.sku} / QTY ${w.qty}</span></div><button class="btn btn-teal btn-block btn-sm" style="margin-top:6px" onclick="startPallEntry('${w.id}')"><i class="ri-play-line"></i> Start palletizing</button></div>`}).join('')}</div>` : '';
+  el.innerHTML = myPending.length ? `<div class="card"><div class="card-t"><i class="ri-stack-line" style="color:var(--teal)"></i> My entries — Ready for palletizing</div>${myPending.map(w => {
+    const o = S.orders.find(x => x.id === w.oid);
+    const inFlight = !!_pending[w.id];
+    return`<div class="we${inFlight?' optimistic':''}">
+      <div class="we-top">
+        <span class="we-id">${w.oid}</span>
+        ${inFlight ? '<span class="badge b-saving">Saving...</span>' : '<span class="badge b-pal">Ready</span>'}
+      </div>
+      <div class="we-meta">
+        <span><i class="ri-store-2-line"></i> ${o?.ch}·${o?.cu}</span>
+        <span><i class="ri-box-3-line"></i> ${w.sku} items / ${w.qty} QTY</span>
+        <span><i class="ri-time-line"></i> Insp: ${w.is} → ${w.ie}</span>
+      </div>
+      <button class="btn btn-teal btn-block btn-action" style="margin-top:12px" onclick="startPallEntry('${w.id}')" ${inFlight?'disabled':''}>
+        <i class="ri-play-circle-line"></i> Start Palletizing
+      </button>
+    </div>`
+  }).join('')}</div>` : '';
+
   const sel = document.getElementById('pallOrd'), cur = sel.value;
   const avail = S.orders.filter(o => S.works.some(w => w.oid === o.id && w.ie && !w.ps && w.w !== CW));
   sel.innerHTML = '<option value="">— Select order —</option>' + avail.map(o => `<option value="${o.id}"${o.id===cur?' selected':''}>${o.id}</option>`).join('');
   sel.onchange = updatePallInfo; updatePallInfo();
+
   const active = S.works.filter(w => w.ps && !w.pe);
-  document.getElementById('pallList').innerHTML = active.length ? active.map(w =>
-    `<div class="we" style="border-color:var(--teal-bd)"><div class="we-top"><span class="we-id">${w.oid} · ${w.w}</span><span class="badge b-live">Palletizing</span></div><div class="we-info" style="margin-bottom:8px">Items ${w.sku} / QTY ${w.qty} · Started: ${w.ps}</div><button class="btn btn-green btn-block" onclick="endPall('${w.id}')"><i class="ri-stop-line"></i> End palletizing</button></div>`
-  ).join('') : '<div style="font-size:12px;color:var(--text3);padding:6px 0">No active palletizing</div>';
+  document.getElementById('pallList').innerHTML = active.length ? active.map(w => {
+    const inFlight = !!_pending[w.id];
+    return `<div class="we${inFlight?' optimistic-done':''}" style="border-color:var(--teal-bd)">
+      <div class="we-top">
+        <span class="we-id">${w.oid} · ${w.w}</span>
+        ${inFlight ? '<span class="badge b-saving">Saving...</span>' : '<span class="badge b-live">Palletizing</span>'}
+      </div>
+      <div class="we-meta">
+        <span><i class="ri-box-3-line"></i> ${w.sku} items / ${w.qty} QTY</span>
+        <span><i class="ri-time-line"></i> Started: ${w.ps}</span>
+      </div>
+      <button class="btn btn-green btn-block btn-action" style="margin-top:12px" onclick="endPall('${w.id}')" ${inFlight?'disabled':''}>
+        <i class="ri-checkbox-circle-line"></i> End Palletizing
+      </button>
+    </div>`;
+  }).join('') : '<div style="font-size:12px;color:var(--text3);padding:6px 0">No active palletizing</div>';
 };
+
 function updatePallInfo() {
   const oid = document.getElementById('pallOrd')?.value;
   const info = document.getElementById('pallInfo'), acts = document.getElementById('pallActs');
@@ -627,25 +933,67 @@ function updatePallInfo() {
   const ws = S.works.filter(w => w.oid === oid && w.ie && w.w !== CW);
   const pending = ws.filter(w => !w.ps).length;
   info.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;margin-bottom:8px;font-size:12px">${ws.length} entries · ${pending} pending</div>`;
-  acts.innerHTML = pending > 0 ? `<button class="btn btn-teal btn-block" onclick="startPallBatch('${oid}')"><i class="ri-play-line"></i> Start palletizing (${pending})</button>` : '<div style="font-size:12px;color:var(--green)">All palletized</div>';
+  acts.innerHTML = pending > 0 ? `<button class="btn btn-teal btn-block btn-action" onclick="startPallBatch('${oid}')"><i class="ri-play-circle-line"></i> Start Palletizing (${pending})</button>` : '<div style="font-size:12px;color:var(--green)">All palletized</div>';
 }
+
 window.startPallEntry = async function(wid) {
-  toast('Starting palletizing...', '');
-  const res = await api('startPall', { entryId: wid });
-  if (res.ok) { toast('Palletizing started!', 'ok'); await loadData(); R.pall(); } else toast('Error: ' + res.error, 'err');
-};
-window.startPallBatch = async function(oid) {
-  const ws = S.works.filter(w => w.oid === oid && w.ie && !w.ps && w.w !== CW);
-  for (const w of ws) await api('startPall', { entryId: w.id });
-  toast('Palletizing started!', 'ok'); await loadData(); R.pall();
-};
-window.endPall = async function(wid) {
-  toast('Ending palletizing...', '');
-  const res = await api('endPall', { entryId: wid });
-  if (res.ok) { toast('Palletizing done', 'ok'); await loadData(); R.pall(); } else toast('Error: ' + res.error, 'err');
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  if (_pending[wid]) return;
+
+  const hhmm = nowHHmm();
+  const original = { ps: w.ps };
+  w.ps = hhmm;
+  _pending[wid] = { patch: { ps: hhmm } };
+  toast('✓ Palletizing started!', 'ok');
+  updateNavBadges(); R.pall();
+
+  apiBackground('startPall', { entryId: wid },
+    (res) => { if (res.pallStart) w.ps = res.pallStart; delete _pending[wid]; R.pall(); },
+    () => { Object.assign(w, original); delete _pending[wid]; toast('⚠ Failed to save — please try again', 'err'); R.pall(); }
+  );
 };
 
+window.startPallBatch = async function(oid) {
+  const ws = S.works.filter(w => w.oid === oid && w.ie && !w.ps && w.w !== CW);
+  if (!ws.length) return;
+  const hhmm = nowHHmm();
+  ws.forEach(w => { w.ps = hhmm; _pending[w.id] = { patch: { ps: hhmm } }; });
+  toast(`✓ Palletizing started (${ws.length})!`, 'ok');
+  updateNavBadges(); R.pall();
+  for (const w of ws) {
+    apiBackground('startPall', { entryId: w.id },
+      (res) => { if (res.pallStart) w.ps = res.pallStart; delete _pending[w.id]; },
+      () => { w.ps = ''; delete _pending[w.id]; toast('⚠ Partial save failure', 'err'); }
+    );
+  }
+};
+
+window.endPall = async function(wid) {
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  if (_pending[wid]) return;
+
+  const hhmm = nowHHmm();
+  const original = { pe: w.pe };
+  w.pe = hhmm;
+  _pending[wid] = { patch: { pe: hhmm } };
+  toast('✓ Palletizing complete! 🎉', 'ok');
+  updateNavBadges(); R.pall();
+
+  apiBackground('endPall', { entryId: wid },
+    (res) => {
+      if (res.pallEnd) w.pe = res.pallEnd;
+      delete _pending[wid];
+      // Update dashboard metrics
+      if (curP() === 'dash') R.dash();
+      R.pall();
+    },
+    () => { Object.assign(w, original); delete _pending[wid]; toast('⚠ Failed to save — please try again', 'err'); R.pall(); }
+  );
+};
+
+// ==========================================
 // KPI
+// ==========================================
 R.kpi = function() {
   const stats = S.workers.map(w => {
     const my = S.works.filter(x => x.w === w);
@@ -657,7 +1005,9 @@ R.kpi = function() {
   document.getElementById('kpiTeam').innerHTML=`<div class="grid g5">${[{l:'Total entries',v:tW,c:'bl'},{l:'Completed',v:tD,c:'gr'},{l:'Active',v:tW-tD,c:'am'},{l:'Total Items',v:S.works.reduce((s,w)=>s+w.sku,0),c:'pu'},{l:'Total QTY',v:S.works.reduce((s,w)=>s+w.qty,0),c:'tl'}].map(m=>`<div class="mc ${m.c}"><div class="mc-l">${m.l}</div><div class="mc-v" style="font-size:20px">${m.v}</div></div>`).join('')}</div>`;
 };
 
+// ==========================================
 // MANAGER
+// ==========================================
 R.mgr = function() {
   document.getElementById('mWList').innerHTML = S.workers.map(w =>
     `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
@@ -680,14 +1030,14 @@ window.addW = async function() {
   if (!n) { toast('Enter name', 'err'); return; }
   if (S.workers.includes(n)) { toast('Exists', 'err'); return; }
   S.workers.push(n);
-  await api('setSettings', { workers: S.workers });
+  apiBackground('setSettings', { workers: S.workers });
   popW(); toast(n + ' added', 'ok');
   document.getElementById('mNewW').value = ''; R.mgr();
 };
 window.rmW = async function(n) {
   if (!confirm(`Remove "${n}"?`)) return;
   S.workers = S.workers.filter(w => w !== n);
-  await api('setSettings', { workers: S.workers });
+  apiBackground('setSettings', { workers: S.workers });
   popW(); toast(n + ' removed', 'ok'); R.mgr();
 };
 window.addO = async function() {
@@ -696,18 +1046,30 @@ window.addO = async function() {
   const cu = document.getElementById('mOCu').value.trim() || '-';
   if (!id) { toast('Enter order#', 'err'); return; }
   if (S.orders.find(o => o.id === id)) { toast('Exists', 'err'); return; }
-  toast('Adding order...', '');
-  const res = await api('upsertOrder', { id, ch, cu });
-  if (res.ok) { toast(id + ' added', 'ok'); await loadData(); R.mgr(); }
-  else toast('Error: ' + res.error, 'err');
+
+  // Optimistic: add to local state immediately
+  const newOrder = { id, ch, cu, at: new Date().toLocaleString(), completedAt: '' };
+  S.orders.push(newOrder);
+  toast(id + ' added', 'ok');
+  R.mgr();
   document.getElementById('mNewO').value = ''; document.getElementById('mOCh').value = ''; document.getElementById('mOCu').value = '';
+
+  apiBackground('upsertOrder', { id, ch, cu },
+    () => {},
+    () => { S.orders = S.orders.filter(o => o.id !== id); toast('⚠ Failed to save order', 'err'); R.mgr(); }
+  );
 };
 window.rmO = async function(id) {
   if (!confirm(`Delete "${id}"?`)) return;
-  toast('Deleting...', '');
-  const res = await api('deleteOrder', { id });
-  if (res.ok) { toast(id + ' deleted', 'ok'); await loadData(); R.mgr(); }
-  else toast('Error: ' + res.error, 'err');
+  const backup = [...S.orders];
+  const backupW = [...S.works];
+  S.orders = S.orders.filter(o => o.id !== id);
+  S.works = S.works.filter(w => w.oid !== id);
+  toast(id + ' deleted', 'ok'); R.mgr();
+  apiBackground('deleteOrder', { id },
+    () => {},
+    () => { S.orders = backup; S.works = backupW; toast('⚠ Delete failed', 'err'); R.mgr(); }
+  );
 };
 window.editOrder = function(oid) {
   const o = S.orders.find(x => x.id === oid); if (!o) return;
@@ -730,16 +1092,19 @@ window.saveOrder = async function(origId) {
   const ch = document.getElementById('eo_ch').value.trim();
   const cu = document.getElementById('eo_cu').value.trim();
   if (!newId) { toast('Order# required', 'err'); return; }
-  toast('Saving...', '');
-  await api('upsertOrder', { id: origId, newId: newId !== origId ? newId : undefined, ch, cu });
+  // Optimistic update
+  const o = S.orders.find(x => x.id === origId);
+  if (o) { o.id = newId; o.ch = ch; o.cu = cu; }
   const ws = S.works.filter(w => w.oid === origId);
+  ws.forEach(w => { w.oid = newId; });
+  toast('Order updated', 'ok'); closeModal(); R.mgr();
+  apiBackground('upsertOrder', { id: origId, newId: newId !== origId ? newId : undefined, ch, cu });
   for (const w of ws) {
     const wEl = document.getElementById('ew_w_' + w.id);
     const sEl = document.getElementById('ew_sku_' + w.id);
     const qEl = document.getElementById('ew_qty_' + w.id);
-    if (wEl || sEl || qEl) await api('editEntry', { entryId: w.id, worker: wEl?.value, items: parseInt(sEl?.value), qty: parseInt(qEl?.value) });
+    if (wEl || sEl || qEl) apiBackground('editEntry', { entryId: w.id, worker: wEl?.value, items: parseInt(sEl?.value), qty: parseInt(qEl?.value) });
   }
-  toast('Order updated', 'ok'); closeModal(); await loadData(); R.mgr();
 };
 window.mSearchEntries = function() {
   const q = (document.getElementById('mSearchW')?.value || '').toUpperCase();
@@ -748,8 +1113,13 @@ window.mSearchEntries = function() {
 };
 window.rmEntry = async function(wid) {
   if (!confirm('Delete this entry?')) return;
-  await api('deleteEntry', { entryId: wid });
-  toast('Deleted', 'ok'); await loadData(); mSearchEntries();
+  const backup = S.works.find(w => w.id === wid);
+  S.works = S.works.filter(w => w.id !== wid);
+  toast('Deleted', 'ok'); mSearchEntries();
+  apiBackground('deleteEntry', { entryId: wid },
+    () => {},
+    () => { if (backup) S.works.push(backup); toast('⚠ Delete failed', 'err'); mSearchEntries(); }
+  );
 };
 window.changePin = async function() {
   const c = document.getElementById('cpCur').value, n = document.getElementById('cpNew').value, cf = document.getElementById('cpConf').value;
@@ -757,10 +1127,10 @@ window.changePin = async function() {
   if (c !== S.pin) { toast('Wrong current password', 'err'); return; }
   if (n.length < 4) { toast('Min 4 chars', 'err'); return; }
   if (n !== cf) { toast("Passwords don't match", 'err'); return; }
-  await api('setSettings', { managerPin: n });
   S.pin = n;
   toast('Password changed', 'ok');
   document.getElementById('cpCur').value = ''; document.getElementById('cpNew').value = ''; document.getElementById('cpConf').value = '';
+  apiBackground('setSettings', { managerPin: n });
 };
 
 // ==========================================
@@ -775,11 +1145,18 @@ window.changePin = async function() {
   popW();
   document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => go(b.dataset.p)));
   go('dash');
-  // Auto refresh every 30 seconds
-  setInterval(async () => { await loadData(); go(curP()); }, 30000);
+  updateNavBadges();
+  // Auto refresh every 30 seconds — silent, doesn't block UI
+  setInterval(async () => {
+    const saved = Object.keys(_pending).length;
+    if (saved === 0) { // Don't reload while saves are in-flight
+      await loadData();
+      updateNavBadges();
+      go(curP());
+    }
+  }, 30000);
   // Register service worker for PWA + clear old caches
   if ('serviceWorker' in navigator) {
-    // Clear all caches first to ensure fresh content
     if ('caches' in window) {
       caches.keys().then(names => names.forEach(name => caches.delete(name)));
     }
