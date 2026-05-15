@@ -750,8 +750,12 @@ window.changePin = async function() {
   go('dash');
   // Auto refresh every 30 seconds
   setInterval(async () => { await loadData(); go(curP()); }, 30000);
-  // Register service worker for PWA
+  // Register service worker for PWA + clear old caches
   if ('serviceWorker' in navigator) {
+    // Clear all caches first to ensure fresh content
+    if ('caches' in window) {
+      caches.keys().then(names => names.forEach(name => caches.delete(name)));
+    }
     navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW:', e));
   }
 })();

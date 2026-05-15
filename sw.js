@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sk-warehouse-v1';
+const CACHE_NAME = 'sk-warehouse-v2';
 const ASSETS = [
   './',
   './index.html',
