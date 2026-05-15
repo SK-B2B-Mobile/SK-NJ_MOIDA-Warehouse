@@ -256,15 +256,43 @@ let _busy = false;
 // ==========================================
 // API CALLS
 // ==========================================
+// JSONP-style API call (Apps Script CORS workaround)
+let _jsonpCounter = 0;
+function apiCall(url) {
+  return new Promise((resolve, reject) => {
+    const callbackName = '_jsonp_' + (++_jsonpCounter) + '_' + Date.now();
+    const timeout = setTimeout(() => {
+      delete window[callbackName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      reject(new Error('Request timeout'));
+    }, 30000);
+
+    window[callbackName] = function(data) {
+      clearTimeout(timeout);
+      delete window[callbackName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      resolve(data);
+    };
+
+    const script = document.createElement('script');
+    const separator = url.includes('?') ? '&' : '?';
+    script.src = url + separator + 'callback=' + callbackName;
+    script.onerror = function() {
+      clearTimeout(timeout);
+      delete window[callbackName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      reject(new Error('Network error'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
 async function api(op, data) {
   _busy = true;
   try {
-    // Use GET with data as URL parameter (Apps Script CORS workaround)
-    const payload = JSON.stringify(Object.assign({ op }, data || {}));
     const url = API_URL + '?op=' + encodeURIComponent(op) + '&data=' + encodeURIComponent(JSON.stringify(data || {}));
-    const res = await fetch(url, { method: 'GET', redirect: 'follow' });
-    const text = await res.text();
-    try { return JSON.parse(text); } catch { return { ok: false, error: 'Invalid response: ' + text.substring(0, 100) }; }
+    const result = await apiCall(url);
+    return result;
   } catch (err) {
     console.error('API error:', err);
     toast('Server error: ' + err.message, 'err');
@@ -274,9 +302,8 @@ async function api(op, data) {
 
 async function apiGet(op) {
   try {
-    const res = await fetch(API_URL + '?op=' + op, { redirect: 'follow' });
-    const text = await res.text();
-    try { return JSON.parse(text); } catch { return { ok: false, error: 'Invalid response' }; }
+    const url = API_URL + '?op=' + op;
+    return await apiCall(url);
   } catch (err) {
     console.error('API GET error:', err);
     return { ok: false, error: err.message };
