@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>STYLEKOREAN_NJ / MOIDA — Warehouse</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#3b82f6">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.1.0/fonts/remixicon.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0e14;--bg2:#131720;--bg3:#1a2030;--bg4:#242e40;
+  --border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.14);
+  --text:#f1f5f9;--text2:#c2cad6;--text3:#8896a8;
+  --blue:#3b82f6;--blue2:#2563eb;--blue-bg:rgba(59,130,246,.1);--blue-bd:rgba(59,130,246,.25);
+  --green:#22c55e;--green-bg:rgba(34,197,94,.1);--green-bd:rgba(34,197,94,.25);
+  --amber:#f59e0b;--amber-bg:rgba(245,158,11,.1);--amber-bd:rgba(245,158,11,.25);
+  --red:#ef4444;--red-bg:rgba(239,68,68,.1);
+  --purple:#a855f7;--purple-bg:rgba(168,85,247,.1);--purple-bd:rgba(168,85,247,.25);
+  --teal:#14b8a6;--teal-bg:rgba(20,184,166,.1);--teal-bd:rgba(20,184,166,.25);
+  --cyan:#06b6d4;--cyan-bg:rgba(6,182,212,.1);
+  --font:'Inter',-apple-system,system-ui,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+  --r:8px;--r2:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.shell{width:100%;max-width:1600px;margin:0 auto;padding:0 36px 100px}
+@media(max-width:1200px){.shell{padding:0 24px 100px}}
+@media(max-width:768px){.shell{padding:0 12px 100px}}
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border);margin-bottom:14px;position:sticky;top:0;background:var(--bg);z-index:100}
+.hdr-left{display:flex;align-items:center;gap:16px}
+.hdr-logo{font-family:var(--mono);font-size:15px;font-weight:800;color:var(--text);letter-spacing:-.3px}
+.hdr-clock{font-family:var(--mono);font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px}
+.hdr-right{display:flex;align-items:center;gap:10px}
+.sel{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);padding:7px 12px;font-family:var(--font);font-size:13px;cursor:pointer;outline:none}
+.sel:focus{border-color:var(--blue)}
+.nav{display:flex;gap:2px;background:var(--bg2);border-radius:var(--r2);padding:3px;margin-bottom:16px;position:sticky;top:54px;z-index:99;border:1px solid var(--border)}
+.nav-btn{flex:1;padding:9px 6px;border:none;background:transparent;color:var(--text3);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;border-radius:var(--r);transition:all .12s;white-space:nowrap;display:flex;flex-direction:column;align-items:center;gap:2px}
+.nav-btn i{font-size:17px}
+.nav-btn:hover{color:var(--text2);background:var(--bg3)}
+.nav-btn.on{background:var(--blue);color:#fff}
+.pg{display:none}.pg.on{display:block;animation:fadeUp .2s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.grid{display:grid;gap:10px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g5{grid-template-columns:repeat(5,1fr)}.g6{grid-template-columns:repeat(6,1fr)}
+@media(max-width:1000px){.g5,.g6{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.g2,.g3{grid-template-columns:1fr}.g5,.g6{grid-template-columns:repeat(2,1fr)}}
+.mc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;position:relative;overflow:hidden}
+.mc::after{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.mc.bl::after{background:var(--blue)}.mc.gr::after{background:var(--green)}.mc.am::after{background:var(--amber)}.mc.pu::after{background:var(--purple)}.mc.tl::after{background:var(--teal)}.mc.cy::after{background:var(--cyan)}
+.mc-l{font-size:10px;color:var(--text2);font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px}
+.mc-v{font-family:var(--mono);font-size:24px;font-weight:700}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:16px 18px;margin-bottom:10px}
+.card-t{font-weight:700;font-size:14px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.section{font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin:18px 0 10px;display:flex;align-items:center;gap:8px}
+.section::after{content:'';flex:1;height:1px;background:var(--border)}
+.badge{display:inline-flex;align-items:center;gap:3px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700}
+.b-wait{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd)}
+.b-pick{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-bd)}
+.b-insp{background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-bd)}
+.b-pal{background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-bd)}
+.b-done{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)}
+.b-live{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.btn{padding:9px 16px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:5px}
+.btn:hover{background:var(--bg4);border-color:var(--text3)}.btn:active{transform:scale(.97)}
+.btn-blue{background:var(--blue);color:#fff;border-color:var(--blue)}.btn-blue:hover{background:var(--blue2)}
+.btn-green{background:var(--green);color:#fff;border-color:var(--green)}
+.btn-red{background:var(--red);color:#fff;border-color:var(--red)}
+.btn-purple{background:var(--purple);color:#fff;border-color:var(--purple)}
+.btn-teal{background:var(--teal);color:#fff;border-color:var(--teal)}
+.btn-sm{padding:5px 10px;font-size:11px}
+.btn-block{width:100%;justify-content:center;padding:11px}
+.btn:disabled{opacity:.3;cursor:not-allowed;pointer-events:none}
+.action-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.fg{margin-bottom:10px}
+.fl{display:block;font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600}
+.fi{width:100%;padding:9px 12px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);font-size:13px;outline:none;transition:border-color .15s}
+.fi:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.12)}
+.fi::placeholder{color:var(--text3)}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:480px){.fr{grid-template-columns:1fr}}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:11px;color:var(--text2);padding:8px 8px;border-bottom:1px solid var(--border2);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.tbl td{padding:9px 8px;border-bottom:1px solid var(--border);font-size:13px}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(255,255,255,.015)}
+.mono{font-family:var(--mono);font-size:11px;font-weight:500}
+.stage-row{display:flex;gap:4px;align-items:center}
+.stage-dot{padding:4px 10px;border-radius:5px;font-size:11px;font-weight:700;letter-spacing:.04em;border:1px solid var(--border);white-space:nowrap}
+.sd-done{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)}
+.sd-active{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-bd);animation:blink .8s infinite}
+.sd-active-insp{background:var(--purple-bg);color:var(--purple);border-color:var(--purple-bd);animation:blinkP .8s infinite}
+.sd-active-pall{background:var(--teal-bg);color:var(--teal);border-color:var(--teal-bd);animation:blinkT .8s infinite}
+.sd-wait{background:var(--bg3);color:var(--text3)}
+.stage-arrow{color:var(--text3);font-size:11px;font-weight:700}
+@keyframes blink{0%,100%{opacity:1;box-shadow:0 0 8px rgba(59,130,246,.5)}50%{opacity:.35;box-shadow:none}}
+@keyframes blinkP{0%,100%{opacity:1;box-shadow:0 0 8px rgba(168,85,247,.5)}50%{opacity:.35;box-shadow:none}}
+@keyframes blinkT{0%,100%{opacity:1;box-shadow:0 0 8px rgba(20,184,166,.5)}50%{opacity:.35;box-shadow:none}}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:10px 22px;border-radius:var(--r2);font-size:13px;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:999}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.ok{border-color:var(--green);background:rgba(34,197,94,.12)}.toast.err{border-color:var(--red);background:rgba(239,68,68,.12)}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;padding:16px}
+.modal-bg.show{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;padding:24px}
+.empty{text-align:center;padding:32px 20px;color:var(--text3);font-size:13px}
+.empty i{font-size:28px;display:block;margin-bottom:6px;opacity:.4}
+.we{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);padding:12px 14px;margin-bottom:6px}
+.we-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:4px}
+.we-id{font-family:var(--mono);font-weight:700;font-size:13px}
+.we-info{font-size:12px;color:var(--text2)}
+.loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.spinner{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div style="font-size:13px;color:var(--text2)">Connecting to server...</div>
+</div>
+
+<div class="shell" style="display:none" id="appShell">
+  <header class="hdr">
+    <div class="hdr-left">
+      <div class="hdr-logo">STYLEKOREAN_NJ / MOIDA</div>
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-clock" id="clock"></div>
+      <select class="sel" id="selW" onchange="swW()"></select>
+      <button class="btn btn-sm" onclick="refreshData()" title="Refresh"><i class="ri-refresh-line"></i></button>
+    </div>
+  </header>
+  <nav class="nav">
+    <button class="nav-btn on" data-p="dash"><i class="ri-dashboard-3-line"></i>Dashboard</button>
+    <button class="nav-btn" data-p="pick"><i class="ri-route-line"></i>Picking</button>
+    <button class="nav-btn" data-p="insp"><i class="ri-search-eye-line"></i>Inspection</button>
+    <button class="nav-btn" data-p="pall"><i class="ri-stack-line"></i>Palletizing</button>
+    <button class="nav-btn" data-p="kpi"><i class="ri-bar-chart-grouped-line"></i>KPI</button>
+    <button class="nav-btn" data-p="mgr"><i class="ri-shield-keyhole-line"></i>Manager</button>
+  </nav>
+  <div class="pg on" id="pg-dash">
+    <div id="dMetrics"></div>
+    <div class="section">Order status — All</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+      <div id="dFilterTabs" style="display:flex;gap:4px"></div>
+      <div style="flex:1"></div>
+      <div style="position:relative;min-width:200px">
+        <i class="ri-search-line" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px"></i>
+        <input class="fi" id="dSearch" placeholder="Search order, channel, customer..." style="padding-left:32px;font-size:12px" oninput="_dPage=0;renderDashTable()">
+      </div>
+    </div>
+    <div id="dOrderTable"></div>
+    <div id="dOrderPager" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px"></div>
+  </div>
+  <div class="pg" id="pg-pick">
+    <div id="pickForm"></div>
+    <div class="section">My active picking</div>
+    <div id="pickMy"></div>
+    <div class="section">All picking — Selected order</div>
+    <div id="pickAll"></div>
+  </div>
+  <div class="pg" id="pg-insp">
+    <div id="inspMyForm"></div>
+    <div class="card">
+      <div class="card-t"><i class="ri-search-eye-line" style="color:var(--purple)"></i> Inspect other entries</div>
+      <div class="fg"><label class="fl">Select order</label><select class="fi" id="inspOrd"></select></div>
+      <div id="inspInfo"></div>
+      <div class="action-row" id="inspActs"></div>
+    </div>
+    <div class="section">Active inspections</div>
+    <div id="inspList"></div>
+  </div>
+  <div class="pg" id="pg-pall">
+    <div id="pallMyForm"></div>
+    <div class="card">
+      <div class="card-t"><i class="ri-stack-line" style="color:var(--teal)"></i> Palletize other entries</div>
+      <div class="fg"><label class="fl">Select order</label><select class="fi" id="pallOrd"></select></div>
+      <div id="pallInfo"></div>
+      <div class="action-row" id="pallActs"></div>
+    </div>
+    <div class="section">Active palletizing</div>
+    <div id="pallList"></div>
+  </div>
+  <div class="pg" id="pg-kpi">
+    <div class="section">Worker performance — Today</div>
+    <div id="kpiList"></div>
+    <div class="section">Team summary</div>
+    <div id="kpiTeam"></div>
+  </div>
+  <div class="pg" id="pg-mgr">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="card">
+        <div class="card-t"><i class="ri-user-settings-line" style="color:var(--amber)"></i> Workers</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <input class="fi" id="mNewW" placeholder="New worker name" style="flex:1">
+          <button class="btn btn-blue btn-sm" onclick="addW()"><i class="ri-user-add-line"></i> Add</button>
+        </div>
+        <div id="mWList"></div>
+      </div>
+      <div class="card">
+        <div class="card-t"><i class="ri-file-list-3-line" style="color:var(--blue)"></i> Orders</div>
+        <div class="fg"><label class="fl">Order number</label><input class="fi" id="mNewO" placeholder="e.g. IM003232"></div>
+        <div class="fr">
+          <div class="fg"><label class="fl">Channel</label><input class="fi" id="mOCh" placeholder="e.g. NJ"></div>
+          <div class="fg"><label class="fl">Customer</label><input class="fi" id="mOCu" placeholder="e.g. MOIDA"></div>
+        </div>
+        <button class="btn btn-blue" onclick="addO()"><i class="ri-add-line"></i> Add order</button>
+        <div class="section" style="margin-top:14px">All orders</div>
+        <div id="mOList" style="max-height:350px;overflow-y:auto"></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="card-t"><i class="ri-edit-line" style="color:var(--purple)"></i> Work entries</div>
+      <div class="fg"><input class="fi" id="mSearchW" placeholder="Search by order number..." oninput="mSearchEntries()"></div>
+      <div id="mWEntries"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+      <div class="card" style="border-color:var(--amber-bd)">
+        <div class="card-t" style="color:var(--amber)"><i class="ri-lock-line"></i> Change password</div>
+        <div class="fg"><input class="fi" type="password" id="cpCur" placeholder="Current password"></div>
+        <div class="fg"><input class="fi" type="password" id="cpNew" placeholder="New password"></div>
+        <div class="fg"><input class="fi" type="password" id="cpConf" placeholder="Confirm new password"></div>
+        <button class="btn btn-blue btn-sm" onclick="changePin()"><i class="ri-lock-line"></i> Change</button>
+      </div>
+      <div class="card" style="border-color:rgba(239,68,68,.2)">
+        <div class="card-t" style="color:var(--red)"><i class="ri-error-warning-line"></i> Danger zone</div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Manage data carefully.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modalContent"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ==========================================
+// API CONFIGURATION
+// ==========================================
+const API_URL = 'https://script.google.com/macros/s/AKfycbw-rEUoQz5c38k0I7P6ykyhEFfZ5P4tGf0wF4zc96742O8KVlpB7-3Unh6W6S7RQctAjA/exec';
+
+// ==========================================
+// STATE
+// ==========================================
+let S = { orders: [], works: [], workers: [], pin: '1234' };
+let CW = '';
+let _mgrOK = false;
+let _busy = false;
+
+// ==========================================
+// API CALLS
+// ==========================================
+async function api(op, data) {
+  _busy = true;
+  try {
+    // Use GET with data as URL parameter (Apps Script CORS workaround)
+    const payload = JSON.stringify(Object.assign({ op }, data || {}));
+    const url = API_URL + '?op=' + encodeURIComponent(op) + '&data=' + encodeURIComponent(JSON.stringify(data || {}));
+    const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+    const text = await res.text();
+    try { return JSON.parse(text); } catch { return { ok: false, error: 'Invalid response: ' + text.substring(0, 100) }; }
+  } catch (err) {
+    console.error('API error:', err);
+    toast('Server error: ' + err.message, 'err');
+    return { ok: false, error: err.message };
+  } finally { _busy = false; }
+}
+
+async function apiGet(op) {
+  try {
+    const res = await fetch(API_URL + '?op=' + op, { redirect: 'follow' });
+    const text = await res.text();
+    try { return JSON.parse(text); } catch { return { ok: false, error: 'Invalid response' }; }
+  } catch (err) {
+    console.error('API GET error:', err);
+    return { ok: false, error: err.message };
+  }
+}
+
+async function loadData() {
+  const result = await apiGet('listAll');
+  if (result.ok) {
+    S.orders = result.orders || [];
+    S.works = result.works || [];
+    S.workers = result.workers || [];
+    S.pin = result.pin || '1234';
+  }
+  return result.ok;
+}
+
+async function refreshData() {
+  toast('Refreshing...', '');
+  await loadData();
+  popW();
+  go(curP());
+  toast('Data refreshed', 'ok');
+}
+
+// ==========================================
+// HELPERS
+// ==========================================
+function toast(m, c) {
+  const t = document.getElementById('toast');
+  t.textContent = m; t.className = 'toast show' + (c ? ' ' + c : '');
+  setTimeout(() => t.className = 'toast', 2800);
+}
+function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+
+function updateClock() {
+  const d = new Date();
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('clock').innerHTML =
+    `<i class="ri-time-line" style="font-size:13px"></i>${days[d.getDay()]} ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} · ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+}
+
+function oSt(oid) {
+  const ws = S.works.filter(w => w.oid === oid);
+  if (!ws.length) return 'waiting';
+  if (ws.every(w => w.pe)) return 'done';
+  if (ws.some(w => w.ps && !w.pe)) return 'pall-active';
+  if (ws.every(w => w.ie)) return 'pall-wait';
+  if (ws.some(w => w.is && !w.ie)) return 'insp-active';
+  if (ws.every(w => w.e)) return 'insp-wait';
+  if (ws.some(w => w.s && !w.e)) return 'pick-active';
+  return 'pick-wait';
+}
+function stBadge(st) {
+  const m = { 'waiting':['Waiting','b-wait'],'pick-wait':['Pick queue','b-pick'],'pick-active':['Picking','b-live'],
+    'insp-wait':['Insp. queue','b-insp'],'insp-active':['Inspecting','b-live'],
+    'pall-wait':['Pallet queue','b-pal'],'pall-active':['Palletizing','b-live'],'done':['Done','b-done'] };
+  const [l, c] = m[st] || ['?','b-wait'];
+  return `<span class="badge ${c}">${l}</span>`;
+}
+function stageInd(oid) {
+  const ws = S.works.filter(w => w.oid === oid);
+  const e = (cls) => `<div class="stage-dot ${cls}">`;
+  if (!ws.length) return `<div class="stage-row">${e('sd-wait')}PICK</div><span class="stage-arrow">→</span>${e('sd-wait')}INSP</div><span class="stage-arrow">→</span>${e('sd-wait')}PALL</div></div>`;
+  const pCls = ws.every(w => w.e) ? 'sd-done' : ws.some(w => w.s && !w.e) ? 'sd-active' : 'sd-wait';
+  const iCls = ws.every(w => w.ie) ? 'sd-done' : ws.some(w => w.is && !w.ie) ? 'sd-active-insp' : 'sd-wait';
+  const lCls = ws.every(w => w.pe) ? 'sd-done' : ws.some(w => w.ps && !w.pe) ? 'sd-active-pall' : 'sd-wait';
+  return `<div class="stage-row">${e(pCls)}PICK</div><span class="stage-arrow">→</span>${e(iCls)}INSP</div><span class="stage-arrow">→</span>${e(lCls)}PALL</div></div>`;
+}
+
+function popW() {
+  const s = document.getElementById('selW'), c = s.value;
+  s.innerHTML = S.workers.map(w => `<option${w === c ? ' selected' : ''}>${w}</option>`).join('');
+  if (!c && S.workers.length) s.value = S.workers[0];
+  CW = s.value;
+}
+function swW() { CW = document.getElementById('selW').value; _mgrOK = false; go(curP()); }
+
+// ==========================================
+// NAV
+// ==========================================
+function go(id) {
+  if (id === 'mgr' && !_mgrOK) { showPinPrompt(); return; }
+  document.querySelectorAll('.pg').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('on'));
+  const pg = document.getElementById('pg-' + id); if (pg) pg.classList.add('on');
+  const nb = document.querySelector(`[data-p="${id}"]`); if (nb) nb.classList.add('on');
+  R[id]?.();
+}
+function curP() { const a = document.querySelector('.nav-btn.on'); return a ? a.dataset.p : 'dash'; }
+
+function showPinPrompt() {
+  document.getElementById('modalContent').innerHTML = `
+    <div style="text-align:center;padding:8px 0">
+      <i class="ri-shield-keyhole-line" style="font-size:32px;color:var(--amber);display:block;margin-bottom:10px"></i>
+      <div style="font-size:15px;font-weight:700;margin-bottom:3px">Manager access</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:16px">Enter password</div>
+      <input class="fi" type="password" id="pinInput" placeholder="Password" style="max-width:200px;margin:0 auto 12px;text-align:center;font-size:18px;letter-spacing:4px" onkeydown="if(event.key==='Enter')checkPin()">
+      <div id="pinErr" style="font-size:11px;color:var(--red);min-height:16px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-blue btn-sm" onclick="checkPin()"><i class="ri-lock-unlock-line"></i> Unlock</button>
+      </div>
+    </div>`;
+  document.getElementById('modalBg').classList.add('show');
+  setTimeout(() => { const e = document.getElementById('pinInput'); if (e) e.focus(); }, 100);
+}
+function checkPin() {
+  const v = document.getElementById('pinInput')?.value || '';
+  if (v === S.pin) { _mgrOK = true; closeModal(); toast('Manager unlocked', 'ok'); go('mgr'); }
+  else { document.getElementById('pinErr').textContent = 'Incorrect password'; const i = document.getElementById('pinInput'); if (i) { i.value = ''; i.focus(); } }
+}
+
+// ==========================================
+// RENDERERS
+// ==========================================
+const R = {};
+
+// DASHBOARD
+let _dFilter = 'all', _dPage = 0;
+const D_PER = 15;
+
+R.dash = function() {
+  const os = S.orders;
+  const ct = (f) => os.filter(o => { const s = oSt(o.id); return f(s); }).length;
+  document.getElementById('dMetrics').innerHTML = `<div class="grid g6" style="margin-bottom:14px">
+    ${[{l:'Waiting',v:ct(s=>s==='waiting'),c:'am'},{l:'Picking',v:ct(s=>s.startsWith('pick')),c:'bl'},{l:'Inspection',v:ct(s=>s.startsWith('insp')),c:'pu'},{l:'Palletizing',v:ct(s=>s.startsWith('pall')),c:'tl'},{l:'Completed',v:ct(s=>s==='done'),c:'gr'},{l:'Total',v:os.length,c:'cy'}]
+    .map(m=>`<div class="mc ${m.c}"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${{am:'amber',bl:'blue',pu:'purple',tl:'teal',gr:'green',cy:'cyan'}[m.c]})">${m.v}</div></div>`).join('')}</div>`;
+  renderDashTable();
+};
+
+function renderDashTable() {
+  const tabs=[{k:'all',l:'All'},{k:'active',l:'Active'},{k:'done',l:'Completed'},{k:'waiting',l:'Waiting'}];
+  document.getElementById('dFilterTabs').innerHTML=tabs.map(t=>`<button class="btn btn-sm" style="${_dFilter===t.k?'background:var(--bg4);color:var(--text);border-color:var(--text3)':'color:var(--text3)'}" onclick="_dFilter='${t.k}';_dPage=0;renderDashTable()">${t.l}</button>`).join('');
+  let filtered=S.orders;
+  if(_dFilter==='active')filtered=filtered.filter(o=>{const s=oSt(o.id);return s!=='waiting'&&s!=='done'});
+  else if(_dFilter==='done')filtered=filtered.filter(o=>oSt(o.id)==='done');
+  else if(_dFilter==='waiting')filtered=filtered.filter(o=>oSt(o.id)==='waiting');
+  const sq=(document.getElementById('dSearch')?.value||'').trim().toUpperCase();
+  if(sq) filtered=filtered.filter(o=>{const ws=S.works.filter(w=>w.oid===o.id);const wn=ws.map(w=>w.w).join(' ').toUpperCase();return o.id.toUpperCase().includes(sq)||o.ch.toUpperCase().includes(sq)||o.cu.toUpperCase().includes(sq)||wn.includes(sq)});
+  const total=filtered.length,totalPages=Math.max(1,Math.ceil(total/D_PER));
+  if(_dPage>=totalPages)_dPage=totalPages-1;if(_dPage<0)_dPage=0;
+  const slice=filtered.slice(_dPage*D_PER,_dPage*D_PER+D_PER);
+  document.getElementById('dOrderTable').innerHTML=slice.length?
+    `<div class="card" style="padding:0;overflow-x:auto"><table class="tbl" style="margin:0;min-width:750px">
+      <tr><th style="padding-left:14px">Order</th><th>Channel</th><th>Customer</th><th>Workers</th><th>Items</th><th>QTY</th><th>Progress</th><th>Status</th><th></th></tr>
+      ${slice.map(o=>{const ws=S.works.filter(w=>w.oid===o.id);const workers=[...new Set(ws.map(w=>w.w))];const tSku=ws.reduce((s,w)=>s+w.sku,0);const tQty=ws.reduce((s,w)=>s+w.qty,0);const st=oSt(o.id);const isMe=ws.some(w=>w.w===CW);const canEdit=ws.some(w=>w.w===CW);
+        return`<tr${isMe?' style="background:rgba(59,130,246,.04)"':''}>
+          <td class="mono" style="padding-left:14px;font-weight:700;font-size:12px">${o.id}</td><td>${o.ch}</td><td>${o.cu}</td>
+          <td style="font-size:11px">${workers.length?workers.join(', '):'<span style="color:var(--text3)">—</span>'}</td>
+          <td class="mono">${tSku||'—'}</td><td class="mono">${tQty||'—'}</td>
+          <td>${stageInd(o.id)}</td><td>${stBadge(st)}</td>
+          <td>${canEdit?`<button class="btn btn-sm" style="padding:3px 7px;font-size:10px" onclick="editMyEntry('${o.id}')"><i class="ri-edit-line"></i></button>`:''}</td></tr>`}).join('')}</table></div>`
+    :'<div class="empty"><i class="ri-inbox-line"></i>No orders found</div>';
+  const pg=document.getElementById('dOrderPager');
+  if(totalPages>1) pg.innerHTML=`<button class="btn btn-sm" onclick="_dPage--;renderDashTable()" ${_dPage===0?'disabled':''}><i class="ri-arrow-left-s-line"></i></button><span style="font-size:11px;color:var(--text2)">${_dPage+1}/${totalPages} (${total})</span><button class="btn btn-sm" onclick="_dPage++;renderDashTable()" ${_dPage>=totalPages-1?'disabled':''}><i class="ri-arrow-right-s-line"></i></button>`;
+  else pg.innerHTML=total?`<span style="font-size:11px;color:var(--text3)">${total} order${total>1?'s':''}</span>`:'';
+}
+
+// EDIT
+window.editMyEntry = function(oid) {
+  const myE = S.works.filter(w => w.oid === oid && w.w === CW);
+  if (!myE.length) { toast('No entries to edit', 'err'); return; }
+  const o = S.orders.find(x => x.id === oid);
+  let html = `<div style="margin-bottom:14px"><div style="font-size:15px;font-weight:700;margin-bottom:4px"><i class="ri-edit-line" style="color:var(--blue)"></i> Edit — ${oid}</div><div style="font-size:12px;color:var(--text2)">${o?.ch} · ${o?.cu}</div></div>`;
+  myE.forEach((w, i) => {
+    const isDone = !!w.pe;
+    html += `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:8px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Entry ${i+1}${isDone?' <span style="color:var(--green)">· Completed</span>':''}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="fl">Items</label><input class="fi" type="number" id="ed_sku_${w.id}" value="${w.sku}" min="1" ${isDone?'disabled':''}></div>
+        <div><label class="fl">QTY</label><input class="fi" type="number" id="ed_qty_${w.id}" value="${w.qty}" min="1" ${isDone?'disabled':''}></div>
+      </div></div>`;
+  });
+  html += `<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-blue btn-sm" onclick="saveEdits('${oid}')"><i class="ri-check-line"></i> Save</button></div>`;
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modalBg').classList.add('show');
+};
+
+window.saveEdits = async function(oid) {
+  const myE = S.works.filter(w => w.oid === oid && w.w === CW);
+  for (const w of myE) {
+    if (w.pe) continue;
+    const sEl = document.getElementById('ed_sku_' + w.id);
+    const qEl = document.getElementById('ed_qty_' + w.id);
+    if (sEl && qEl) {
+      const newSku = parseInt(sEl.value) || w.sku;
+      const newQty = parseInt(qEl.value) || w.qty;
+      if (newSku !== w.sku || newQty !== w.qty) {
+        await api('editEntry', { entryId: w.id, items: newSku, qty: newQty });
+      }
+    }
+  }
+  toast('Updated', 'ok');
+  closeModal();
+  await refreshData();
+};
+
+// PICKING
+let _pickSel = '';
+R.pick = function() {
+  const myActive = S.works.filter(w => w.w === CW && w.s && !w.e);
+  if (myActive.length) {
+    document.getElementById('pickForm').innerHTML = '';
+  } else {
+    const avail = S.orders.filter(o => { const st = oSt(o.id); return st === 'waiting' || st.startsWith('pick'); });
+    document.getElementById('pickForm').innerHTML = `<div class="card">
+      <div class="card-t"><i class="ri-route-line" style="color:var(--blue)"></i> Start picking</div>
+      <div class="fg"><label class="fl">Select order</label>
+        <select class="fi" id="pOrd"><option value="">— Select order —</option>${avail.map(o => `<option value="${o.id}"${o.id===_pickSel?' selected':''}>${o.id} (${o.ch} · ${o.cu})</option>`).join('')}</select></div>
+      <div id="pOrdInfo"></div>
+      <div class="fr">
+        <div class="fg"><label class="fl">SKU count (Items)</label><input class="fi" type="number" id="pSku" placeholder="e.g. 15" min="1"></div>
+        <div class="fg"><label class="fl">Total QTY</label><input class="fi" type="number" id="pQty" placeholder="e.g. 120" min="1"></div>
+      </div>
+      <button class="btn btn-blue btn-block" onclick="startPick()"><i class="ri-play-line"></i> Start picking</button></div>`;
+    const sel = document.getElementById('pOrd');
+    if (sel) sel.addEventListener('change', pOrdChg);
+    if (_pickSel) pOrdChg();
+  }
+  document.getElementById('pickMy').innerHTML = myActive.length ? myActive.map(w =>
+    `<div class="we" style="border-color:var(--blue-bd)"><div class="we-top"><span class="we-id">${w.oid} · SKU ${w.sku} Items / ${w.qty} QTY</span><span class="badge b-live">Picking</span></div>
+      <div class="we-info" style="margin-bottom:8px">Started: ${w.s}</div>
+      <button class="btn btn-green btn-block" onclick="endPick('${w.id}')"><i class="ri-stop-line"></i> End picking</button></div>`
+  ).join('') : '<div style="font-size:12px;color:var(--text3);padding:6px 0">No active picking</div>';
+  updatePickAll();
+};
+function updatePickAll() {
+  if (!_pickSel) { document.getElementById('pickAll').innerHTML = ''; return; }
+  const all = S.works.filter(w => w.oid === _pickSel);
+  document.getElementById('pickAll').innerHTML = all.length ? `<div class="card" style="padding:0;overflow:hidden"><table class="tbl"><tr><th>Worker</th><th>Items</th><th>QTY</th><th>Status</th><th>Start</th><th>End</th></tr>${all.map(w => `<tr><td>${w.w}</td><td class="mono">${w.sku}</td><td class="mono">${w.qty}</td><td>${w.e?'<span class="badge b-done">Done</span>':'<span class="badge b-live">Active</span>'}</td><td class="mono">${w.s||'-'}</td><td class="mono">${w.e||'-'}</td></tr>`).join('')}</table></div>` : '';
+}
+function pOrdChg() {
+  const sel = document.getElementById('pOrd'); if (!sel) return;
+  _pickSel = sel.value;
+  const info = document.getElementById('pOrdInfo');
+  if (!_pickSel) { if (info) info.innerHTML = ''; updatePickAll(); return; }
+  const o = S.orders.find(x => x.id === _pickSel);
+  const ws = S.works.filter(w => w.oid === _pickSel);
+  const act = ws.filter(w => w.s && !w.e).length;
+  info.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;margin-bottom:10px;font-size:12px"><span style="font-weight:600">${o.ch} · ${o.cu}</span> · ${act} worker(s) active · Items ${ws.reduce((s,w)=>s+w.sku,0)} / QTY ${ws.reduce((s,w)=>s+w.qty,0)}</div>`;
+  updatePickAll();
+}
+window.startPick = async function() {
+  const oid = document.getElementById('pOrd')?.value;
+  const sku = parseInt(document.getElementById('pSku')?.value);
+  const qty = parseInt(document.getElementById('pQty')?.value);
+  if (!oid) { toast('Select an order', 'err'); return; }
+  if (!sku || sku < 1) { toast('Enter item count', 'err'); return; }
+  if (!qty || qty < 1) { toast('Enter total QTY', 'err'); return; }
+  toast('Starting pick...', '');
+  const res = await api('startPick', { orderId: oid, worker: CW, items: sku, qty: qty });
+  if (res.ok) { _pickSel = oid; toast('Picking started!', 'ok'); await loadData(); R.pick(); }
+  else toast('Error: ' + res.error, 'err');
+};
+window.endPick = async function(wid) {
+  toast('Ending pick...', '');
+  const res = await api('endPick', { entryId: wid });
+  if (res.ok) { toast('Picking done → Inspection queue', 'ok'); await loadData(); R.pick(); }
+  else toast('Error: ' + res.error, 'err');
+};
+
+// INSPECTION
+R.insp = function() {
+  const myPending = S.works.filter(w => w.w === CW && w.e && !w.is);
+  const el = document.getElementById('inspMyForm');
+  el.innerHTML = myPending.length ? `<div class="card"><div class="card-t"><i class="ri-search-eye-line" style="color:var(--purple)"></i> My entries — Ready for inspection</div>${myPending.map(w => {const o=S.orders.find(x=>x.id===w.oid);return`<div class="we" style="margin-bottom:6px"><div class="we-top"><span class="we-id">${w.oid}</span><span style="font-size:11px;color:var(--text2)">${o?.ch}·${o?.cu} · Items ${w.sku} / QTY ${w.qty}</span></div><button class="btn btn-purple btn-block btn-sm" style="margin-top:6px" onclick="startInspEntry('${w.id}')"><i class="ri-play-line"></i> Start inspection</button></div>`}).join('')}</div>` : '';
+  const sel = document.getElementById('inspOrd'), cur = sel.value;
+  const avail = S.orders.filter(o => S.works.some(w => w.oid === o.id && w.e && !w.is && w.w !== CW));
+  sel.innerHTML = '<option value="">— Select order —</option>' + avail.map(o => `<option value="${o.id}"${o.id===cur?' selected':''}>${o.id}</option>`).join('');
+  sel.onchange = updateInspInfo; updateInspInfo();
+  const active = S.works.filter(w => w.is && !w.ie);
+  document.getElementById('inspList').innerHTML = active.length ? active.map(w =>
+    `<div class="we" style="border-color:var(--purple-bd)"><div class="we-top"><span class="we-id">${w.oid} · ${w.w}</span><span class="badge b-live">Inspecting</span></div><div class="we-info" style="margin-bottom:8px">Items ${w.sku} / QTY ${w.qty} · Started: ${w.is}</div><button class="btn btn-green btn-block" onclick="endInsp('${w.id}')"><i class="ri-stop-line"></i> End inspection</button></div>`
+  ).join('') : '<div style="font-size:12px;color:var(--text3);padding:6px 0">No active inspections</div>';
+};
+function updateInspInfo() {
+  const oid = document.getElementById('inspOrd')?.value;
+  const info = document.getElementById('inspInfo'), acts = document.getElementById('inspActs');
+  if (!oid) { info.innerHTML = ''; acts.innerHTML = ''; return; }
+  const ws = S.works.filter(w => w.oid === oid && w.e && w.w !== CW);
+  const pending = ws.filter(w => !w.is).length;
+  info.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;margin-bottom:8px;font-size:12px">${ws.length} entries · ${pending} pending</div>`;
+  acts.innerHTML = pending > 0 ? `<button class="btn btn-purple btn-block" onclick="startInspBatch('${oid}')"><i class="ri-play-line"></i> Start inspection (${pending})</button>` : '<div style="font-size:12px;color:var(--green)">All inspected</div>';
+}
+window.startInspEntry = async function(wid) {
+  toast('Starting inspection...', '');
+  const res = await api('startInsp', { entryId: wid });
+  if (res.ok) { toast('Inspection started!', 'ok'); await loadData(); R.insp(); } else toast('Error: ' + res.error, 'err');
+};
+window.startInspBatch = async function(oid) {
+  const ws = S.works.filter(w => w.oid === oid && w.e && !w.is && w.w !== CW);
+  for (const w of ws) await api('startInsp', { entryId: w.id });
+  toast('Inspection started!', 'ok'); await loadData(); R.insp();
+};
+window.endInsp = async function(wid) {
+  toast('Ending inspection...', '');
+  const res = await api('endInsp', { entryId: wid });
+  if (res.ok) { toast('Inspection done', 'ok'); await loadData(); R.insp(); } else toast('Error: ' + res.error, 'err');
+};
+
+// PALLETIZING
+R.pall = function() {
+  const myPending = S.works.filter(w => w.w === CW && w.ie && !w.ps);
+  const el = document.getElementById('pallMyForm');
+  el.innerHTML = myPending.length ? `<div class="card"><div class="card-t"><i class="ri-stack-line" style="color:var(--teal)"></i> My entries — Ready for palletizing</div>${myPending.map(w => {const o=S.orders.find(x=>x.id===w.oid);return`<div class="we" style="margin-bottom:6px"><div class="we-top"><span class="we-id">${w.oid}</span><span style="font-size:11px;color:var(--text2)">${o?.ch}·${o?.cu} · Items ${w.sku} / QTY ${w.qty}</span></div><button class="btn btn-teal btn-block btn-sm" style="margin-top:6px" onclick="startPallEntry('${w.id}')"><i class="ri-play-line"></i> Start palletizing</button></div>`}).join('')}</div>` : '';
+  const sel = document.getElementById('pallOrd'), cur = sel.value;
+  const avail = S.orders.filter(o => S.works.some(w => w.oid === o.id && w.ie && !w.ps && w.w !== CW));
+  sel.innerHTML = '<option value="">— Select order —</option>' + avail.map(o => `<option value="${o.id}"${o.id===cur?' selected':''}>${o.id}</option>`).join('');
+  sel.onchange = updatePallInfo; updatePallInfo();
+  const active = S.works.filter(w => w.ps && !w.pe);
+  document.getElementById('pallList').innerHTML = active.length ? active.map(w =>
+    `<div class="we" style="border-color:var(--teal-bd)"><div class="we-top"><span class="we-id">${w.oid} · ${w.w}</span><span class="badge b-live">Palletizing</span></div><div class="we-info" style="margin-bottom:8px">Items ${w.sku} / QTY ${w.qty} · Started: ${w.ps}</div><button class="btn btn-green btn-block" onclick="endPall('${w.id}')"><i class="ri-stop-line"></i> End palletizing</button></div>`
+  ).join('') : '<div style="font-size:12px;color:var(--text3);padding:6px 0">No active palletizing</div>';
+};
+function updatePallInfo() {
+  const oid = document.getElementById('pallOrd')?.value;
+  const info = document.getElementById('pallInfo'), acts = document.getElementById('pallActs');
+  if (!oid) { info.innerHTML = ''; acts.innerHTML = ''; return; }
+  const ws = S.works.filter(w => w.oid === oid && w.ie && w.w !== CW);
+  const pending = ws.filter(w => !w.ps).length;
+  info.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;margin-bottom:8px;font-size:12px">${ws.length} entries · ${pending} pending</div>`;
+  acts.innerHTML = pending > 0 ? `<button class="btn btn-teal btn-block" onclick="startPallBatch('${oid}')"><i class="ri-play-line"></i> Start palletizing (${pending})</button>` : '<div style="font-size:12px;color:var(--green)">All palletized</div>';
+}
+window.startPallEntry = async function(wid) {
+  toast('Starting palletizing...', '');
+  const res = await api('startPall', { entryId: wid });
+  if (res.ok) { toast('Palletizing started!', 'ok'); await loadData(); R.pall(); } else toast('Error: ' + res.error, 'err');
+};
+window.startPallBatch = async function(oid) {
+  const ws = S.works.filter(w => w.oid === oid && w.ie && !w.ps && w.w !== CW);
+  for (const w of ws) await api('startPall', { entryId: w.id });
+  toast('Palletizing started!', 'ok'); await loadData(); R.pall();
+};
+window.endPall = async function(wid) {
+  toast('Ending palletizing...', '');
+  const res = await api('endPall', { entryId: wid });
+  if (res.ok) { toast('Palletizing done', 'ok'); await loadData(); R.pall(); } else toast('Error: ' + res.error, 'err');
+};
+
+// KPI
+R.kpi = function() {
+  const stats = S.workers.map(w => {
+    const my = S.works.filter(x => x.w === w);
+    const done = my.filter(x => x.pe).length;
+    return { w, total: my.length, done, active: my.length - done, tSku: my.reduce((s,x)=>s+x.sku,0), tQty: my.reduce((s,x)=>s+x.qty,0), rate: my.length ? Math.round(done/my.length*100) : 0 };
+  }).sort((a,b) => b.done - a.done || b.tSku - a.tSku);
+  document.getElementById('kpiList').innerHTML = `<div class="card" style="padding:0;overflow:hidden"><table class="tbl"><tr><th style="padding-left:14px">#</th><th>Worker</th><th>Done</th><th>Active</th><th>Total</th><th>Items</th><th>QTY</th><th>Rate</th><th style="width:100px">Progress</th></tr>${stats.map((s,i)=>{const me=s.w===CW;const rc=s.rate>=80?'var(--green)':s.rate>=50?'var(--amber)':s.rate>0?'var(--blue)':'var(--text3)';return`<tr${me?' style="background:rgba(59,130,246,.05)"':''}><td style="padding-left:14px;color:var(--text3);font-weight:700">${i+1}</td><td style="font-weight:${me?700:500}">${s.w}${me?' <span style="color:var(--blue);font-size:9px">YOU</span>':''}</td><td class="mono" style="color:var(--green);font-weight:600">${s.done}</td><td class="mono" style="color:${s.active?'var(--amber)':'var(--text3)'}">${s.active}</td><td class="mono">${s.total}</td><td class="mono" style="color:var(--purple)">${s.tSku}</td><td class="mono" style="color:var(--teal)">${s.tQty}</td><td class="mono" style="color:${rc};font-weight:600">${s.rate}%</td><td><div style="height:5px;background:var(--bg);border-radius:3px;overflow:hidden"><div style="height:100%;width:${s.rate}%;background:${rc};border-radius:3px"></div></div></td></tr>`}).join('')}</table></div>`;
+  const tW=S.works.length,tD=S.works.filter(w=>w.pe).length;
+  document.getElementById('kpiTeam').innerHTML=`<div class="grid g5">${[{l:'Total entries',v:tW,c:'bl'},{l:'Completed',v:tD,c:'gr'},{l:'Active',v:tW-tD,c:'am'},{l:'Total Items',v:S.works.reduce((s,w)=>s+w.sku,0),c:'pu'},{l:'Total QTY',v:S.works.reduce((s,w)=>s+w.qty,0),c:'tl'}].map(m=>`<div class="mc ${m.c}"><div class="mc-l">${m.l}</div><div class="mc-v" style="font-size:20px">${m.v}</div></div>`).join('')}</div>`;
+};
+
+// MANAGER
+R.mgr = function() {
+  document.getElementById('mWList').innerHTML = S.workers.map(w =>
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <span>${w}${w===CW?' <span style="color:var(--blue);font-size:10px;font-weight:600">(current)</span>':''}</span>
+      <button class="btn btn-sm" style="color:var(--red);border-color:rgba(239,68,68,.3);padding:3px 6px" onclick="rmW('${w}')"><i class="ri-delete-bin-line"></i></button></div>`).join('');
+  document.getElementById('mOList').innerHTML = S.orders.map(o => {
+    const st = oSt(o.id);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <div><span class="mono" style="font-weight:600">${o.id}</span> ${o.ch}·${o.cu} ${stBadge(st)}</div>
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-sm" style="padding:3px 6px" onclick="editOrder('${o.id}')"><i class="ri-edit-line"></i></button>
+        <button class="btn btn-sm" style="color:var(--red);border-color:rgba(239,68,68,.3);padding:3px 6px" onclick="rmO('${o.id}')"><i class="ri-delete-bin-line"></i></button>
+      </div></div>`;
+  }).join('') || '<div style="font-size:12px;color:var(--text3)">No orders</div>';
+  mSearchEntries();
+};
+
+window.addW = async function() {
+  const n = document.getElementById('mNewW').value.trim();
+  if (!n) { toast('Enter name', 'err'); return; }
+  if (S.workers.includes(n)) { toast('Exists', 'err'); return; }
+  S.workers.push(n);
+  await api('setSettings', { workers: S.workers });
+  popW(); toast(n + ' added', 'ok');
+  document.getElementById('mNewW').value = ''; R.mgr();
+};
+window.rmW = async function(n) {
+  if (!confirm(`Remove "${n}"?`)) return;
+  S.workers = S.workers.filter(w => w !== n);
+  await api('setSettings', { workers: S.workers });
+  popW(); toast(n + ' removed', 'ok'); R.mgr();
+};
+window.addO = async function() {
+  const id = document.getElementById('mNewO').value.trim();
+  const ch = document.getElementById('mOCh').value.trim() || '-';
+  const cu = document.getElementById('mOCu').value.trim() || '-';
+  if (!id) { toast('Enter order#', 'err'); return; }
+  if (S.orders.find(o => o.id === id)) { toast('Exists', 'err'); return; }
+  toast('Adding order...', '');
+  const res = await api('upsertOrder', { id, ch, cu });
+  if (res.ok) { toast(id + ' added', 'ok'); await loadData(); R.mgr(); }
+  else toast('Error: ' + res.error, 'err');
+  document.getElementById('mNewO').value = ''; document.getElementById('mOCh').value = ''; document.getElementById('mOCu').value = '';
+};
+window.rmO = async function(id) {
+  if (!confirm(`Delete "${id}"?`)) return;
+  toast('Deleting...', '');
+  const res = await api('deleteOrder', { id });
+  if (res.ok) { toast(id + ' deleted', 'ok'); await loadData(); R.mgr(); }
+  else toast('Error: ' + res.error, 'err');
+};
+window.editOrder = function(oid) {
+  const o = S.orders.find(x => x.id === oid); if (!o) return;
+  const ws = S.works.filter(w => w.oid === oid);
+  let html = `<div style="font-size:15px;font-weight:700;margin-bottom:14px"><i class="ri-edit-line" style="color:var(--amber)"></i> Edit order — ${oid}</div>
+    <div class="fg"><label class="fl">Order number</label><input class="fi" id="eo_id" value="${o.id}"></div>
+    <div class="fr"><div class="fg"><label class="fl">Channel</label><input class="fi" id="eo_ch" value="${o.ch}"></div><div class="fg"><label class="fl">Customer</label><input class="fi" id="eo_cu" value="${o.cu}"></div></div>`;
+  if (ws.length) {
+    html += `<div class="section" style="margin-top:12px">Work entries (${ws.length})</div>`;
+    ws.forEach((w, i) => {
+      html += `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:10px;margin-bottom:6px"><div style="font-size:11px;color:var(--text3);margin-bottom:6px">Entry ${i+1}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><div><label class="fl">Worker</label><select class="fi" id="ew_w_${w.id}" style="font-size:12px">${S.workers.map(wk=>`<option${wk===w.w?' selected':''}>${wk}</option>`).join('')}</select></div><div><label class="fl">Items</label><input class="fi" type="number" id="ew_sku_${w.id}" value="${w.sku}" min="1"></div><div><label class="fl">QTY</label><input class="fi" type="number" id="ew_qty_${w.id}" value="${w.qty}" min="1"></div></div></div>`;
+    });
+  }
+  html += `<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-blue btn-sm" onclick="saveOrder('${oid}')"><i class="ri-check-line"></i> Save</button></div>`;
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modalBg').classList.add('show');
+};
+window.saveOrder = async function(origId) {
+  const newId = document.getElementById('eo_id').value.trim();
+  const ch = document.getElementById('eo_ch').value.trim();
+  const cu = document.getElementById('eo_cu').value.trim();
+  if (!newId) { toast('Order# required', 'err'); return; }
+  toast('Saving...', '');
+  await api('upsertOrder', { id: origId, newId: newId !== origId ? newId : undefined, ch, cu });
+  const ws = S.works.filter(w => w.oid === origId);
+  for (const w of ws) {
+    const wEl = document.getElementById('ew_w_' + w.id);
+    const sEl = document.getElementById('ew_sku_' + w.id);
+    const qEl = document.getElementById('ew_qty_' + w.id);
+    if (wEl || sEl || qEl) await api('editEntry', { entryId: w.id, worker: wEl?.value, items: parseInt(sEl?.value), qty: parseInt(qEl?.value) });
+  }
+  toast('Order updated', 'ok'); closeModal(); await loadData(); R.mgr();
+};
+window.mSearchEntries = function() {
+  const q = (document.getElementById('mSearchW')?.value || '').toUpperCase();
+  const ws = q ? S.works.filter(w => w.oid.toUpperCase().includes(q)) : S.works.slice(0, 30);
+  document.getElementById('mWEntries').innerHTML = ws.length ? `<table class="tbl"><tr><th>Order</th><th>Worker</th><th>Items</th><th>QTY</th><th>Pick</th><th>Insp.</th><th>Pallet</th><th></th></tr>${ws.map(w => `<tr><td class="mono">${w.oid}</td><td>${w.w}</td><td class="mono">${w.sku}</td><td class="mono">${w.qty}</td><td class="mono" style="font-size:10px">${w.s||'-'}→${w.e||'-'}</td><td class="mono" style="font-size:10px">${w.is||'-'}→${w.ie||'-'}</td><td class="mono" style="font-size:10px">${w.ps||'-'}→${w.pe||'-'}</td><td><button class="btn btn-sm" style="color:var(--red);padding:2px 5px" onclick="rmEntry('${w.id}')"><i class="ri-delete-bin-line"></i></button></td></tr>`).join('')}</table>` : '<div style="font-size:12px;color:var(--text3)">No entries</div>';
+};
+window.rmEntry = async function(wid) {
+  if (!confirm('Delete this entry?')) return;
+  await api('deleteEntry', { entryId: wid });
+  toast('Deleted', 'ok'); await loadData(); mSearchEntries();
+};
+window.changePin = async function() {
+  const c = document.getElementById('cpCur').value, n = document.getElementById('cpNew').value, cf = document.getElementById('cpConf').value;
+  if (!c || !n || !cf) { toast('Fill all fields', 'err'); return; }
+  if (c !== S.pin) { toast('Wrong current password', 'err'); return; }
+  if (n.length < 4) { toast('Min 4 chars', 'err'); return; }
+  if (n !== cf) { toast("Passwords don't match", 'err'); return; }
+  await api('setSettings', { managerPin: n });
+  S.pin = n;
+  toast('Password changed', 'ok');
+  document.getElementById('cpCur').value = ''; document.getElementById('cpNew').value = ''; document.getElementById('cpConf').value = '';
+};
+
+// ==========================================
+// INIT
+// ==========================================
+(async function init() {
+  updateClock(); setInterval(updateClock, 1000);
+  const ok = await loadData();
+  document.getElementById('loadingOverlay').style.display = 'none';
+  document.getElementById('appShell').style.display = 'block';
+  if (!ok) toast('Failed to connect to server', 'err');
+  popW();
+  document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => go(b.dataset.p)));
+  go('dash');
+  // Auto refresh every 30 seconds
+  setInterval(async () => { await loadData(); go(curP()); }, 30000);
+  // Register service worker for PWA
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW:', e));
+  }
+})();
+</script>
+</body>
+</html>
