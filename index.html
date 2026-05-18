@@ -763,7 +763,7 @@ function renderStageContent() {
       </div>
       <div id="workOrderInfo"></div>
       ${pickFields}
-      <button class="btn ${SBTN[s]} btn-block btn-lg" onclick="startWork()" style="font-size:15px;padding:14px">
+      <button class="btn ${SBTN[s]} btn-block btn-lg" id="btnStartWork" onclick="startWork()" style="font-size:15px;padding:14px">
         <i class="ri-play-circle-line"></i> ${SLABEL[s]}
       </button>
     </div>`;
@@ -848,116 +848,207 @@ function onWorkOrderChange()   { onOrderChange(); }
 function renderActFeed()       {}
 function renderMyActive()      { renderStageContent(); }
 
-window.startWork=function(){
-  const oid=document.getElementById('workOrder')?.value;
-  if(!oid){toast('Select an order','err');return;}
-  let items=null,qty=null;
-  if(CS==='PICK'){
-    items=parseInt(document.getElementById('wItems')?.value);
-    qty  =parseInt(document.getElementById('wQty')?.value);
-    if(!items||items<1){toast('Enter item count','err');return;}
-    if(!qty||qty<1){toast('Enter total QTY','err');return;}
+// ── Global start lock — prevents double-tap race condition ──
+let _startLock = false;
+
+window.startWork = function() {
+  const oid = document.getElementById('workOrder')?.value;
+  if (!oid) { toast('Select an order', 'err'); return; }
+
+  let items = null, qty = null;
+  if (CS === 'PICK') {
+    items = parseInt(document.getElementById('wItems')?.value);
+    qty   = parseInt(document.getElementById('wQty')?.value);
+    if (!items || items < 1) { toast('Enter item count', 'err'); return; }
+    if (!qty   || qty   < 1) { toast('Enter total QTY', 'err'); return; }
   }
 
-  // ── Duplicate session guard ──────────────────────────
-  // Check: same worker, same order, same stage, currently ACTIVE (not ended)
+  // ── Hard block: active dupe ──────────────────────────
   const activeDupe = S.works.filter(w =>
     w.w === CW && w.oid === oid && w.stage === CS && !w.endT
   );
-
   if (activeDupe.length > 0) {
-    // Hard block — cannot have 2 simultaneous active sessions on same order+stage
-    const o = S.orders.find(x=>x.id===oid);
-    const col = SCOL[CS];
-    const icon = SICON[CS];
-    openModal(`<div style="text-align:center;padding:8px 0">
-      <div style="width:52px;height:52px;border-radius:50%;background:var(--red-bg);border:2px solid var(--red-bd);display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
-        <i class="ri-error-warning-line" style="font-size:26px;color:var(--red)"></i>
-      </div>
-      <div style="font-size:16px;font-weight:800;margin-bottom:4px">Already in progress</div>
-      <div style="font-size:12px;color:var(--t2);margin-bottom:16px">
-        You already have an active <span style="color:${col};font-weight:700">${CS}</span> session<br>
-        for <span style="font-weight:700">${oid}</span> (${o?.ch}·${o?.cu})
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;font-size:12px">
-        <div style="color:var(--t3);margin-bottom:4px">Active session started at:</div>
-        <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:${col}">${activeDupe[0].startT}</div>
-        <div style="color:var(--amber);font-size:11px;margin-top:4px">⏱ ${liveElapsed(activeDupe[0].startT)||'Just started'}</div>
-      </div>
-      <div style="font-size:12px;color:var(--t3);margin-bottom:16px">
-        Please <strong style="color:var(--green)">end the current session</strong> before starting a new one.
-      </div>
-      <button class="btn btn-blue btn-block" onclick="closeModal()" style="justify-content:center">
-        <i class="ri-arrow-left-line"></i> Go back
-      </button>
-    </div>`);
+    showDupeBlockModal(oid, activeDupe[0]);
     return;
   }
 
-  // ── Warn if same order+stage already completed (multi-session OK, but confirm) ──
+  // ── Warn: previously completed same order+stage ──────
   const completedHere = S.works.filter(w =>
     w.w === CW && w.oid === oid && w.stage === CS && w.endT
   );
-
   if (completedHere.length > 0) {
-    // For PALL and INSP: multi-session is allowed (e.g. work resumed next day)
-    // Show confirmation dialog
-    const o = S.orders.find(x=>x.id===oid);
-    const col = SCOL[CS];
-    const lastSession = completedHere[completedHere.length - 1];
-    const pallNote = CS==='PALL'
-      ? '<div style="font-size:11px;color:var(--teal);margin-top:6px">✓ Multi-session palletizing is normal (work can span multiple days)</div>'
-      : '';
-    openModal(`<div style="text-align:center;padding:6px 0">
-      <div style="width:48px;height:48px;border-radius:50%;background:var(--amber-bg);border:2px solid var(--amber-bd);display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
-        <i class="ri-question-line" style="font-size:24px;color:var(--amber)"></i>
-      </div>
-      <div style="font-size:15px;font-weight:800;margin-bottom:4px">Start another session?</div>
-      <div style="font-size:12px;color:var(--t2);margin-bottom:14px">
-        You already completed <strong>${completedHere.length}</strong> ${CS} session${completedHere.length>1?'s':''}<br>
-        for <span style="font-weight:700">${oid}</span> (${o?.ch}·${o?.cu})
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 12px;margin-bottom:4px;font-size:12px;text-align:left">
-        <div style="color:var(--t3);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px">Previous sessions</div>
-        ${completedHere.map(w=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--bd)">
-          <span class="mono" style="color:var(--t2)">${w.startT} → ${w.endT}</span>
-          <span style="color:var(--teal);font-size:11px">${fmtMin(w.netMin)}${w.pallets!==null?' · '+fmtPallets(w.pallets)+' pallets':''}</span>
-        </div>`).join('')}
-      </div>
-      ${pallNote}
-      <div style="display:flex;gap:8px;margin-top:16px">
-        <button class="btn btn-sm" onclick="closeModal()" style="flex:1;justify-content:center">
-          <i class="ri-close-line"></i> Cancel
-        </button>
-        <button class="btn ${SBTN[CS]}" onclick="closeModal();doStartWork('${oid}',${items},${qty})" style="flex:1;justify-content:center;font-weight:700">
-          <i class="ri-play-circle-line"></i> Start anyway
-        </button>
-      </div>
-    </div>`);
+    showDupeWarnModal(oid, completedHere, items, qty);
     return;
   }
 
-  // Normal start — no conflicts
+  // ── Normal start ─────────────────────────────────────
   doStartWork(oid, items, qty);
 };
 
-function doStartWork(oid, items, qty) {
-  const tid=genId(), hhmm=nowHHmm();
-  const entry={id:tid,oid,w:CW,stage:CS,items,qty,pallets:null,startT:hhmm,endT:'',startISO:'',endISO:'',netMin:null,grossMin:null,date:todayStr()};
-  S.works.push(entry); _pending[tid]=true;
-  toast(`✓ ${CS} started!`,'ok');
-  updateBadges(); renderStageContent();
+function showDupeBlockModal(oid, existing) {
+  const o   = S.orders.find(x => x.id === oid);
+  const col = SCOL[CS];
+  openModal(`
+    <div style="text-align:center;padding:8px 0">
+      <div style="width:56px;height:56px;border-radius:50%;background:var(--red-bg);border:2px solid var(--red-bd);
+           display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+        <i class="ri-forbid-2-line" style="font-size:28px;color:var(--red)"></i>
+      </div>
+      <div style="font-size:17px;font-weight:800;margin-bottom:6px">Already in progress</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:16px">
+        You have an active <strong style="color:${col}">${CS}</strong> session<br>
+        for <strong>${oid}</strong> (${o?.ch}·${o?.cu})
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r2);
+           padding:14px 16px;margin-bottom:18px">
+        <div style="font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.07em;
+             text-transform:uppercase;margin-bottom:8px">Active session</div>
+        <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:${col};margin-bottom:4px">
+          ${existing.startT} → now
+        </div>
+        <div style="color:var(--amber);font-size:12px;font-weight:600">
+          ⏱ ${liveElapsed(existing.startT) || 'Just started'}
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:16px;line-height:1.6">
+        End your current session first,<br>then start a new one.
+      </div>
+      <button class="btn btn-blue btn-block" onclick="closeModal()" style="justify-content:center;padding:13px">
+        <i class="ri-arrow-left-line"></i> Back to work
+      </button>
+    </div>`);
+}
 
-  apiBg('startWork',{orderId:oid,worker:CW,stage:CS,items,qty},
-    res=>{
-      const idx=S.works.findIndex(w=>w.id===tid);
-      if(idx>=0&&res.entryId){S.works[idx].id=res.entryId;S.works[idx].startT=res.startTime||hhmm;}
-      delete _pending[tid]; updateBadges(); renderStageContent();
+function showDupeWarnModal(oid, completedSessions, items, qty) {
+  const o      = S.orders.find(x => x.id === oid);
+  const col    = SCOL[CS];
+  const isMultiOK = CS === 'PALL'; // PALL explicitly allows multi-session (multi-day)
+  // Safe JSON for callback — avoids null in inline JS string
+  const itemsJson = items !== null ? items : 'null';
+  const qtyJson   = qty   !== null ? qty   : 'null';
+
+  openModal(`
+    <div style="padding:4px 0">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="width:44px;height:44px;border-radius:50%;background:var(--amber-bg);border:2px solid var(--amber-bd);
+             display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="ri-question-line" style="font-size:22px;color:var(--amber)"></i>
+        </div>
+        <div>
+          <div style="font-size:15px;font-weight:800">Start another session?</div>
+          <div style="font-size:12px;color:var(--t2);margin-top:2px">
+            ${oid} · <span style="color:${col};font-weight:700">${CS}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size:12px;color:var(--t2);margin-bottom:12px">
+        You already completed <strong>${completedSessions.length}</strong>
+        ${CS} session${completedSessions.length > 1 ? 's' : ''} for this order:
+      </div>
+
+      <div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);
+           padding:10px 12px;margin-bottom:12px;max-height:160px;overflow-y:auto">
+        ${completedSessions.map((w, i) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;
+               padding:6px 0;border-bottom:1px solid var(--bd)${i===completedSessions.length-1?';border-bottom:none':''}">
+            <div>
+              <div style="font-family:var(--mono);font-size:12px;color:var(--t2)">${w.startT} → ${w.endT}</div>
+              <div style="font-size:10px;color:var(--t3);margin-top:1px">${w.date||''}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="color:var(--teal);font-size:12px;font-weight:600">${fmtMin(w.netMin)}</div>
+              ${w.pallets !== null ? `<div style="color:var(--amber);font-size:10px">${fmtPallets(w.pallets)} pallets</div>` : ''}
+            </div>
+          </div>`).join('')}
+      </div>
+
+      ${isMultiOK
+        ? `<div style="background:var(--teal-bg);border:1px solid var(--teal-bd);border-radius:var(--r);
+               padding:8px 12px;margin-bottom:14px;font-size:11px;color:var(--teal)">
+             <i class="ri-information-line"></i>
+             Multi-session palletizing is normal — work can resume across days.
+           </div>`
+        : `<div style="background:var(--amber-bg);border:1px solid var(--amber-bd);border-radius:var(--r);
+               padding:8px 12px;margin-bottom:14px;font-size:11px;color:var(--amber)">
+             <i class="ri-alert-line"></i>
+             Are you sure? This will add another ${CS} session to the same order.
+           </div>`
+      }
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn" onclick="closeModal()" style="justify-content:center;padding:12px">
+          <i class="ri-close-line"></i> Cancel
+        </button>
+        <button class="btn ${SBTN[CS]}" style="justify-content:center;padding:12px;font-weight:700"
+          onclick="closeModal(); _confirmedStart('${oid}', ${itemsJson}, ${qtyJson})">
+          <i class="ri-play-circle-line"></i> Start session
+        </button>
+      </div>
+    </div>`);
+}
+
+// Called only after user explicitly confirms
+window._confirmedStart = function(oid, items, qty) {
+  doStartWork(oid, items === 'null' ? null : items, qty === 'null' ? null : qty);
+};
+
+function doStartWork(oid, items, qty) {
+  // ── Click lock — prevent double-tap ─────────────────
+  if (_startLock) { toast('Starting... please wait', ''); return; }
+  _startLock = true;
+  setTimeout(() => { _startLock = false; }, 3000); // auto-release after 3s
+
+  // Final guard (in case state changed between check and confirm)
+  const activeDupe = S.works.filter(w =>
+    w.w === CW && w.oid === oid && w.stage === CS && !w.endT
+  );
+  if (activeDupe.length > 0) {
+    _startLock = false;
+    showDupeBlockModal(oid, activeDupe[0]);
+    return;
+  }
+
+  const tid   = genId();
+  const hhmm  = nowHHmm();
+
+  // Immediately disable start button to prevent any further clicks
+  const btnStart = document.getElementById('btnStartWork');
+  if (btnStart) {
+    btnStart.disabled = true;
+    btnStart.innerHTML = '<i class="ri-loader-4-line"></i> Starting...';
+  }
+  const entry = {
+    id: tid, oid, w: CW, stage: CS,
+    items, qty, pallets: null,
+    startT: hhmm, endT: '', startISO: '', endISO: '',
+    netMin: null, grossMin: null, date: todayStr()
+  };
+  S.works.push(entry);
+  _pending[tid] = true;
+  toast(`✓ ${CS} started!`, 'ok');
+  updateBadges();
+  renderStageContent();
+
+  apiBg('startWork', { orderId: oid, worker: CW, stage: CS, items, qty },
+    res => {
+      const idx = S.works.findIndex(w => w.id === tid);
+      if (idx >= 0 && res.entryId) {
+        S.works[idx].id     = res.entryId;
+        S.works[idx].startT = res.startTime || hhmm;
+      }
+      delete _pending[tid];
+      _startLock = false;
+      updateBadges();
+      renderStageContent();
     },
-    ()=>{
-      S.works=S.works.filter(w=>w.id!==tid);
-      delete _pending[tid]; toast('⚠ Save failed — try again','err');
-      updateBadges(); renderStageContent();
+    () => {
+      S.works = S.works.filter(w => w.id !== tid);
+      delete _pending[tid];
+      _startLock = false;
+      toast('⚠ Save failed — try again', 'err');
+      updateBadges();
+      renderStageContent();
     }
   );
 }
