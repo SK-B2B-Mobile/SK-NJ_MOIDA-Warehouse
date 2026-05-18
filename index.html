@@ -85,13 +85,37 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .sp-pall{background:var(--teal-bg);color:var(--teal);border-color:var(--teal-bd)}
 .sp-done{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)}
 .sp-arr{color:var(--t3);font-size:10px}
-/* ── Stage tab selector ── */
-.stabs{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:14px}
-.stab{padding:10px 6px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg3);color:var(--t3);font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:all .12s;display:flex;align-items:center;justify-content:center;gap:5px}
+/* ── Stage tabs — redesigned ── */
+.stabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px}
+.stab{padding:12px 8px;border-radius:var(--r2);border:1px solid var(--bd2);background:var(--bg3);color:var(--t3);font-weight:700;cursor:pointer;text-align:center;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px;position:relative}
 .stab:hover{border-color:var(--t3);color:var(--t2)}
-.stab.pick.on{background:var(--blue-bg);border-color:var(--blue-bd);color:var(--blue)}
-.stab.insp.on{background:var(--purple-bg);border-color:var(--purple-bd);color:var(--purple)}
-.stab.pall.on{background:var(--teal-bg);border-color:var(--teal-bd);color:var(--teal)}
+.stab.pick.on{background:var(--blue-bg);border-color:var(--blue-bd);color:var(--blue);box-shadow:0 0 0 1px var(--blue-bd)}
+.stab.insp.on{background:var(--purple-bg);border-color:var(--purple-bd);color:var(--purple);box-shadow:0 0 0 1px var(--purple-bd)}
+.stab.pall.on{background:var(--teal-bg);border-color:var(--teal-bd);color:var(--teal);box-shadow:0 0 0 1px var(--teal-bd)}
+/* active dot on tab */
+.stab-dot{position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+/* stage content panels */
+.stage-panel{animation:fu .16s ease}
+/* start card */
+.start-card{background:var(--bg2);border:2px solid var(--bd2);border-radius:var(--r3);padding:18px 20px;margin-bottom:12px}
+.start-card.pick{border-color:var(--blue-bd)}
+.start-card.insp{border-color:var(--purple-bd)}
+.start-card.pall{border-color:var(--teal-bd)}
+/* active session card — stage-colored */
+.session-card{background:var(--bg2);border-radius:var(--r2);padding:16px 18px;margin-bottom:10px;border-left:4px solid var(--bd2)}
+.session-card.pick{border-left-color:var(--blue);background:linear-gradient(135deg,rgba(59,130,246,.04),var(--bg2))}
+.session-card.insp{border-left-color:var(--purple);background:linear-gradient(135deg,rgba(168,85,247,.04),var(--bg2))}
+.session-card.pall{border-left-color:var(--teal);background:linear-gradient(135deg,rgba(20,184,166,.04),var(--bg2))}
+.session-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.session-title{font-family:var(--mono);font-weight:700;font-size:15px}
+.session-sub{font-size:11px;color:var(--t2);margin-top:2px}
+.session-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{display:inline-flex;align-items:center;gap:3px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;background:var(--bg3);border:1px solid var(--bd2);color:var(--t2)}
+.chip.hi{color:var(--amber);border-color:var(--amber-bd);background:var(--amber-bg)}
+/* activity feed rows */
+.act-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bd);font-size:12px}
+.act-row:last-child{border-bottom:none}
+.act-stage{font-weight:700;font-size:10px;width:38px;flex-shrink:0;letter-spacing:.04em}
 /* ── Buttons ── */
 .btn{padding:8px 14px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg3);color:var(--t);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:5px;position:relative;overflow:hidden;white-space:nowrap}
 .btn:hover{background:var(--bg4);border-color:var(--t3)}.btn:active{transform:scale(.97)}
@@ -203,45 +227,37 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
     <div id="dashPager" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:7px"></div>
   </div>
 
-  <!-- WORK -->
+  <!-- WORK — completely redesigned: stage-focused -->
   <div class="pg" id="pg-work">
-    <div class="card">
-      <div class="card-t" id="workTitle"><i class="ri-play-circle-line" style="color:var(--blue)"></i> Start work</div>
 
-      <!-- Stage tabs -->
-      <div class="stabs">
-        <div class="stab pick on" onclick="selStage('PICK')"><i class="ri-route-line"></i> PICK</div>
-        <div class="stab insp" onclick="selStage('INSP')"><i class="ri-search-eye-line"></i> INSP</div>
-        <div class="stab pall" onclick="selStage('PALL')"><i class="ri-stack-line"></i> PALL</div>
-      </div>
+    <!-- ① Stage status bar — 내 현재 상태 한눈에 -->
+    <div id="stageStatusBar" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px"></div>
 
-      <!-- Order select -->
-      <div class="fg">
-        <label class="fl">Order</label>
-        <select class="fi" id="workOrder" onchange="onWorkOrderChange()">
-          <option value="">— Select order —</option>
-        </select>
-      </div>
-      <div id="workOrderInfo"></div>
-
-      <!-- PICK only: Items + QTY -->
-      <div id="pickInputs">
-        <div class="frow">
-          <div class="fg"><label class="fl">Items (SKU types)</label><input class="fi" type="number" id="wItems" placeholder="e.g. 15" min="1"></div>
-          <div class="fg"><label class="fl">Total QTY</label><input class="fi" type="number" id="wQty" placeholder="e.g. 120" min="1"></div>
+    <!-- ② Stage tab selector -->
+    <div class="stabs" id="stageTabs">
+      <div class="stab pick on" onclick="selStage('PICK')">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;width:100%">
+          <div style="display:flex;align-items:center;gap:5px;font-size:13px"><i class="ri-route-line"></i> PICKING</div>
+          <div class="stab-status" id="stabStatus_PICK" style="font-size:10px;font-weight:400;opacity:.7"></div>
         </div>
       </div>
-
-      <button class="btn btn-blue btn-block btn-lg" id="btnStart" onclick="startWork()">
-        <i class="ri-play-circle-line"></i> <span id="btnStartTxt">Start Picking</span>
-      </button>
+      <div class="stab insp" onclick="selStage('INSP')">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;width:100%">
+          <div style="display:flex;align-items:center;gap:5px;font-size:13px"><i class="ri-search-eye-line"></i> INSPECTION</div>
+          <div class="stab-status" id="stabStatus_INSP" style="font-size:10px;font-weight:400;opacity:.7"></div>
+        </div>
+      </div>
+      <div class="stab pall" onclick="selStage('PALL')">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;width:100%">
+          <div style="display:flex;align-items:center;gap:5px;font-size:13px"><i class="ri-stack-line"></i> PALLETIZING</div>
+          <div class="stab-status" id="stabStatus_PALL" style="font-size:10px;font-weight:400;opacity:.7"></div>
+        </div>
+      </div>
     </div>
 
-    <div class="section">My active sessions</div>
-    <div id="myActive"></div>
+    <!-- ③ Stage content area — changes per tab -->
+    <div id="stageContent"></div>
 
-    <div class="section" id="actFeedSection" style="display:none">All activity — this order</div>
-    <div id="actFeed"></div>
   </div>
 
   <!-- KPI -->
@@ -491,13 +507,14 @@ function checkPin(){
 // ═══════════════════════════════════════════════
 const R={};
 
-// stage color helpers
-const SCOL={PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'};
-const SBDCOL={PICK:'var(--blue-bd)',INSP:'var(--purple-bd)',PALL:'var(--teal-bd)'};
-const SBTN={PICK:'btn-blue',INSP:'btn-purple',PALL:'btn-teal'};
-const SLABEL={PICK:'Start Picking',INSP:'Start Inspection',PALL:'Start Palletizing'};
-const SELABEL={PICK:'End Picking',INSP:'End Inspection',PALL:'End Palletizing'};
-const SICON={PICK:'ri-route-line',INSP:'ri-search-eye-line',PALL:'ri-stack-line'};
+// stage color/label helpers
+const SCOL   = {PICK:'var(--blue)',  INSP:'var(--purple)',  PALL:'var(--teal)'};
+const SBDCOL = {PICK:'var(--blue-bd)',INSP:'var(--purple-bd)',PALL:'var(--teal-bd)'};
+const SBTN   = {PICK:'btn-blue',     INSP:'btn-purple',     PALL:'btn-teal'};
+const SLABEL = {PICK:'Start Picking',INSP:'Start Inspection',PALL:'Start Palletizing'};
+const SELABEL= {PICK:'End Picking',  INSP:'End Inspection',  PALL:'End Palletizing'};
+const SICON  = {PICK:'ri-route-line',INSP:'ri-search-eye-line',PALL:'ri-stack-line'};
+const SBGCLS = {PICK:'pick',         INSP:'insp',            PALL:'pall'};
 
 // ── helpers ──
 function orderStageSummary(oid){
@@ -623,125 +640,213 @@ window.showOrderDetail=function(oid){
   openModal(html);
 };
 
-// ── WORK PAGE ──
-function selStage(s){
-  CS=s;
-  document.querySelectorAll('.stab').forEach(t=>t.classList.remove('on'));
+// ══════════════════════════════════════════════════════
+// WORK PAGE — each tab shows ONLY that stage's content
+// ══════════════════════════════════════════════════════
+
+function selStage(s) {
+  CS = s;
+  document.querySelectorAll('.stab').forEach(t => t.classList.remove('on'));
   document.querySelector(`.stab.${s.toLowerCase()}`)?.classList.add('on');
-  document.getElementById('workTitle').innerHTML=`<i class="${SICON[s]}" style="color:${SCOL[s]}"></i> Start ${s.charAt(0)+s.slice(1).toLowerCase()}`;
-  document.getElementById('btnStartTxt').textContent=SLABEL[s];
-  document.getElementById('btnStart').className=`btn ${SBTN[s]} btn-block btn-lg`;
-  document.getElementById('pickInputs').style.display=s==='PICK'?'block':'none';
-  updateWorkOrderInfo();
+  renderStageContent();
 }
 
-function updateWorkOrderInfo(){
-  const oid=document.getElementById('workOrder')?.value;
-  const el=document.getElementById('workOrderInfo');
-  if(!oid){el.innerHTML='';renderActFeed();return;}
-  const o=S.orders.find(x=>x.id===oid);
-  const ws=S.works.filter(w=>w.oid===oid&&w.stage===CS);
-  const active=ws.filter(w=>!w.endT).length,done=ws.filter(w=>w.endT).length;
-  const myHere=ws.filter(w=>w.w===CW);
-  el.innerHTML=`<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 12px;margin-bottom:10px;font-size:12px">
-    <span style="font-weight:600">${o.ch} · ${o.cu}</span>
-    <span style="color:var(--t3);margin-left:10px">${CS}: ${active} active · ${done} done</span>
-    ${myHere.length?`<span style="color:var(--amber);margin-left:8px">· You have ${myHere.length} session(s) here</span>`:''}
-  </div>`;
-  renderActFeed();
-}
-
-function onWorkOrderChange(){updateWorkOrderInfo();}
-
-function renderActFeed(){
-  const oid=document.getElementById('workOrder')?.value;
-  const sec=document.getElementById('actFeedSection');
-  const feed=document.getElementById('actFeed');
-  if(!oid){sec.style.display='none';feed.innerHTML='';return;}
-  sec.style.display='';
-  const ws=S.works.filter(w=>w.oid===oid);
-  if(!ws.length){feed.innerHTML='<div style="font-size:12px;color:var(--t3);padding:4px 0">No entries for this order yet</div>';return;}
-  feed.innerHTML=ws.map(w=>{
-    const done=!!w.endT;
-    const stage=w.stage&&['PICK','INSP','PALL'].includes(w.stage)?w.stage:'PICK';
-    const stageCol=SCOL[stage]||'var(--t)';
-    const detail=stage==='PICK'?`${w.items||0}i/${w.qty||0}q`:(w.pallets!==null&&done?`${fmtPallets(w.pallets)} pallets`:'');
-    return`<div class="act-row">
-      <span class="act-stage" style="color:${stageCol}">${stage}</span>
-      <span style="flex:1;font-weight:500">${w.w}</span>
-      <span class="mono" style="color:var(--t3)">${detail}</span>
-      <span class="mono" style="color:var(--t2)">${w.startT}${done?' → '+w.endT:' → now'}</span>
-      ${done?`<span class="mono" style="color:var(--teal);min-width:44px;text-align:right">${fmtMin(w.netMin)}</span>`:'<span class="badge b-live" style="font-size:9px">Live</span>'}
-    </div>`;
-  }).join('');
-}
-
-R.work=function(){
-  const sel=document.getElementById('workOrder'),cur=sel.value;
-  sel.innerHTML='<option value="">— Select order —</option>'+S.orders.map(o=>`<option value="${o.id}"${o.id===cur?' selected':''}>${o.id} (${o.ch}·${o.cu})</option>`).join('');
-  selStage(CS);
-  renderMyActive();
+R.work = function() {
+  updateTabStatus();
+  renderStageContent();
 };
 
-// ── Live elapsed timer ─────────────────────────────────
-// Ticks every 30s, updates elapsed time on active session cards
+function updateTabStatus() {
+  ['PICK','INSP','PALL'].forEach(s => {
+    const el  = document.getElementById('stabStatus_' + s); if (!el) return;
+    const mine = S.works.filter(w => w.w === CW && w.stage === s && !w.endT);
+    const tab  = document.querySelector(`.stab.${s.toLowerCase()}`); if (!tab) return;
+    const dot  = tab.querySelector('.stab-dot');
+    if (mine.length > 0) {
+      el.textContent = mine.length + ' active';
+      el.style.color   = SCOL[s];
+      el.style.opacity = '1';
+      if (!dot) { const d=document.createElement('div'); d.className='stab-dot'; tab.appendChild(d); }
+    } else {
+      el.textContent = '';
+      if (dot) dot.remove();
+    }
+  });
+}
+
+function renderStageContent() {
+  const container = document.getElementById('stageContent'); if (!container) return;
+  updateTabStatus();
+  const s    = CS;
+  const col  = SCOL[s];
+  const bdcl = SBGCLS[s];
+  const icon = SICON[s];
+
+  // My active sessions for THIS stage only
+  const mySessions = S.works.filter(w => w.w===CW && w.stage===s && !w.endT);
+
+  // ── Active sessions section ──
+  let activeSect = '';
+  if (mySessions.length > 0) {
+    activeSect += mySessions.map(w => {
+      const o   = S.orders.find(x=>x.id===w.oid);
+      const inf = !!_pending[w.id];
+      const elapsed = w.startT ? liveElapsed(w.startT) : '';
+      return `
+      <div class="session-card ${bdcl}" id="sc_${w.id}" style="margin-bottom:10px">
+        <div class="session-top">
+          <div>
+            <div class="session-title">${w.oid}</div>
+            <div class="session-sub">${o?.ch||''} · ${o?.cu||''}</div>
+          </div>
+          ${inf ? '<span class="badge b-saving"><i class="ri-loader-4-line"></i> Saving...</span>'
+                : `<span class="badge b-live"><i class="ri-record-circle-line"></i> ${s} Active</span>`}
+        </div>
+        <div class="session-chips">
+          ${s==='PICK'&&w.items ? `<span class="chip"><i class="ri-box-3-line"></i> ${w.items} items</span><span class="chip"><i class="ri-stack-line"></i> ${w.qty} QTY</span>` : ''}
+          <span class="chip"><i class="ri-play-line"></i> Started ${w.startT||'—'}</span>
+          ${elapsed ? `<span class="chip hi" id="elapsed_${w.id}"><i class="ri-timer-line"></i> ${elapsed}</span>` : `<span id="elapsed_${w.id}"></span>`}
+        </div>
+        <button class="btn btn-green btn-block btn-lg" onclick="endWork('${w.id}','${s}')" ${inf?'disabled':''}>
+          <i class="ri-checkbox-circle-line"></i> ${SELABEL[s]}
+        </button>
+      </div>`;
+    }).join('');
+    activeSect = `<div style="margin-bottom:6px">
+      <div class="section" style="margin-top:0"><i class="${icon}" style="color:${col}"></i> My active ${s} sessions</div>
+      ${activeSect}
+    </div>`;
+  }
+
+  // ── Start new session ──
+  const orders = S.orders;
+  const curOid = ''; // fresh each render
+  const orderOpts = orders.map(o => {
+    const myHere = S.works.filter(w=>w.oid===o.id&&w.w===CW&&w.stage===s&&!w.endT).length;
+    return `<option value="${o.id}">${o.id} (${o.ch}·${o.cu})${myHere?' ⚡ Active':''}  </option>`;
+  }).join('');
+
+  const instrMap = {
+    PICK: 'Enter item count + quantity, then start picking.',
+    INSP: 'Select order and start. Enter pallet count when done.',
+    PALL: 'Select order and start. Enter pallet count when done.'
+  };
+
+  const pickFields = s==='PICK' ? `
+    <div class="frow" style="margin-bottom:12px">
+      <div class="fg" style="margin-bottom:0">
+        <label class="fl"><i class="ri-box-3-line"></i> Items (SKU types)</label>
+        <input class="fi" type="number" id="wItems" placeholder="e.g. 15" min="1" style="font-size:15px;padding:11px 14px">
+      </div>
+      <div class="fg" style="margin-bottom:0">
+        <label class="fl"><i class="ri-stack-line"></i> Total QTY</label>
+        <input class="fi" type="number" id="wQty" placeholder="e.g. 120" min="1" style="font-size:15px;padding:11px 14px">
+      </div>
+    </div>` : '';
+
+  const startSect = `
+    <div class="start-card ${bdcl}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <div style="width:36px;height:36px;border-radius:50%;background:${col}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="${icon}" style="color:${col};font-size:18px"></i>
+        </div>
+        <div>
+          <div style="font-weight:700;font-size:15px">${SLABEL[s]}</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:1px">${instrMap[s]}</div>
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl">Order</label>
+        <select class="fi" id="workOrder" onchange="onOrderChange()" style="font-size:14px;padding:10px 12px">
+          <option value="">— Select order —</option>${orderOpts}
+        </select>
+      </div>
+      <div id="workOrderInfo"></div>
+      ${pickFields}
+      <button class="btn ${SBTN[s]} btn-block btn-lg" onclick="startWork()" style="font-size:15px;padding:14px">
+        <i class="ri-play-circle-line"></i> ${SLABEL[s]}
+      </button>
+    </div>`;
+
+  container.innerHTML = activeSect + startSect;
+  startSessionTimer();
+
+  // Re-attach order change handler
+  const sel = document.getElementById('workOrder');
+  if (sel) sel.addEventListener('change', onOrderChange);
+}
+
+// Live timer
 let _timerInterval = null;
 function startSessionTimer() {
   if (_timerInterval) return;
   _timerInterval = setInterval(() => {
     if (curPage() !== 'work') return;
-    const active = S.works.filter(w => w.w === CW && !w.endT && w.startT);
-    if (!active.length) return;
-    active.forEach(w => {
-      const el = document.getElementById('elapsed_' + w.id);
-      if (!el) return;
+    S.works.filter(w => w.w===CW && !w.endT && w.startT).forEach(w => {
+      const el = document.getElementById('elapsed_' + w.id); if (!el) return;
       const t = liveElapsed(w.startT);
-      el.innerHTML = t ? `<i class="ri-timer-line"></i> ${t}` : '';
+      if (t) el.innerHTML = `<i class="ri-timer-line"></i> ${t}`;
     });
-  }, 60000); // update every minute
+  }, 60000);
 }
 
-// Returns "Xh Ym elapsed" from a HH:mm startTime
 function liveElapsed(startHHmm) {
   if (!startHHmm) return '';
   try {
-    const now = nowHHmm();
-    const nm = clientNet(startHHmm, now);
-    if (nm === null) return '';
-    return fmtMin(nm) + ' elapsed';
+    const nm = clientNet(startHHmm, nowHHmm());
+    return nm !== null ? fmtMin(nm) + ' elapsed' : '';
   } catch(_) { return ''; }
 }
 
-function renderMyActive(){
-  const active=S.works.filter(w=>w.w===CW&&!w.endT);
-  document.getElementById('myActive').innerHTML=active.length?active.map(w=>{
-    const o=S.orders.find(x=>x.id===w.oid);
-    const inf=!!_pending[w.id];
-    const stage=w.stage&&['PICK','INSP','PALL'].includes(w.stage)?w.stage:'PICK';
-    const stageCol  =SCOL[stage]    ||'var(--blue)';
-    const stageBdCol=SBDCOL[stage]  ||'var(--blue-bd)';
-    const endLabel  =SELABEL[stage] ||'End Work';
-    const elapsed   = w.startT ? liveElapsed(w.startT) : '';
-    return`<div class="we${inf?' pending':''}" style="border-color:${stageBdCol}">
-      <div class="we-header">
-        <div>
-          <div class="we-title">${w.oid} <span style="color:${stageCol};font-size:11px;font-weight:700">${stage}</span></div>
-          <div class="we-sub">${o?.ch||''}·${o?.cu||''}</div>
-        </div>
-        ${inf?'<span class="badge b-saving">Saving...</span>':'<span class="badge b-live">Active</span>'}
+function onOrderChange() {
+  const oid = document.getElementById('workOrder')?.value;
+  const el  = document.getElementById('workOrderInfo'); if (!el) return;
+  if (!oid) { el.innerHTML = ''; return; }
+  const o      = S.orders.find(x=>x.id===oid);
+  const ws     = S.works.filter(w=>w.oid===oid && w.stage===CS);
+  const active = ws.filter(w=>!w.endT).length;
+  const done   = ws.filter(w=> w.endT).length;
+  const myHere = ws.filter(w=>w.w===CW && !w.endT).length;
+  const col    = SCOL[CS];
+
+  // Activity feed for this stage only
+  const feedRows = ws.map(w => {
+    const isDone  = !!w.endT;
+    const isMe    = w.w === CW;
+    const detail  = CS==='PICK'
+      ? `${w.items||0} items · ${w.qty||0} QTY`
+      : (w.pallets!==null && isDone ? `${fmtPallets(w.pallets)} pallets` : '');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)">
+      <div style="flex:1">
+        <div style="font-weight:${isMe?700:500};font-size:12px">${w.w}${isMe?` <span style="color:var(--blue);font-size:10px">(you)</span>`:''}</div>
+        ${detail?`<div style="font-size:11px;color:var(--t3)">${detail}</div>`:''}
       </div>
-      <div class="we-meta">
-        ${stage==='PICK'&&w.items?`<span><i class="ri-box-3-line"></i> ${w.items} items</span><span><i class="ri-stack-line"></i> ${w.qty} QTY</span>`:''}
-        <span><i class="ri-time-line"></i> Started ${w.startT||'—'}</span>
-        ${elapsed?`<span class="elapsed-timer" id="elapsed_${w.id}"><i class="ri-timer-line"></i> ${elapsed}</span>`:`<span class="elapsed-timer" id="elapsed_${w.id}"></span>`}
+      <div style="text-align:right;flex-shrink:0">
+        <div class="mono" style="font-size:11px;color:var(--t2)">${w.startT||''}${isDone?' → '+w.endT:' → now'}</div>
+        ${isDone
+          ? `<div class="mono" style="font-size:11px;color:var(--teal)">${fmtMin(w.netMin)}</div>`
+          : `<span class="badge b-live" style="font-size:9px">Live</span>`}
       </div>
-      <button class="btn btn-green btn-block btn-lg" style="margin-top:12px" onclick="endWork('${w.id}','${stage}')" ${inf?'disabled':''}>
-        <i class="ri-checkbox-circle-line"></i> ${endLabel}
-      </button>
     </div>`;
-  }).join(''):'<div style="font-size:12px;color:var(--t3);padding:4px 0">No active sessions</div>';
-  startSessionTimer();
+  }).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);margin-bottom:12px;font-size:12px;flex-wrap:wrap">
+      <span style="font-weight:700">${o.ch} · ${o.cu}</span>
+      <span style="color:${col};margin-left:4px">${CS}: ${active} active · ${done} done</span>
+      ${myHere ? `<span style="color:var(--amber);font-weight:600;margin-left:4px">⚡ You have ${myHere} active here</span>` : ''}
+    </div>
+    ${feedRows ? `<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:10px 14px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;color:${col};letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px"><i class="${SICON[CS]}"></i> ${CS} — ${oid}</div>
+      ${feedRows}
+    </div>` : ''}`;
 }
+
+// stubs so nothing breaks
+function updateWorkOrderInfo() { onOrderChange(); }
+function onWorkOrderChange()   { onOrderChange(); }
+function renderActFeed()       {}
+function renderMyActive()      { renderStageContent(); }
 
 window.startWork=function(){
   const oid=document.getElementById('workOrder')?.value;
@@ -758,13 +863,19 @@ window.startWork=function(){
   const entry={id:tid,oid,w:CW,stage:CS,items,qty,pallets:null,startT:hhmm,endT:'',startISO:'',endISO:'',netMin:null,grossMin:null,date:todayStr()};
   S.works.push(entry);_pending[tid]=true;
   toast(`✓ ${CS} started!`,'ok');
-  updateBadges();renderMyActive();renderActFeed();
-  // Clear PICK inputs
-  if(CS==='PICK'){document.getElementById('wItems').value='';document.getElementById('wQty').value='';}
+  updateBadges(); renderStageContent();
 
   apiBg('startWork',{orderId:oid,worker:CW,stage:CS,items,qty},
-    res=>{const idx=S.works.findIndex(w=>w.id===tid);if(idx>=0&&res.entryId){S.works[idx].id=res.entryId;S.works[idx].startT=res.startTime||hhmm;}delete _pending[tid];updateBadges();renderMyActive();renderActFeed();},
-    ()=>{S.works=S.works.filter(w=>w.id!==tid);delete _pending[tid];toast('⚠ Save failed — try again','err');updateBadges();renderMyActive();}
+    res=>{
+      const idx=S.works.findIndex(w=>w.id===tid);
+      if(idx>=0&&res.entryId){S.works[idx].id=res.entryId;S.works[idx].startT=res.startTime||hhmm;}
+      delete _pending[tid]; updateBadges(); renderStageContent();
+    },
+    ()=>{
+      S.works=S.works.filter(w=>w.id!==tid);
+      delete _pending[tid]; toast('⚠ Save failed — try again','err');
+      updateBadges(); renderStageContent();
+    }
   );
 };
 
@@ -868,15 +979,20 @@ function doEndWork(wid,pallets){
   w.endT=hhmm;w.netMin=nm;if(pallets!==null)w.pallets=pallets;
   _pending[wid]=true;
 
-  // Show completion summary card (stays 6 seconds)
   showCompletionCard(wid, w, nm, pallets, hhmm);
-
-  updateBadges();renderMyActive();renderActFeed();
-  if(curPage()==='dash')R.dash();
+  updateBadges(); renderStageContent();
+  if(curPage()==='dash') R.dash();
 
   apiBg('endWork',{entryId:wid,pallets:pallets!==null?pallets:undefined},
-    res=>{if(res.endTime)w.endT=res.endTime;if(res.netMinutes!==undefined&&res.netMinutes!==null)w.netMin=res.netMinutes;if(res.pallets!==null&&res.pallets!==undefined)w.pallets=res.pallets;delete _pending[wid];renderMyActive();renderActFeed();if(curPage()==='dash')R.dash();},
-    ()=>{Object.assign(w,orig);delete _pending[wid];toast('⚠ Save failed — try again','err');renderMyActive();}
+    res=>{
+      if(res.endTime)    w.endT   = res.endTime;
+      if(res.netMinutes !== undefined && res.netMinutes !== null) w.netMin = res.netMinutes;
+      if(res.pallets    !== null && res.pallets !== undefined)    w.pallets = res.pallets;
+      delete _pending[wid];
+      renderStageContent();
+      if(curPage()==='dash') R.dash();
+    },
+    ()=>{ Object.assign(w,orig); delete _pending[wid]; toast('⚠ Save failed — try again','err'); renderStageContent(); }
   );
 }
 
