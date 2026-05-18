@@ -1044,30 +1044,36 @@ window._confirmedStart = function(oid, items, qty) {
 };
 
 function doStartWork(oid, items, qty) {
-  // ── Click lock — prevent double-tap ─────────────────
+  // ── Click lock — holds until server responds ──────────
   if (_startLock) { toast('Starting... please wait', ''); return; }
   _startLock = true;
-  setTimeout(() => { _startLock = false; }, 3000); // auto-release after 3s
 
-  // Final guard (in case state changed between check and confirm)
+  // Safety auto-release after 10s (in case of network failure)
+  const lockTimer = setTimeout(() => { _startLock = false; }, 10000);
+
+  // Final guard — check again right before pushing
   const activeDupe = S.works.filter(w =>
     w.w === CW && w.oid === oid && w.stage === CS && !w.endT
   );
   if (activeDupe.length > 0) {
     _startLock = false;
+    clearTimeout(lockTimer);
     showDupeBlockModal(oid, activeDupe[0]);
     return;
   }
 
-  const tid   = genId();
-  const hhmm  = nowHHmm();
+  const tid  = genId();
+  const hhmm = nowHHmm();
 
-  // Immediately disable start button to prevent any further clicks
-  const btnStart = document.getElementById('btnStartWork');
-  if (btnStart) {
-    btnStart.disabled = true;
-    btnStart.innerHTML = '<i class="ri-loader-4-line"></i> Starting...';
-  }
+  // ── Immediately disable ALL start buttons ─────────────
+  document.querySelectorAll('[id="btnStartWork"]').forEach(btn => {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ri-loader-4-line"></i> Starting...';
+  });
+  // Also disable the start card entirely
+  const startCard = document.querySelector('.start-card');
+  if (startCard) startCard.style.opacity = '.5';
+
   const entry = {
     id: tid, oid, w: CW, stage: CS,
     items, qty, pallets: null,
@@ -1082,12 +1088,38 @@ function doStartWork(oid, items, qty) {
 
   apiBg('startWork', { orderId: oid, worker: CW, stage: CS, items, qty },
     res => {
+      clearTimeout(lockTimer);
+      _startLock = false;
+
+      // Server rejected as duplicate active session
+      if (!res.ok && res.error === 'duplicate_active') {
+        S.works = S.works.filter(w => w.id !== tid);
+        delete _pending[tid];
+        toast('⚠ Already active on server — refreshing...', 'err');
+        loadData().then(() => { updateBadges(); renderStageContent(); });
+        return;
+      }
+
       const idx = S.works.findIndex(w => w.id === tid);
       if (idx >= 0 && res.entryId) {
         S.works[idx].id     = res.entryId;
         S.works[idx].startT = res.startTime || hhmm;
       }
       delete _pending[tid];
+      updateBadges();
+      renderStageContent();
+    },
+    () => {
+      clearTimeout(lockTimer);
+      _startLock = false;
+      S.works = S.works.filter(w => w.id !== tid);
+      delete _pending[tid];
+      toast('⚠ Save failed — try again', 'err');
+      updateBadges();
+      renderStageContent();
+    }
+  );
+}
       _startLock = false;
       updateBadges();
       renderStageContent();
@@ -1538,7 +1570,7 @@ window.changePin=function(){
   updateBadges();
   // Auto-refresh every 30s — skips if saves in-flight
   setInterval(async()=>{
-    if(Object.keys(_pending).length===0){
+    if(Object.keys(_pending).length===0 && !_startLock){
       await loadData();updateBadges();
       const p=curPage();if(p==='dash')R.dash();else if(p==='work'){renderMyActive();renderActFeed();}
     }
