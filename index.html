@@ -2,82 +2,71 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>STYLEKOREAN_NJ / MOIDA — Warehouse v2</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>SK B2C Warehouse</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#3b82f6">
-<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#1a56db">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@4.1.0/fonts/remixicon.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0b0e14;--bg2:#131720;--bg3:#1a2030;--bg4:#242e40;
-  --border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.14);
-  --text:#f1f5f9;--text2:#c2cad6;--text3:#8896a8;
-  --blue:#3b82f6;--blue2:#2563eb;--blue-bg:rgba(59,130,246,.1);--blue-bd:rgba(59,130,246,.3);
-  --green:#22c55e;--green-bg:rgba(34,197,94,.1);--green-bd:rgba(34,197,94,.3);
-  --amber:#f59e0b;--amber-bg:rgba(245,158,11,.1);--amber-bd:rgba(245,158,11,.3);
-  --red:#ef4444;--red-bg:rgba(239,68,68,.1);--red-bd:rgba(239,68,68,.3);
-  --purple:#a855f7;--purple-bg:rgba(168,85,247,.1);--purple-bd:rgba(168,85,247,.3);
-  --teal:#14b8a6;--teal-bg:rgba(20,184,166,.1);--teal-bd:rgba(20,184,166,.3);
-  --cyan:#06b6d4;--cyan-bg:rgba(6,182,212,.1);
-  --font:'Inter',-apple-system,system-ui,sans-serif;
-  --mono:'JetBrains Mono',monospace;
-  --r:8px;--r2:12px;
+  --bg:#080c12;--bg2:#0f1520;--bg3:#161e2e;--bg4:#1d2840;
+  --bd:rgba(255,255,255,.07);--bd2:rgba(255,255,255,.13);
+  --t:#eef2f7;--t2:#b4bfcc;--t3:#6b7a8d;
+  --blue:#3b82f6;--blue2:#2563eb;--blue-bg:rgba(59,130,246,.1);--blue-bd:rgba(59,130,246,.28);
+  --green:#22c55e;--green-bg:rgba(34,197,94,.1);--green-bd:rgba(34,197,94,.28);
+  --amber:#f59e0b;--amber-bg:rgba(245,158,11,.1);--amber-bd:rgba(245,158,11,.28);
+  --red:#ef4444;--red-bg:rgba(239,68,68,.08);--red-bd:rgba(239,68,68,.28);
+  --purple:#a855f7;--purple-bg:rgba(168,85,247,.1);--purple-bd:rgba(168,85,247,.28);
+  --teal:#14b8a6;--teal-bg:rgba(20,184,166,.1);--teal-bd:rgba(20,184,166,.28);
+  --cyan:#06b6d4;
+  --font:'Inter',-apple-system,sans-serif;--mono:'JetBrains Mono',monospace;
+  --r:8px;--r2:12px;--r3:16px;
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
-.shell{width:100%;max-width:1400px;margin:0 auto;padding:0 28px 100px}
-@media(max-width:900px){.shell{padding:0 14px 100px}}
-
-/* Header */
-.hdr{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border);margin-bottom:12px;position:sticky;top:0;background:var(--bg);z-index:100;gap:10px;flex-wrap:wrap}
-.hdr-logo{font-family:var(--mono);font-size:14px;font-weight:800;letter-spacing:-.2px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height:100vh;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+/* ── Layout ── */
+.shell{max-width:1360px;margin:0 auto;padding:0 24px 90px}
+@media(max-width:800px){.shell{padding:0 12px 90px}}
+/* ── Header ── */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--bd);margin-bottom:12px;position:sticky;top:0;background:var(--bg);z-index:100;gap:8px;flex-wrap:wrap}
+.hdr-brand{font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:-.1px;color:var(--t)}
 .hdr-right{display:flex;align-items:center;gap:8px}
-.hdr-clock{font-family:var(--mono);font-size:11px;color:var(--text2)}
-.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;transition:background .3s}
-.sync-dot.syncing{background:var(--amber);animation:pd 1s infinite}
-.sync-dot.err{background:var(--red)}
-@keyframes pd{0%,100%{opacity:1}50%{opacity:.2}}
-.sel{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);padding:6px 10px;font-family:var(--font);font-size:13px;cursor:pointer;outline:none;max-width:140px}
-.sel:focus{border-color:var(--blue)}
-
-/* Nav */
-.nav{display:flex;gap:2px;background:var(--bg2);border-radius:var(--r2);padding:3px;margin-bottom:14px;position:sticky;top:50px;z-index:99;border:1px solid var(--border)}
-.nav-btn{flex:1;padding:8px 4px;border:none;background:transparent;color:var(--text3);font-family:var(--font);font-size:10px;font-weight:700;cursor:pointer;border-radius:var(--r);transition:all .12s;white-space:nowrap;display:flex;flex-direction:column;align-items:center;gap:2px;position:relative;letter-spacing:.03em}
-.nav-btn i{font-size:16px}
-.nav-btn:hover{color:var(--text2);background:var(--bg3)}
-.nav-btn.on{background:var(--blue);color:#fff}
-.nav-badge{position:absolute;top:3px;right:6px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 4px;min-width:14px;text-align:center;line-height:1.4}
-
-/* Pages */
-.pg{display:none}.pg.on{display:block;animation:fu .18s ease}
+.hdr-clock{font-family:var(--mono);font-size:11px;color:var(--t3)}
+.sync{width:7px;height:7px;border-radius:50%;background:var(--green);transition:background .3s;flex-shrink:0}
+.sync.busy{background:var(--amber);animation:pp 1s infinite}.sync.fail{background:var(--red)}
+@keyframes pp{0%,100%{opacity:1}50%{opacity:.2}}
+.worker-sel{background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r);color:var(--t);padding:6px 10px;font-family:var(--font);font-size:13px;cursor:pointer;outline:none;max-width:150px}
+.worker-sel:focus{border-color:var(--blue)}
+/* ── Nav ── */
+.nav{display:flex;gap:2px;background:var(--bg2);border-radius:var(--r2);padding:3px;margin-bottom:14px;position:sticky;top:48px;z-index:99;border:1px solid var(--bd)}
+.nb{flex:1;padding:8px 4px;border:none;background:transparent;color:var(--t3);font-family:var(--font);font-size:10px;font-weight:700;cursor:pointer;border-radius:var(--r);transition:all .12s;display:flex;flex-direction:column;align-items:center;gap:2px;position:relative;letter-spacing:.03em;white-space:nowrap}
+.nb i{font-size:16px}.nb:hover{color:var(--t2);background:var(--bg3)}.nb.on{background:var(--blue);color:#fff}
+.nb-badge{position:absolute;top:3px;right:5px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 4px;min-width:14px;text-align:center;line-height:1.4}
+/* ── Pages ── */
+.pg{display:none}.pg.on{display:block;animation:fu .16s ease}
 @keyframes fu{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
-
-/* Layout */
-.grid{display:grid;gap:10px}
-.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
-.g4{grid-template-columns:repeat(4,1fr)}.g5{grid-template-columns:repeat(5,1fr)}
-.g6{grid-template-columns:repeat(6,1fr)}
-@media(max-width:900px){.g4,.g5,.g6{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:600px){.g2,.g3{grid-template-columns:1fr}.g4,.g5,.g6{grid-template-columns:repeat(2,1fr)}}
-
-/* Metric cards */
-.mc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:12px 14px;position:relative;overflow:hidden}
-.mc::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:2px 2px 0 0}
-.mc.bl::after{background:var(--blue)}.mc.gr::after{background:var(--green)}.mc.am::after{background:var(--amber)}
-.mc.pu::after{background:var(--purple)}.mc.tl::after{background:var(--teal)}.mc.cy::after{background:var(--cyan)}
-.mc.rd::after{background:var(--red)}
-.mc-l{font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:3px}
+/* ── Grid ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.g6{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+@media(max-width:900px){.g5,.g6{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:580px){.g2,.g3{grid-template-columns:1fr}.g4,.g5,.g6{grid-template-columns:repeat(2,1fr)}}
+/* ── Metric cards ── */
+.mc{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r2);padding:12px 14px;position:relative;overflow:hidden}
+.mc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:2px 2px 0 0}
+.mc.bl::before{background:var(--blue)}.mc.gr::before{background:var(--green)}.mc.am::before{background:var(--amber)}
+.mc.pu::before{background:var(--purple)}.mc.tl::before{background:var(--teal)}.mc.cy::before{background:var(--cyan)}.mc.rd::before{background:var(--red)}
+.mc-l{font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:3px}
 .mc-v{font-family:var(--mono);font-size:22px;font-weight:700;line-height:1.2}
-
-/* Cards */
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;margin-bottom:10px}
-.card-t{font-weight:700;font-size:13px;margin-bottom:11px;display:flex;align-items:center;gap:7px}
-.section{font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 9px;display:flex;align-items:center;gap:8px}
-.section::after{content:'';flex:1;height:1px;background:var(--border)}
-
-/* Badges */
+/* ── Card ── */
+.card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r2);padding:14px 16px;margin-bottom:10px}
+.card-t{font-weight:700;font-size:13px;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.section{font-size:10px;font-weight:700;color:var(--t2);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 9px;display:flex;align-items:center;gap:8px}
+.section::after{content:'';flex:1;height:1px;background:var(--bd)}
+/* ── Badges ── */
 .badge{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
 .b-pick{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-bd)}
 .b-insp{background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-bd)}
@@ -86,211 +75,213 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 .b-wait{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd)}
 .b-live{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);animation:pulse 2s infinite}
 .b-saving{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd);animation:pulse 1s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
-
-/* Stage pill row (dashboard) */
-.stage-row{display:flex;gap:3px;align-items:center;flex-wrap:wrap}
-.sp{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.04em;border:1px solid var(--border)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+/* ── Stage pills ── */
+.srow{display:flex;gap:3px;align-items:center;flex-wrap:wrap}
+.sp{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;border:1px solid var(--bd);white-space:nowrap}
+.sp-wait{background:var(--bg3);color:var(--t3)}
+.sp-pick{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-bd)}
+.sp-insp{background:var(--purple-bg);color:var(--purple);border-color:var(--purple-bd)}
+.sp-pall{background:var(--teal-bg);color:var(--teal);border-color:var(--teal-bd)}
 .sp-done{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)}
-.sp-active{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-bd)}
-.sp-insp-active{background:var(--purple-bg);color:var(--purple);border-color:var(--purple-bd)}
-.sp-pall-active{background:var(--teal-bg);color:var(--teal);border-color:var(--teal-bd)}
-.sp-wait{background:var(--bg3);color:var(--text3)}
-.sp-arrow{color:var(--text3);font-size:10px}
-
-/* Buttons */
-.btn{padding:8px 14px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:5px;position:relative;overflow:hidden}
-.btn:hover{background:var(--bg4);border-color:var(--text3)}.btn:active{transform:scale(.97)}
+.sp-arr{color:var(--t3);font-size:10px}
+/* ── Stage tab selector ── */
+.stabs{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:14px}
+.stab{padding:10px 6px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg3);color:var(--t3);font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:all .12s;display:flex;align-items:center;justify-content:center;gap:5px}
+.stab:hover{border-color:var(--t3);color:var(--t2)}
+.stab.pick.on{background:var(--blue-bg);border-color:var(--blue-bd);color:var(--blue)}
+.stab.insp.on{background:var(--purple-bg);border-color:var(--purple-bd);color:var(--purple)}
+.stab.pall.on{background:var(--teal-bg);border-color:var(--teal-bd);color:var(--teal)}
+/* ── Buttons ── */
+.btn{padding:8px 14px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg3);color:var(--t);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:5px;position:relative;overflow:hidden;white-space:nowrap}
+.btn:hover{background:var(--bg4);border-color:var(--t3)}.btn:active{transform:scale(.97)}
 .btn-blue{background:var(--blue);color:#fff;border-color:var(--blue)}.btn-blue:hover{background:var(--blue2)}
-.btn-green{background:var(--green);color:#fff;border-color:var(--green)}
+.btn-green{background:var(--green);color:#000;border-color:var(--green)}
 .btn-red{background:var(--red);color:#fff;border-color:var(--red)}
 .btn-purple{background:var(--purple);color:#fff;border-color:var(--purple)}
-.btn-teal{background:var(--teal);color:#fff;border-color:var(--teal)}
+.btn-teal{background:var(--teal);color:#000;border-color:var(--teal)}
 .btn-amber{background:var(--amber);color:#000;border-color:var(--amber)}
 .btn-sm{padding:4px 9px;font-size:11px}
-.btn-lg{padding:13px 18px;font-size:14px;font-weight:700;border-radius:10px}
+.btn-lg{padding:14px 20px;font-size:14px;font-weight:700;border-radius:var(--r2)}
 .btn-block{width:100%;justify-content:center}
-.btn:disabled{opacity:.3;cursor:not-allowed;pointer-events:none}
-.btn.saving::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);animation:sh 1s infinite}
+.btn:disabled{opacity:.28;cursor:not-allowed;pointer-events:none}
+.btn.saving::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);animation:sh 1s infinite}
 @keyframes sh{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
-
-/* Forms */
-.fg{margin-bottom:9px}
-.fl{display:block;font-size:11px;color:var(--text2);margin-bottom:3px;font-weight:600}
-.fi{width:100%;padding:8px 11px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);font-size:13px;outline:none;transition:border-color .15s}
+/* ── Forms ── */
+.fg{margin-bottom:10px}
+.fl{display:block;font-size:11px;color:var(--t2);margin-bottom:3px;font-weight:600;letter-spacing:.02em}
+.fi{width:100%;padding:9px 12px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg3);color:var(--t);font-family:var(--font);font-size:13px;outline:none;transition:border-color .15s}
 .fi:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
-.fi::placeholder{color:var(--text3)}
-.fr2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-@media(max-width:440px){.fr2{grid-template-columns:1fr}}
-
-/* Table */
+.fi::placeholder{color:var(--t3)}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:440px){.frow{grid-template-columns:1fr}}
+/* ── Table ── */
 .tbl{width:100%;border-collapse:collapse}
-.tbl th{text-align:left;font-size:10px;color:var(--text3);padding:7px 8px;border-bottom:1px solid var(--border2);font-weight:700;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
-.tbl td{padding:8px 8px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle}
+.tbl th{text-align:left;font-size:10px;color:var(--t3);padding:7px 9px;border-bottom:1px solid var(--bd2);font-weight:700;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.tbl td{padding:8px 9px;border-bottom:1px solid var(--bd);font-size:12px;vertical-align:middle}
 .tbl tr:last-child td{border-bottom:none}
-.tbl tr:hover td{background:rgba(255,255,255,.012)}
+.tbl tr:hover td{background:rgba(255,255,255,.011)}
 .mono{font-family:var(--mono);font-size:11px;font-weight:500}
-
-/* Work Entry Card */
-.we{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);padding:13px 15px;margin-bottom:7px;transition:border-color .2s}
-.we.pending{border-color:var(--amber-bd)}
-.we-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:6px;flex-wrap:wrap}
-.we-id{font-family:var(--mono);font-weight:700;font-size:13px}
-.we-meta{display:flex;gap:10px;font-size:11px;color:var(--text3);flex-wrap:wrap;margin-top:3px}
+/* ── Work entry card ── */
+.we{background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r2);padding:14px 16px;margin-bottom:8px;transition:border-color .2s,opacity .2s}
+.we.pending{border-color:var(--amber-bd);opacity:.88}
+.we-header{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:5px;flex-wrap:wrap}
+.we-title{font-family:var(--mono);font-weight:700;font-size:13px}
+.we-sub{font-size:11px;color:var(--t2);margin-top:2px}
+.we-meta{display:flex;gap:10px;font-size:11px;color:var(--t3);flex-wrap:wrap;margin-top:5px}
 .we-meta i{font-size:12px}
-
-/* Stage selector tabs */
-.stage-tabs{display:flex;gap:4px;margin-bottom:12px}
-.stage-tab{flex:1;padding:9px 6px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text3);font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:all .12s}
-.stage-tab:hover{border-color:var(--text3);color:var(--text2)}
-.stage-tab.pick.on{background:var(--blue-bg);border-color:var(--blue-bd);color:var(--blue)}
-.stage-tab.insp.on{background:var(--purple-bg);border-color:var(--purple-bd);color:var(--purple)}
-.stage-tab.pall.on{background:var(--teal-bg);border-color:var(--teal-bd);color:var(--teal)}
-
-/* KPI date picker row */
-.kpi-filter{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-.kpi-filter label{font-size:11px;color:var(--text2);font-weight:600}
-.kpi-filter .fi{width:130px;padding:6px 9px;font-size:12px}
-
-/* Modal */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;padding:14px}
+/* ── Activity row ── */
+.act-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12px}
+.act-row:last-child{border-bottom:none}
+.act-stage{font-weight:700;font-size:11px;width:36px;flex-shrink:0}
+/* ── End modal ── */
+.end-modal-inner{text-align:center;padding:4px 0}
+.pallet-input{font-size:36px;font-weight:800;text-align:center;font-family:var(--mono);width:140px;margin:0 auto}
+/* ── KPI filters ── */
+.kpi-bar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.kpi-bar label{font-size:11px;color:var(--t2);font-weight:600}
+.kpi-bar .fi{width:130px;padding:6px 9px;font-size:12px}
+/* ── Modal ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;padding:14px}
 .modal-bg.show{display:flex}
-.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:400px;max-height:88vh;overflow-y:auto;padding:22px}
-
-/* Toast */
-.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:9px 20px;border-radius:var(--r2);font-size:13px;font-weight:600;opacity:0;transition:all .28s;pointer-events:none;z-index:999;white-space:nowrap}
+.modal{background:var(--bg2);border:1px solid var(--bd2);border-radius:var(--r3);width:100%;max-width:400px;max-height:88vh;overflow-y:auto;padding:22px}
+/* ── Toast ── */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--bd2);color:var(--t);padding:9px 20px;border-radius:var(--r2);font-size:13px;font-weight:600;opacity:0;transition:all .28s;pointer-events:none;z-index:999;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.ok{border-color:var(--green);background:rgba(34,197,94,.1)}.toast.err{border-color:var(--red);background:rgba(239,68,68,.1)}
-
-/* Loading */
-.loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px}
-.spinner{width:30px;height:30px;border:3px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+/* ── Loading ── */
+.loading{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px}
+.spinner{width:30px;height:30px;border:3px solid var(--bd2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-
-/* Misc */
-.empty{text-align:center;padding:28px 16px;color:var(--text3);font-size:12px}
-.empty i{font-size:26px;display:block;margin-bottom:5px;opacity:.35}
-.divider{height:1px;background:var(--border);margin:12px 0}
+.empty{text-align:center;padding:26px 16px;color:var(--t3);font-size:12px}
+.empty i{font-size:26px;display:block;margin-bottom:5px;opacity:.3}
 </style>
 </head>
 <body>
 
-<div class="loading-overlay" id="loadingOverlay">
+<div class="loading" id="loadingScreen">
   <div class="spinner"></div>
-  <div style="font-size:12px;color:var(--text2)">Loading warehouse system...</div>
+  <div style="font-size:12px;color:var(--t2)">Loading warehouse system...</div>
 </div>
 
-<div class="shell" style="display:none" id="appShell">
+<div class="shell" style="display:none" id="app">
+  <!-- Header -->
   <header class="hdr">
-    <div class="hdr-logo">STYLEKOREAN_NJ / MOIDA</div>
+    <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
-      <span class="sync-dot" id="syncDot" title="Sync"></span>
-      <select class="sel" id="selW" onchange="swW()"></select>
+      <span class="sync" id="syncDot"></span>
+      <select class="worker-sel" id="workerSel" onchange="onWorkerChange()"></select>
       <button class="btn btn-sm" onclick="refreshData()" title="Refresh"><i class="ri-refresh-line"></i></button>
     </div>
   </header>
 
+  <!-- Nav -->
   <nav class="nav">
-    <button class="nav-btn on" data-p="dash"><i class="ri-dashboard-3-line"></i>Dashboard</button>
-    <button class="nav-btn" data-p="work"><i class="ri-play-circle-line"></i>Work</button>
-    <button class="nav-btn" data-p="kpi"><i class="ri-bar-chart-2-line"></i>KPI</button>
-    <button class="nav-btn" data-p="mgr"><i class="ri-shield-keyhole-line"></i>Manager</button>
+    <button class="nb on" data-p="dash"><i class="ri-dashboard-3-line"></i>Dashboard</button>
+    <button class="nb" data-p="work"><i class="ri-play-circle-line"></i>Work</button>
+    <button class="nb" data-p="kpi"><i class="ri-bar-chart-2-line"></i>KPI</button>
+    <button class="nb" data-p="mgr"><i class="ri-shield-keyhole-line"></i>Manager</button>
   </nav>
 
-  <!-- ========== DASHBOARD ========== -->
+  <!-- DASHBOARD -->
   <div class="pg on" id="pg-dash">
-    <div id="dMetrics" style="margin-bottom:12px"></div>
+    <div id="dashMetrics" style="margin-bottom:12px"></div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap">
-      <div id="dFilterTabs" style="display:flex;gap:4px"></div>
+      <div id="dashFilterTabs" style="display:flex;gap:4px;flex-wrap:wrap"></div>
       <div style="flex:1"></div>
-      <div style="position:relative;min-width:190px">
-        <i class="ri-search-line" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px"></i>
-        <input class="fi" id="dSearch" placeholder="Order / channel / customer" style="padding-left:30px;font-size:12px" oninput="_dPage=0;renderDashTable()">
+      <div style="position:relative;min-width:180px">
+        <i class="ri-search-line" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:13px"></i>
+        <input class="fi" id="dashSearch" placeholder="Order / channel / customer" style="padding-left:30px;font-size:12px" oninput="_dp=0;renderDashTable()">
       </div>
     </div>
-    <div id="dOrderTable"></div>
-    <div id="dOrderPager" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:7px"></div>
+    <div id="dashTable"></div>
+    <div id="dashPager" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:7px"></div>
   </div>
 
-  <!-- ========== WORK (unified pick/insp/pall) ========== -->
+  <!-- WORK -->
   <div class="pg" id="pg-work">
-    <!-- Stage selector -->
-    <div class="card" style="margin-bottom:10px">
-      <div class="card-t" id="workCardTitle"><i class="ri-play-circle-line" style="color:var(--blue)"></i> Start work</div>
-      <div class="stage-tabs" id="stageTabs">
-        <div class="stage-tab pick on" onclick="selStage('PICK')"><i class="ri-route-line"></i> PICK</div>
-        <div class="stage-tab insp" onclick="selStage('INSP')"><i class="ri-search-eye-line"></i> INSP</div>
-        <div class="stage-tab pall" onclick="selStage('PALL')"><i class="ri-stack-line"></i> PALL</div>
+    <div class="card">
+      <div class="card-t" id="workTitle"><i class="ri-play-circle-line" style="color:var(--blue)"></i> Start work</div>
+
+      <!-- Stage tabs -->
+      <div class="stabs">
+        <div class="stab pick on" onclick="selStage('PICK')"><i class="ri-route-line"></i> PICK</div>
+        <div class="stab insp" onclick="selStage('INSP')"><i class="ri-search-eye-line"></i> INSP</div>
+        <div class="stab pall" onclick="selStage('PALL')"><i class="ri-stack-line"></i> PALL</div>
       </div>
-      <div class="fg"><label class="fl">Order</label>
-        <select class="fi" id="wOrd">
+
+      <!-- Order select -->
+      <div class="fg">
+        <label class="fl">Order</label>
+        <select class="fi" id="workOrder" onchange="onWorkOrderChange()">
           <option value="">— Select order —</option>
         </select>
       </div>
-      <div id="wOrdSummary"></div>
-      <div class="fr2">
-        <div class="fg"><label class="fl" id="wItemsLbl">Items (SKU count)</label><input class="fi" type="number" id="wItems" placeholder="e.g. 15" min="1"></div>
-        <div class="fg"><label class="fl">Total QTY</label><input class="fi" type="number" id="wQty" placeholder="e.g. 120" min="1"></div>
+      <div id="workOrderInfo"></div>
+
+      <!-- PICK only: Items + QTY -->
+      <div id="pickInputs">
+        <div class="frow">
+          <div class="fg"><label class="fl">Items (SKU types)</label><input class="fi" type="number" id="wItems" placeholder="e.g. 15" min="1"></div>
+          <div class="fg"><label class="fl">Total QTY</label><input class="fi" type="number" id="wQty" placeholder="e.g. 120" min="1"></div>
+        </div>
       </div>
-      <button class="btn btn-blue btn-block btn-lg" id="btnStartWork" onclick="startWork()">
-        <i class="ri-play-circle-line"></i> <span id="btnStartLabel">Start Picking</span>
+
+      <button class="btn btn-blue btn-block btn-lg" id="btnStart" onclick="startWork()">
+        <i class="ri-play-circle-line"></i> <span id="btnStartTxt">Start Picking</span>
       </button>
     </div>
 
-    <!-- My active sessions -->
     <div class="section">My active sessions</div>
     <div id="myActive"></div>
 
-    <!-- Order activity feed -->
-    <div class="section">All active — this order</div>
-    <div id="orderActivity"></div>
+    <div class="section" id="actFeedSection" style="display:none">All activity — this order</div>
+    <div id="actFeed"></div>
   </div>
 
-  <!-- ========== KPI ========== -->
+  <!-- KPI -->
   <div class="pg" id="pg-kpi">
-    <div class="kpi-filter">
-      <label>From</label>
-      <input class="fi" type="date" id="kpiFrom">
-      <label>To</label>
-      <input class="fi" type="date" id="kpiTo">
+    <div class="kpi-bar">
+      <label>From</label><input class="fi" type="date" id="kpiFrom">
+      <label>To</label><input class="fi" type="date" id="kpiTo">
       <button class="btn btn-blue btn-sm" onclick="renderKPI()"><i class="ri-filter-line"></i> Apply</button>
-      <button class="btn btn-sm" onclick="kpiSetToday()">Today</button>
-      <button class="btn btn-sm" onclick="kpiSetWeek()">This week</button>
-      <button class="btn btn-sm" onclick="kpiSetMonth()">This month</button>
+      <button class="btn btn-sm" onclick="kpiToday()">Today</button>
+      <button class="btn btn-sm" onclick="kpiWeek()">This week</button>
+      <button class="btn btn-sm" onclick="kpiMonth()">This month</button>
     </div>
     <div id="kpiContent"></div>
   </div>
 
-  <!-- ========== MANAGER ========== -->
+  <!-- MANAGER -->
   <div class="pg" id="pg-mgr">
-    <div class="g2 grid" style="margin-bottom:12px">
+    <div class="g2" style="margin-bottom:10px">
       <div class="card">
         <div class="card-t"><i class="ri-user-settings-line" style="color:var(--amber)"></i> Workers</div>
         <div style="display:flex;gap:7px;margin-bottom:9px">
-          <input class="fi" id="mNewW" placeholder="New worker name" style="flex:1">
-          <button class="btn btn-blue btn-sm" onclick="addW()"><i class="ri-user-add-line"></i> Add</button>
+          <input class="fi" id="newWorker" placeholder="New worker name" style="flex:1">
+          <button class="btn btn-blue btn-sm" onclick="addWorker()"><i class="ri-user-add-line"></i> Add</button>
         </div>
-        <div id="mWList"></div>
+        <div id="workerList"></div>
       </div>
       <div class="card">
         <div class="card-t"><i class="ri-file-list-3-line" style="color:var(--blue)"></i> Orders</div>
-        <div class="fg"><label class="fl">Order number</label><input class="fi" id="mNewO" placeholder="e.g. IM003232"></div>
-        <div class="fr2">
-          <div class="fg"><label class="fl">Channel</label><input class="fi" id="mOCh" placeholder="e.g. NJ"></div>
-          <div class="fg"><label class="fl">Customer</label><input class="fi" id="mOCu" placeholder="e.g. MOIDA"></div>
+        <div class="fg"><label class="fl">Order number</label><input class="fi" id="newOrderId" placeholder="e.g. IM003232"></div>
+        <div class="frow">
+          <div class="fg"><label class="fl">Channel</label><input class="fi" id="newOrderCh" placeholder="e.g. NJ"></div>
+          <div class="fg"><label class="fl">Customer</label><input class="fi" id="newOrderCu" placeholder="e.g. MOIDA"></div>
         </div>
-        <button class="btn btn-blue btn-sm" onclick="addO()"><i class="ri-add-line"></i> Add order</button>
+        <button class="btn btn-blue btn-sm" onclick="addOrder()"><i class="ri-add-line"></i> Add order</button>
         <div class="section" style="margin-top:12px">All orders</div>
-        <div id="mOList" style="max-height:320px;overflow-y:auto"></div>
+        <div id="orderList" style="max-height:300px;overflow-y:auto"></div>
       </div>
     </div>
     <div class="card">
       <div class="card-t"><i class="ri-edit-line" style="color:var(--purple)"></i> Work entries</div>
-      <div class="fg"><input class="fi" id="mSearchW" placeholder="Search by order number..." oninput="mSearchEntries()"></div>
-      <div id="mWEntries" style="overflow-x:auto"></div>
+      <div class="fg"><input class="fi" id="entrySearch" placeholder="Search by order number or worker..." oninput="renderEntries()"></div>
+      <div id="entryTable" style="overflow-x:auto"></div>
     </div>
-    <div class="g2 grid" style="margin-top:12px">
+    <div class="g2" style="margin-top:10px">
       <div class="card" style="border-color:var(--amber-bd)">
         <div class="card-t" style="color:var(--amber)"><i class="ri-lock-line"></i> Change password</div>
         <div class="fg"><input class="fi" type="password" id="cpCur" placeholder="Current password"></div>
@@ -300,793 +291,805 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
       </div>
       <div class="card" style="border-color:var(--red-bd)">
         <div class="card-t" style="color:var(--red)"><i class="ri-error-warning-line"></i> Danger zone</div>
-        <p style="font-size:12px;color:var(--text2)">Data modifications here are permanent.</p>
+        <p style="font-size:12px;color:var(--t2)">All data operations here are permanent and irreversible.</p>
       </div>
     </div>
   </div>
 </div>
 
+<!-- Modal -->
 <div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
-  <div class="modal" id="modalContent"></div>
+  <div class="modal" id="modalBody"></div>
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
-// =============================================
-// CONFIG
-// =============================================
+// ═══════════════════════════════════════════════
+// CONFIG — update API_URL after redeploying Code.gs
+// ═══════════════════════════════════════════════
 const API_URL = 'https://script.google.com/macros/s/AKfycbw-rEUoQz5c38k0I7P6ykyhEFfZ5P4tGf0wF4zc96742O8KVlpB7-3Unh6W6S7RQctAjA/exec';
 
-// Work schedule (for display only — net calc is server-side)
-const LUNCH_S = 12 * 60;      // 12:00 in minutes
-const LUNCH_E = 13 * 60;      // 13:00 in minutes
-
-// =============================================
+// ═══════════════════════════════════════════════
 // STATE
-// =============================================
-let S = { orders: [], works: [], workers: [], pin: '1234' };
-let CW = '';
+// ═══════════════════════════════════════════════
+let S = { orders:[], works:[], workers:[], pin:'1234' };
+let CW = '';           // current worker
+let CS = 'PICK';       // current stage
 let _mgrOK = false;
-let _curStage = 'PICK';
-let _syncCount = 0;
-let _pending = {}; // entryId → patch
+let _pending = {};     // entryId → true (in-flight)
+let _syncN = 0;
+let _dp = 0;           // dashboard page
 
-// =============================================
-// SYNC / JSONP
-// =============================================
+// ═══════════════════════════════════════════════
+// JSONP / API
+// ═══════════════════════════════════════════════
 let _jc = 0;
-function apiCall(url) {
-  return new Promise((resolve, reject) => {
-    const cb = '_j_' + (++_jc) + '_' + Date.now();
-    const to = setTimeout(() => { cleanup(); reject(new Error('Timeout')); }, 30000);
-    const script = document.createElement('script');
-    function cleanup() { clearTimeout(to); delete window[cb]; if (script.parentNode) script.parentNode.removeChild(script); }
-    window[cb] = d => { cleanup(); resolve(d); };
-    script.onerror = () => { cleanup(); reject(new Error('Network error')); };
-    script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
-    document.head.appendChild(script);
+function apiCall(url){
+  return new Promise((res,rej)=>{
+    const cb='_j'+(++_jc)+'_'+Date.now();
+    const sc=document.createElement('script');
+    const to=setTimeout(()=>{cleanup();rej(new Error('Timeout'));},30000);
+    function cleanup(){clearTimeout(to);delete window[cb];if(sc.parentNode)sc.parentNode.removeChild(sc);}
+    window[cb]=d=>{cleanup();res(d);};
+    sc.onerror=()=>{cleanup();rej(new Error('Network error'));};
+    sc.src=url+(url.includes('?')?'&':'?')+'callback='+cb;
+    document.head.appendChild(sc);
   });
 }
-function setSyncing(on) {
-  const d = document.getElementById('syncDot'); if (!d) return;
-  d.className = 'sync-dot' + (on ? ' syncing' : '');
-}
-function setSyncErr() { const d = document.getElementById('syncDot'); if (d) { d.className = 'sync-dot err'; setTimeout(() => d.className = 'sync-dot', 4000); } }
 
-async function apiGet(op) {
-  try { return await apiCall(API_URL + '?op=' + op); }
-  catch(e) { return { ok:false, error:e.message }; }
+function setSyncing(on){
+  const d=document.getElementById('syncDot');if(!d)return;
+  d.className='sync'+(on?' busy':'');
 }
-async function apiBg(op, data, onOk, onErr) {
-  _syncCount++;
-  setSyncing(true);
-  try {
-    const url = API_URL + '?op=' + encodeURIComponent(op) + '&data=' + encodeURIComponent(JSON.stringify(data||{}));
-    const r = await apiCall(url);
-    if (r && r.ok) { if (onOk) onOk(r); }
-    else { setSyncErr(); if (onErr) onErr(r); }
+function setSyncFail(){
+  const d=document.getElementById('syncDot');if(!d)return;
+  d.className='sync fail';setTimeout(()=>d.className='sync',4000);
+}
+
+// background fire-and-forget
+async function apiBg(op,data,onOk,onErr){
+  _syncN++;setSyncing(true);
+  try{
+    const url=API_URL+'?op='+encodeURIComponent(op)+'&data='+encodeURIComponent(JSON.stringify(data||{}));
+    const r=await apiCall(url);
+    if(r&&r.ok){if(onOk)onOk(r);}
+    else{setSyncFail();if(onErr)onErr(r);}
     return r;
-  } catch(e) { setSyncErr(); if (onErr) onErr({ error:e.message }); return { ok:false }; }
-  finally { _syncCount--; if (_syncCount <= 0) { _syncCount = 0; setSyncing(false); } }
-}
-async function apiBlock(op, data) {
-  try {
-    const url = API_URL + '?op=' + encodeURIComponent(op) + '&data=' + encodeURIComponent(JSON.stringify(data||{}));
-    return await apiCall(url);
-  } catch(e) { toast(e.message, 'err'); return { ok:false }; }
+  }catch(e){setSyncFail();if(onErr)onErr({error:e.message});return{ok:false};}
+  finally{_syncN--;if(_syncN<=0){_syncN=0;setSyncing(false);}}
 }
 
-async function loadData() {
-  const r = await apiGet('listAll');
-  if (r.ok) { S.orders = r.orders||[]; S.works = r.works||[]; S.workers = r.workers||[]; S.pin = r.pin||'1234'; }
+async function apiGet(op){
+  try{return await apiCall(API_URL+'?op='+op);}
+  catch(e){return{ok:false,error:e.message};}
+}
+
+async function loadData(){
+  const r=await apiGet('listAll');
+  if(r.ok){S.orders=r.orders||[];S.works=r.works||[];S.workers=r.workers||[];S.pin=r.pin||'1234';}
   return r.ok;
 }
-async function refreshData() {
-  toast('Refreshing...', '');
-  await loadData(); popW(); go(curP()); updateNavBadges();
-  toast('Refreshed', 'ok');
+
+async function refreshData(){
+  toast('Refreshing...','');
+  const ok=await loadData();
+  popWorker();go(curPage());updateBadges();
+  toast(ok?'Refreshed ✓':'Refresh failed','ok');
 }
 
-// =============================================
-// HELPERS
-// =============================================
-function toast(m, c) {
-  const t = document.getElementById('toast');
-  t.textContent = m; t.className = 'toast show' + (c ? ' ' + c : '');
-  clearTimeout(t._to); t._to = setTimeout(() => t.className = 'toast', 2800);
+// ═══════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════
+function toast(m,c){
+  const t=document.getElementById('toast');t.textContent=m;
+  t.className='toast show'+(c?' '+c:'');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.className='toast',2800);
 }
-function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
-function openModal(html) { document.getElementById('modalContent').innerHTML = html; document.getElementById('modalBg').classList.add('show'); }
+function closeModal(){document.getElementById('modalBg').classList.remove('show');}
+function openModal(html){document.getElementById('modalBody').innerHTML=html;document.getElementById('modalBg').classList.add('show');}
 
-function updateClock() {
-  const d = new Date();
-  const D=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  document.getElementById('clock').textContent =
-    D[d.getDay()]+' '+M[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear()+' · '+
+function updateClock(){
+  const d=new Date();
+  const D=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('clock').textContent=D[d.getDay()]+' '+M[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear()+' · '+
     String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
 }
 
-function nowHHmm() {
-  try {
-    return new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Los_Angeles'});
-  } catch(e) { const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function nowHHmm(){
+  try{return new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Los_Angeles'});}
+  catch(e){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 }
-function todayStr() {
-  try { return new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'}); }
-  catch(e) { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function todayStr(){
+  try{return new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});}
+  catch(e){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 }
-function genId() { return 'W'+Date.now()+Math.floor(Math.random()*999); }
+function genId(){return'W'+Date.now()+Math.floor(Math.random()*999);}
 
-// Client-side net minutes calc (same logic as server)
-function clientNetMin(startHHmm, endHHmm) {
-  if (!startHHmm || !endHHmm) return null;
-  const [sh,sm] = startHHmm.split(':').map(Number);
-  const [eh,em] = endHHmm.split(':').map(Number);
-  const s = sh*60+sm, e = eh*60+em;
-  if (e <= s) return null;
-  const gross = e - s;
-  const overlap = Math.max(0, Math.min(e,LUNCH_E) - Math.max(s,LUNCH_S));
-  return Math.max(0, gross - overlap);
+// net minutes client-side (for immediate display)
+function clientNet(sHHmm,eHHmm){
+  if(!sHHmm||!eHHmm)return null;
+  const[sh,sm]=sHHmm.split(':').map(Number),[eh,em]=eHHmm.split(':').map(Number);
+  const s=sh*60+sm,e=eh*60+em;
+  if(e<=s)return null;
+  const gross=e-s;
+  const overlap=Math.max(0,Math.min(e,13*60)-Math.max(s,12*60));
+  return Math.max(0,gross-overlap);
 }
-
-function fmtMin(m) {
-  if (m === '' || m === null || m === undefined) return '—';
-  const n = Number(m);
-  if (isNaN(n)) return '—';
-  if (n < 60) return n + 'm';
-  return Math.floor(n/60) + 'h ' + (n%60) + 'm';
+function fmtMin(m){
+  if(m===null||m===undefined||m==='')return'—';
+  const n=Number(m);if(isNaN(n))return'—';
+  if(n<60)return n+'m';return Math.floor(n/60)+'h '+(n%60)+'m';
 }
 
-function popW() {
-  const s = document.getElementById('selW'), c = s.value;
-  s.innerHTML = S.workers.map(w => `<option${w===c?' selected':''}>${w}</option>`).join('');
-  if (!c && S.workers.length) s.value = S.workers[0];
-  CW = s.value;
+function popWorker(){
+  const sel=document.getElementById('workerSel'),cur=sel.value;
+  sel.innerHTML=S.workers.map(w=>`<option${w===cur?' selected':''}>${w}</option>`).join('');
+  if(!cur&&S.workers.length)sel.value=S.workers[0];
+  CW=sel.value;
 }
-function swW() { CW = document.getElementById('selW').value; _mgrOK = false; go(curP()); }
+function onWorkerChange(){CW=document.getElementById('workerSel').value;_mgrOK=false;go(curPage());}
 
-// Order status based on work entries
-function orderActivities(oid) {
-  const ws = S.works.filter(w => w.oid === oid);
-  const byStage = s => ws.filter(w => w.stage === s);
-  return {
-    PICK: { all: byStage('PICK'), active: byStage('PICK').filter(w => !w.endT), done: byStage('PICK').filter(w => w.endT) },
-    INSP: { all: byStage('INSP'), active: byStage('INSP').filter(w => !w.endT), done: byStage('INSP').filter(w => w.endT) },
-    PALL: { all: byStage('PALL'), active: byStage('PALL').filter(w => !w.endT), done: byStage('PALL').filter(w => w.endT) },
-  };
+function updateBadges(){
+  const n=S.works.filter(w=>w.w===CW&&!w.endT).length;
+  const btn=document.querySelector('[data-p="work"]');if(!btn)return;
+  let b=btn.querySelector('.nb-badge');
+  if(n>0){if(!b){b=document.createElement('span');b.className='nb-badge';btn.appendChild(b);}b.textContent=n;}
+  else if(b)b.remove();
 }
 
-function stagePills(oid) {
-  const a = orderActivities(oid);
-  const stages = ['PICK','INSP','PALL'];
-  const colors = {PICK:'sp-active',INSP:'sp-insp-active',PALL:'sp-pall-active'};
-  return `<div class="stage-row">${stages.map((s,i) => {
-    const aa = a[s];
-    let cls = 'sp-wait';
-    if (aa.active.length) cls = colors[s];
-    else if (aa.done.length) cls = 'sp-done';
-    const cnt = aa.all.length ? ` (${aa.done.length}/${aa.all.length})` : '';
-    return (i>0?'<span class="sp-arrow">→</span>':'') + `<div class="sp ${cls}">${s}${cnt}</div>`;
-  }).join('')}</div>`;
-}
-
-function updateNavBadges() {
-  const myActive = S.works.filter(w => w.w === CW && !w.endT).length;
-  const b = document.querySelector('[data-p="work"] .nav-badge');
-  const btn = document.querySelector('[data-p="work"]');
-  if (!btn) return;
-  if (myActive > 0) {
-    if (!b) { const nb = document.createElement('span'); nb.className='nav-badge'; nb.textContent=myActive; btn.appendChild(nb); }
-    else b.textContent = myActive;
-  } else { if (b) b.remove(); }
-}
-
-// =============================================
+// ═══════════════════════════════════════════════
 // NAV
-// =============================================
-function go(id) {
-  if (id === 'mgr' && !_mgrOK) { showPinPrompt(); return; }
-  document.querySelectorAll('.pg').forEach(p => p.classList.remove('on'));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('on'));
-  const pg = document.getElementById('pg-'+id); if (pg) pg.classList.add('on');
-  const nb = document.querySelector(`[data-p="${id}"]`); if (nb) nb.classList.add('on');
+// ═══════════════════════════════════════════════
+function go(id){
+  if(id==='mgr'&&!_mgrOK){showPin();return;}
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
+  const pg=document.getElementById('pg-'+id);if(pg)pg.classList.add('on');
+  const nb=document.querySelector(`[data-p="${id}"]`);if(nb)nb.classList.add('on');
   R[id]?.();
 }
-function curP() { const a = document.querySelector('.nav-btn.on'); return a ? a.dataset.p : 'dash'; }
+function curPage(){const a=document.querySelector('.nb.on');return a?a.dataset.p:'dash';}
 
-function showPinPrompt() {
-  openModal(`<div style="text-align:center;padding:8px 0">
+function showPin(){
+  openModal(`<div style="text-align:center;padding:6px 0">
     <i class="ri-shield-keyhole-line" style="font-size:30px;color:var(--amber);display:block;margin-bottom:8px"></i>
     <div style="font-size:15px;font-weight:700;margin-bottom:3px">Manager access</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Enter password</div>
-    <input class="fi" type="password" id="pinInput" placeholder="Password" style="max-width:180px;margin:0 auto 10px;text-align:center;font-size:18px;letter-spacing:4px" onkeydown="if(event.key==='Enter')checkPin()">
+    <div style="font-size:12px;color:var(--t2);margin-bottom:14px">Enter password</div>
+    <input class="fi pallet-input" type="password" id="pinIn" style="letter-spacing:6px;margin:0 auto 10px;display:block" placeholder="••••" onkeydown="if(event.key==='Enter')checkPin()">
     <div id="pinErr" style="font-size:11px;color:var(--red);min-height:15px;margin-bottom:10px"></div>
     <div style="display:flex;gap:7px;justify-content:center">
       <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
       <button class="btn btn-blue btn-sm" onclick="checkPin()"><i class="ri-lock-unlock-line"></i> Unlock</button>
     </div></div>`);
-  setTimeout(() => { const e = document.getElementById('pinInput'); if(e) e.focus(); }, 80);
+  setTimeout(()=>document.getElementById('pinIn')?.focus(),80);
 }
-function checkPin() {
-  const v = document.getElementById('pinInput')?.value||'';
-  if (v === S.pin) { _mgrOK=true; closeModal(); toast('Manager unlocked','ok'); go('mgr'); }
-  else { document.getElementById('pinErr').textContent='Incorrect password'; const i=document.getElementById('pinInput'); if(i){i.value='';i.focus();} }
+function checkPin(){
+  const v=document.getElementById('pinIn')?.value||'';
+  if(v===S.pin){_mgrOK=true;closeModal();toast('Manager unlocked','ok');go('mgr');}
+  else{document.getElementById('pinErr').textContent='Incorrect password';const i=document.getElementById('pinIn');if(i){i.value='';i.focus();}}
 }
 
-// =============================================
+// ═══════════════════════════════════════════════
 // RENDERERS
-// =============================================
-const R = {};
+// ═══════════════════════════════════════════════
+const R={};
 
-// ---- DASHBOARD ----
-let _dFilter = 'all', _dPage = 0;
-const D_PER = 20;
+// stage color helpers
+const SCOL={PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'};
+const SBDCOL={PICK:'var(--blue-bd)',INSP:'var(--purple-bd)',PALL:'var(--teal-bd)'};
+const SBTN={PICK:'btn-blue',INSP:'btn-purple',PALL:'btn-teal'};
+const SLABEL={PICK:'Start Picking',INSP:'Start Inspection',PALL:'Start Palletizing'};
+const SELABEL={PICK:'End Picking',INSP:'End Inspection',PALL:'End Palletizing'};
+const SICON={PICK:'ri-route-line',INSP:'ri-search-eye-line',PALL:'ri-stack-line'};
 
-R.dash = function() {
-  const os = S.orders;
-  // Count active by stage
-  let wait=0,pickA=0,inspA=0,pallA=0,done=0;
-  os.forEach(o => {
-    const a = orderActivities(o.id);
-    const hasAny = a.PICK.all.length||a.INSP.all.length||a.PALL.all.length;
-    const allDone = hasAny && a.PICK.all.every(w=>w.endT) && a.INSP.all.every(w=>w.endT) && a.PALL.all.every(w=>w.endT)
-                           && a.PALL.done.length>0;
-    if (!hasAny) wait++;
-    else if (allDone) done++;
-    else {
-      if (a.PICK.active.length) pickA++;
-      if (a.INSP.active.length) inspA++;
-      if (a.PALL.active.length) pallA++;
-    }
+// ── helpers ──
+function orderStageSummary(oid){
+  const ws=S.works.filter(w=>w.oid===oid);
+  const byStage=s=>ws.filter(w=>w.stage===s);
+  return{PICK:byStage('PICK'),INSP:byStage('INSP'),PALL:byStage('PALL')};
+}
+
+function stagePills(oid){
+  const a=orderStageSummary(oid);
+  return`<div class="srow">${['PICK','INSP','PALL'].map((s,i)=>{
+    const ws=a[s];
+    const active=ws.filter(w=>!w.endT).length;
+    const done=ws.filter(w=>w.endT).length;
+    let cls='sp-wait';
+    if(active>0)cls=`sp-${s.toLowerCase()}`;
+    else if(done>0)cls='sp-done';
+    const cnt=ws.length?` (${done}/${ws.length})`:'';
+    return(i>0?'<span class="sp-arr">→</span>':'')+`<div class="sp ${cls}">${s}${cnt}</div>`;
+  }).join('')}</div>`;
+}
+
+// ── DASHBOARD ──
+const D_PER=20;
+let _dFilter='all';
+
+R.dash=function(){
+  // Count by status
+  let wait=0,pickA=0,inspA=0,pallA=0,done=0,mixed=0;
+  S.orders.forEach(o=>{
+    const a=orderStageSummary(o.id);
+    const anyWork=a.PICK.length||a.INSP.length||a.PALL.length;
+    if(!anyWork){wait++;return;}
+    const anyActive=Object.values(a).some(ws=>ws.some(w=>!w.endT));
+    const allEnded=Object.values(a).every(ws=>ws.every(w=>w.endT));
+    if(allEnded&&a.PALL.filter(w=>w.endT).length>0){done++;return;}
+    if(a.PALL.some(w=>!w.endT))pallA++;
+    else if(a.INSP.some(w=>!w.endT))inspA++;
+    else if(a.PICK.some(w=>!w.endT))pickA++;
+    else mixed++;
   });
-  document.getElementById('dMetrics').innerHTML = `<div class="grid g6">
+
+  document.getElementById('dashMetrics').innerHTML=`<div class="g6">
     ${[{l:'Waiting',v:wait,c:'am'},{l:'Picking',v:pickA,c:'bl'},{l:'Inspection',v:inspA,c:'pu'},
-       {l:'Palletizing',v:pallA,c:'tl'},{l:'Completed',v:done,c:'gr'},{l:'Total orders',v:os.length,c:'cy'}]
+       {l:'Palletizing',v:pallA,c:'tl'},{l:'Completed',v:done,c:'gr'},{l:'Total',v:S.orders.length,c:'cy'}]
     .map(m=>`<div class="mc ${m.c}"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${{am:'amber',bl:'blue',pu:'purple',tl:'teal',gr:'green',cy:'cyan'}[m.c]})">${m.v}</div></div>`).join('')}</div>`;
   renderDashTable();
 };
 
-function renderDashTable() {
+function renderDashTable(){
   const tabs=[{k:'all',l:'All'},{k:'active',l:'Active'},{k:'done',l:'Done'},{k:'waiting',l:'Waiting'}];
-  document.getElementById('dFilterTabs').innerHTML=tabs.map(t=>`<button class="btn btn-sm" style="${_dFilter===t.k?'background:var(--bg4);border-color:var(--text3)':'color:var(--text3)'}" onclick="_dFilter='${t.k}';_dPage=0;renderDashTable()">${t.l}</button>`).join('');
+  document.getElementById('dashFilterTabs').innerHTML=tabs.map(t=>
+    `<button class="btn btn-sm" style="${_dFilter===t.k?'background:var(--bg4);border-color:var(--t3)':'color:var(--t3)'}" onclick="_dFilter='${t.k}';_dp=0;renderDashTable()">${t.l}</button>`).join('');
 
-  let filtered = S.orders;
-  if (_dFilter==='active') filtered=filtered.filter(o=>{const a=orderActivities(o.id);return Object.values(a).some(s=>s.active.length>0);});
-  else if (_dFilter==='done') filtered=filtered.filter(o=>{const a=orderActivities(o.id);const h=a.PICK.all.length||a.INSP.all.length||a.PALL.all.length;return h&&Object.values(a).every(s=>s.all.every(w=>w.endT))&&a.PALL.done.length>0;});
-  else if (_dFilter==='waiting') filtered=filtered.filter(o=>{const a=orderActivities(o.id);return !a.PICK.all.length&&!a.INSP.all.length&&!a.PALL.all.length;});
+  let rows=S.orders;
+  if(_dFilter==='active')rows=rows.filter(o=>Object.values(orderStageSummary(o.id)).some(ws=>ws.some(w=>!w.endT)));
+  else if(_dFilter==='done')rows=rows.filter(o=>{const a=orderStageSummary(o.id);const any=a.PICK.length||a.INSP.length||a.PALL.length;return any&&Object.values(a).every(ws=>ws.every(w=>w.endT))&&a.PALL.some(w=>w.endT);});
+  else if(_dFilter==='waiting')rows=rows.filter(o=>{const a=orderStageSummary(o.id);return!a.PICK.length&&!a.INSP.length&&!a.PALL.length;});
 
-  const sq=(document.getElementById('dSearch')?.value||'').trim().toUpperCase();
-  if(sq) filtered=filtered.filter(o=>{
+  const sq=(document.getElementById('dashSearch')?.value||'').toUpperCase();
+  if(sq)rows=rows.filter(o=>{const ws=S.works.filter(w=>w.oid===o.id);return o.id.toUpperCase().includes(sq)||o.ch.toUpperCase().includes(sq)||o.cu.toUpperCase().includes(sq)||ws.some(w=>w.w.toUpperCase().includes(sq));});
+
+  const total=rows.length,pages=Math.max(1,Math.ceil(total/D_PER));
+  if(_dp>=pages)_dp=pages-1;if(_dp<0)_dp=0;
+  const slice=rows.slice(_dp*D_PER,_dp*D_PER+D_PER);
+
+  if(!slice.length){document.getElementById('dashTable').innerHTML='<div class="empty"><i class="ri-inbox-line"></i>No orders found</div>';document.getElementById('dashPager').innerHTML='';return;}
+
+  const trs=slice.map(o=>{
     const ws=S.works.filter(w=>w.oid===o.id);
-    return o.id.toUpperCase().includes(sq)||o.ch.toUpperCase().includes(sq)||o.cu.toUpperCase().includes(sq)||ws.some(w=>w.w.toUpperCase().includes(sq));
-  });
-
-  const total=filtered.length, pages=Math.max(1,Math.ceil(total/D_PER));
-  if(_dPage>=pages)_dPage=pages-1; if(_dPage<0)_dPage=0;
-  const slice=filtered.slice(_dPage*D_PER,_dPage*D_PER+D_PER);
-
-  if (!slice.length) { document.getElementById('dOrderTable').innerHTML='<div class="empty"><i class="ri-inbox-line"></i>No orders found</div>'; document.getElementById('dOrderPager').innerHTML=''; return; }
-
-  let rows = slice.map(o => {
-    const ws = S.works.filter(w=>w.oid===o.id);
-    const workers = [...new Set(ws.map(w=>w.w))];
-    const totalItems = ws.reduce((s,w)=>s+w.items,0);
-    const totalQty   = ws.reduce((s,w)=>s+w.qty,0);
-    const totalNetMin = ws.filter(w=>w.endT&&w.netMin!=='').reduce((s,w)=>s+Number(w.netMin),0);
-    const isMe = ws.some(w=>w.w===CW);
-    return `<tr${isMe?' style="background:rgba(59,130,246,.03)"':''}>
+    const workers=[...new Set(ws.map(w=>w.w))];
+    const totalItems=ws.filter(w=>w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
+    const totalQty  =ws.filter(w=>w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
+    const totalPallets=ws.filter(w=>w.stage==='PALL'&&w.endT&&w.pallets!==null).reduce((s,w)=>s+(w.pallets||0),0);
+    const totalNet  =ws.filter(w=>w.endT&&w.netMin!==null).reduce((s,w)=>s+(w.netMin||0),0);
+    const isMe=ws.some(w=>w.w===CW);
+    return`<tr${isMe?' style="background:rgba(59,130,246,.03)"':''}>
       <td class="mono" style="font-weight:700;padding-left:12px">${o.id}</td>
-      <td>${o.ch}</td><td>${o.cu}</td>
-      <td style="font-size:11px">${workers.join(', ')||'<span style="color:var(--text3)">—</span>'}</td>
+      <td style="color:var(--t2)">${o.ch}</td><td style="color:var(--t2)">${o.cu}</td>
+      <td style="font-size:11px">${workers.join(', ')||'<span style="color:var(--t3)">—</span>'}</td>
       <td class="mono">${totalItems||'—'}</td>
       <td class="mono">${totalQty||'—'}</td>
-      <td class="mono" style="color:var(--teal)">${totalNetMin?fmtMin(totalNetMin):'—'}</td>
+      <td class="mono" style="color:var(--teal)">${totalPallets?fmtPallets(totalPallets):'—'}</td>
+      <td class="mono" style="color:var(--blue)">${totalNet?fmtMin(totalNet):'—'}</td>
       <td>${stagePills(o.id)}</td>
-      <td style="padding-right:10px">
-        <button class="btn btn-sm" style="font-size:10px;padding:2px 6px" onclick="showOrderDetail('${o.id}')"><i class="ri-eye-line"></i></button>
-      </td></tr>`;
+      <td style="padding-right:10px"><button class="btn btn-sm" style="padding:2px 6px;font-size:10px" onclick="showOrderDetail('${o.id}')"><i class="ri-eye-line"></i></button></td>
+    </tr>`;
   });
 
-  document.getElementById('dOrderTable').innerHTML=`<div class="card" style="padding:0;overflow-x:auto"><table class="tbl" style="min-width:700px"><thead><tr>
-    <th style="padding-left:12px">Order</th><th>Ch.</th><th>Customer</th><th>Workers</th>
-    <th>Items</th><th>QTY</th><th>Net time</th><th>Stage progress</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+  document.getElementById('dashTable').innerHTML=`<div class="card" style="padding:0;overflow-x:auto">
+    <table class="tbl" style="min-width:750px"><thead><tr>
+      <th style="padding-left:12px">Order</th><th>Ch.</th><th>Customer</th><th>Workers</th>
+      <th>Items</th><th>QTY</th><th>Pallets</th><th>Net time</th><th>Stage</th><th></th>
+    </tr></thead><tbody>${trs.join('')}</tbody></table></div>`;
 
-  const pg=document.getElementById('dOrderPager');
-  pg.innerHTML=pages>1?`<button class="btn btn-sm" onclick="_dPage--;renderDashTable()" ${_dPage===0?'disabled':''}><i class="ri-arrow-left-s-line"></i></button><span style="font-size:11px;color:var(--text2)">${_dPage+1}/${pages} (${total})</span><button class="btn btn-sm" onclick="_dPage++;renderDashTable()" ${_dPage>=pages-1?'disabled':''}><i class="ri-arrow-right-s-line"></i></button>`:`<span style="font-size:11px;color:var(--text3)">${total} order${total>1?'s':''}</span>`;
+  const pg=document.getElementById('dashPager');
+  pg.innerHTML=pages>1?`<button class="btn btn-sm" onclick="_dp--;renderDashTable()" ${_dp===0?'disabled':''}><i class="ri-arrow-left-s-line"></i></button><span style="font-size:11px;color:var(--t2)">${_dp+1}/${pages} (${total})</span><button class="btn btn-sm" onclick="_dp++;renderDashTable()" ${_dp>=pages-1?'disabled':''}><i class="ri-arrow-right-s-line"></i></button>`:`<span style="font-size:11px;color:var(--t3)">${total} order${total>1?'s':''}</span>`;
 }
 
-window.showOrderDetail = function(oid) {
-  const o = S.orders.find(x=>x.id===oid); if(!o) return;
-  const ws = S.works.filter(w=>w.oid===oid);
-  const byStage = s => ws.filter(w=>w.stage===s);
-  let html = `<div style="margin-bottom:14px"><div style="font-size:15px;font-weight:700">${oid}</div><div style="font-size:12px;color:var(--text2)">${o.ch} · ${o.cu}</div></div>`;
-  ['PICK','INSP','PALL'].forEach(stage => {
-    const sw = byStage(stage);
-    if (!sw.length) return;
-    const col = {PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'}[stage];
-    html += `<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:${col};letter-spacing:.06em;margin-bottom:6px">${stage}</div>`;
-    sw.forEach(w => {
-      const done = !!w.endT;
-      html += `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;margin-bottom:4px;font-size:12px">
+window.showOrderDetail=function(oid){
+  const o=S.orders.find(x=>x.id===oid);if(!o)return;
+  const ws=S.works.filter(w=>w.oid===oid);
+  let html=`<div style="margin-bottom:14px"><div style="font-size:15px;font-weight:700">${oid}</div><div style="font-size:12px;color:var(--t2)">${o.ch} · ${o.cu}</div></div>`;
+  ['PICK','INSP','PALL'].forEach(stage=>{
+    const sw=ws.filter(w=>w.stage===stage);if(!sw.length)return;
+    const col=SCOL[stage];
+    html+=`<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:${col};letter-spacing:.06em;margin-bottom:5px">${stage}</div>`;
+    sw.forEach((w,i)=>{
+      const done=!!w.endT;
+      const detail=stage==='PICK'?`${w.items} items · ${w.qty} QTY`:(w.pallets!==null&&done?`${fmtPallets(w.pallets)} pallets`:'');
+      html+=`<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 11px;margin-bottom:4px;font-size:12px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">${w.w}</span>
-          ${done?`<span class="badge b-done">Done</span>`:`<span class="badge b-live">Active</span>`}
+          ${done?`<span class="badge b-done">Done · ${fmtMin(w.netMin)}</span>`:`<span class="badge b-live">Active</span>`}
         </div>
-        <div style="color:var(--text3);margin-top:3px">${w.items} items · ${w.qty} QTY · ${w.startT}${done?' → '+w.endT:' → now'} · Net: ${fmtMin(w.netMin)}</div>
+        <div style="color:var(--t3);margin-top:2px">${w.startT}${done?' → '+w.endT:' → now'} · ${detail}</div>
       </div>`;
     });
-    html += '</div>';
+    html+='</div>';
   });
-  if (!ws.length) html += '<div class="empty"><i class="ri-inbox-line"></i>No work entries yet</div>';
-  html += `<div style="text-align:right;margin-top:12px"><button class="btn btn-sm" onclick="closeModal()">Close</button></div>`;
+  if(!ws.length)html+='<div class="empty"><i class="ri-inbox-line"></i>No work entries</div>';
+  html+=`<div style="text-align:right;margin-top:12px"><button class="btn btn-sm" onclick="closeModal()">Close</button></div>`;
   openModal(html);
 };
 
-// ---- WORK PAGE ----
-function selStage(stage) {
-  _curStage = stage;
-  document.querySelectorAll('.stage-tab').forEach(t => t.classList.remove('on'));
-  document.querySelector(`.stage-tab.${stage.toLowerCase()}`)?.classList.add('on');
-  const colors = {PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'};
-  const icons  = {PICK:'ri-route-line',INSP:'ri-search-eye-line',PALL:'ri-stack-line'};
-  const labels = {PICK:'Start Picking',INSP:'Start Inspection',PALL:'Start Palletizing'};
-  const itemL  = {PICK:'Items (SKU count)',INSP:'Items checked',PALL:'Items palletized'};
-  document.getElementById('workCardTitle').innerHTML = `<i class="${icons[stage]}" style="color:${colors[stage]}"></i> Start ${stage.charAt(0)+stage.slice(1).toLowerCase()}`;
-  document.getElementById('btnStartLabel').textContent = labels[stage];
-  document.getElementById('btnStartWork').className = `btn btn-${stage==='PICK'?'blue':stage==='INSP'?'purple':'teal'} btn-block btn-lg`;
-  document.getElementById('wItemsLbl').textContent = itemL[stage];
-  updateOrderSummary();
+// ── WORK PAGE ──
+function selStage(s){
+  CS=s;
+  document.querySelectorAll('.stab').forEach(t=>t.classList.remove('on'));
+  document.querySelector(`.stab.${s.toLowerCase()}`)?.classList.add('on');
+  document.getElementById('workTitle').innerHTML=`<i class="${SICON[s]}" style="color:${SCOL[s]}"></i> Start ${s.charAt(0)+s.slice(1).toLowerCase()}`;
+  document.getElementById('btnStartTxt').textContent=SLABEL[s];
+  document.getElementById('btnStart').className=`btn ${SBTN[s]} btn-block btn-lg`;
+  document.getElementById('pickInputs').style.display=s==='PICK'?'block':'none';
+  updateWorkOrderInfo();
 }
 
-function updateOrderSummary() {
-  const oid = document.getElementById('wOrd')?.value;
-  const el = document.getElementById('wOrdInfo'); // may not exist, using wOrdSummary
-  const sum = document.getElementById('wOrdSummary'); if (!sum) return;
-  if (!oid) { sum.innerHTML=''; return; }
-  const o = S.orders.find(x=>x.id===oid);
-  const ws = S.works.filter(w=>w.oid===oid);
-  const stageWs = ws.filter(w=>w.stage===_curStage);
-  const active = stageWs.filter(w=>!w.endT);
-  const done   = stageWs.filter(w=>w.endT);
-  const myHere = stageWs.filter(w=>w.w===CW);
-  sum.innerHTML=`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 11px;margin-bottom:10px;font-size:12px">
+function updateWorkOrderInfo(){
+  const oid=document.getElementById('workOrder')?.value;
+  const el=document.getElementById('workOrderInfo');
+  if(!oid){el.innerHTML='';renderActFeed();return;}
+  const o=S.orders.find(x=>x.id===oid);
+  const ws=S.works.filter(w=>w.oid===oid&&w.stage===CS);
+  const active=ws.filter(w=>!w.endT).length,done=ws.filter(w=>w.endT).length;
+  const myHere=ws.filter(w=>w.w===CW);
+  el.innerHTML=`<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 12px;margin-bottom:10px;font-size:12px">
     <span style="font-weight:600">${o.ch} · ${o.cu}</span>
-    <span style="color:var(--text3);margin-left:10px">${_curStage}: ${active.length} active · ${done.length} done</span>
-    ${myHere.length?`<span style="color:var(--amber);margin-left:8px">⚠ You already have ${myHere.length} ${_curStage} entry here</span>`:''}
+    <span style="color:var(--t3);margin-left:10px">${CS}: ${active} active · ${done} done</span>
+    ${myHere.length?`<span style="color:var(--amber);margin-left:8px">· You have ${myHere.length} session(s) here</span>`:''}
   </div>`;
+  renderActFeed();
 }
 
-R.work = function() {
-  // Populate order dropdown
-  const sel = document.getElementById('wOrd');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">— Select order —</option>' + S.orders.map(o=>`<option value="${o.id}"${o.id===cur?' selected':''}>${o.id} (${o.ch}·${o.cu})</option>`).join('');
-  sel.onchange = () => { updateOrderSummary(); renderOrderActivity(); };
-  selStage(_curStage);
+function onWorkOrderChange(){updateWorkOrderInfo();}
 
-  // My active sessions
-  const myActive = S.works.filter(w=>w.w===CW&&!w.endT);
-  const stageColor = {PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'};
-  const stageBdColor = {PICK:'var(--blue-bd)',INSP:'var(--purple-bd)',PALL:'var(--teal-bd)'};
-  const stageEndLabel = {PICK:'End Picking',INSP:'End Inspection',PALL:'End Palletizing'};
-  const stageEndClass = {PICK:'btn-green',INSP:'btn-green',PALL:'btn-green'};
+function renderActFeed(){
+  const oid=document.getElementById('workOrder')?.value;
+  const sec=document.getElementById('actFeedSection');
+  const feed=document.getElementById('actFeed');
+  if(!oid){sec.style.display='none';feed.innerHTML='';return;}
+  sec.style.display='';
+  const ws=S.works.filter(w=>w.oid===oid);
+  if(!ws.length){feed.innerHTML='<div style="font-size:12px;color:var(--t3);padding:4px 0">No entries for this order yet</div>';return;}
+  feed.innerHTML=ws.map(w=>{
+    const done=!!w.endT;
+    const detail=w.stage==='PICK'?`${w.items||0}i/${w.qty||0}q`:(w.pallets!==null&&done?`${fmtPallets(w.pallets)} pallets`:'');
+    return`<div class="act-row">
+      <span class="act-stage" style="color:${SCOL[w.stage]||'var(--t)'}">${w.stage}</span>
+      <span style="flex:1;font-weight:500">${w.w}</span>
+      <span class="mono" style="color:var(--t3)">${detail}</span>
+      <span class="mono" style="color:var(--t2)">${w.startT}${done?' → '+w.endT:' → now'}</span>
+      ${done?`<span class="mono" style="color:var(--teal);min-width:44px;text-align:right">${fmtMin(w.netMin)}</span>`:'<span class="badge b-live" style="font-size:9px">Live</span>'}
+    </div>`;
+  }).join('');
+}
 
-  document.getElementById('myActive').innerHTML = myActive.length ?
-    myActive.map(w => {
-      const o = S.orders.find(x=>x.id===w.oid);
-      const inf = !!_pending[w.id];
-      return `<div class="we${inf?' pending':''}" style="border-color:${stageBdColor[w.stage]}">
-        <div class="we-top">
-          <div>
-            <div class="we-id">${w.oid} <span style="color:${stageColor[w.stage]};font-size:11px">${w.stage}</span></div>
-            <div style="font-size:11px;color:var(--text2)">${o?.ch}·${o?.cu}</div>
-          </div>
-          ${inf?'<span class="badge b-saving">Saving...</span>':'<span class="badge b-live">Active</span>'}
-        </div>
-        <div class="we-meta">
-          <span><i class="ri-box-3-line"></i> ${w.items} items</span>
-          <span><i class="ri-stack-line"></i> ${w.qty} QTY</span>
-          <span><i class="ri-time-line"></i> ${w.startT} → now</span>
-        </div>
-        <button class="btn btn-green btn-block btn-lg" style="margin-top:11px" onclick="endWork('${w.id}')" ${inf?'disabled':''}>
-          <i class="ri-checkbox-circle-line"></i> ${stageEndLabel[w.stage]}
-        </button>
-      </div>`;
-    }).join('')
-    : '<div style="font-size:12px;color:var(--text3);padding:4px 0">No active sessions</div>';
-
-  // Order activity feed
-  renderOrderActivity();
+R.work=function(){
+  const sel=document.getElementById('workOrder'),cur=sel.value;
+  sel.innerHTML='<option value="">— Select order —</option>'+S.orders.map(o=>`<option value="${o.id}"${o.id===cur?' selected':''}>${o.id} (${o.ch}·${o.cu})</option>`).join('');
+  selStage(CS);
+  renderMyActive();
 };
 
-function renderOrderActivity() {
-  const selOid = document.getElementById('wOrd')?.value;
-  const stageColor = {PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'};
-  if (selOid) {
-    const allForOrder = S.works.filter(w=>w.oid===selOid);
-    document.getElementById('orderActivity').innerHTML = allForOrder.length ?
-      allForOrder.map(w=>{
-        const done=!!w.endT;
-        const nm = done ? fmtMin(w.netMin) : '...';
-        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
-          <span style="color:${stageColor[w.stage]||'var(--text)'};font-weight:700;width:36px;font-size:11px">${w.stage}</span>
-          <span style="flex:1;font-weight:500">${w.w}</span>
-          <span class="mono" style="color:var(--text3)">${w.items}i / ${w.qty}q</span>
-          <span class="mono" style="color:var(--text2)">${w.startT}${done?' → '+w.endT:' → now'}</span>
-          ${done
-            ? `<span class="mono" style="color:var(--teal);width:52px;text-align:right">${nm}</span>`
-            : `<span class="badge b-live" style="font-size:9px">Live</span>`
-          }
-        </div>`;
-      }).join('')
-      : '<div class="empty" style="padding:16px 0"><i class="ri-inbox-line"></i>No work entries for this order yet</div>';
-  } else {
-    document.getElementById('orderActivity').innerHTML = '<div style="font-size:12px;color:var(--text3);padding:4px 0">Select an order above to see activity</div>';
-  }
+function renderMyActive(){
+  const active=S.works.filter(w=>w.w===CW&&!w.endT);
+  document.getElementById('myActive').innerHTML=active.length?active.map(w=>{
+    const o=S.orders.find(x=>x.id===w.oid);
+    const inf=!!_pending[w.id];
+    return`<div class="we${inf?' pending':''}" style="border-color:${SBDCOL[w.stage]}">
+      <div class="we-header">
+        <div>
+          <div class="we-title">${w.oid} <span style="color:${SCOL[w.stage]};font-size:11px;font-weight:700">${w.stage}</span></div>
+          <div class="we-sub">${o?.ch}·${o?.cu}</div>
+        </div>
+        ${inf?'<span class="badge b-saving">Saving...</span>':'<span class="badge b-live">Active</span>'}
+      </div>
+      <div class="we-meta">
+        ${w.stage==='PICK'?`<span><i class="ri-box-3-line"></i> ${w.items} items</span><span><i class="ri-stack-line"></i> ${w.qty} QTY</span>`:''}
+        <span><i class="ri-time-line"></i> Started ${w.startT}</span>
+      </div>
+      <button class="btn btn-green btn-block btn-lg" style="margin-top:12px" onclick="endWork('${w.id}','${w.stage}')" ${inf?'disabled':''}>
+        <i class="ri-checkbox-circle-line"></i> ${SELABEL[w.stage]}
+      </button>
+    </div>`;
+  }).join(''):'<div style="font-size:12px;color:var(--t3);padding:4px 0">No active sessions</div>';
 }
 
-window.startWork = function() {
-  const oid = document.getElementById('wOrd')?.value;
-  const items = parseInt(document.getElementById('wItems')?.value);
-  const qty   = parseInt(document.getElementById('wQty')?.value);
-  if (!oid)   { toast('Select an order', 'err'); return; }
-  if (!items||items<1) { toast('Enter item count', 'err'); return; }
-  if (!qty||qty<1)     { toast('Enter total QTY', 'err'); return; }
-
+window.startWork=function(){
+  const oid=document.getElementById('workOrder')?.value;
+  if(!oid){toast('Select an order','err');return;}
+  let items=null,qty=null;
+  if(CS==='PICK'){
+    items=parseInt(document.getElementById('wItems')?.value);
+    qty  =parseInt(document.getElementById('wQty')?.value);
+    if(!items||items<1){toast('Enter item count','err');return;}
+    if(!qty||qty<1){toast('Enter total QTY','err');return;}
+  }
   // Optimistic
-  const tempId = genId();
-  const hhmm   = nowHHmm();
-  const entry  = { id:tempId, oid, w:CW, stage:_curStage, items, qty, startT:hhmm, endT:'', netMin:'', grossMin:'' };
-  S.works.push(entry);
-  _pending[tempId] = { patch:null };
-  toast(`✓ ${_curStage} started!`, 'ok');
-  updateNavBadges(); R.work(); renderOrderActivity();
+  const tid=genId(),hhmm=nowHHmm();
+  const entry={id:tid,oid,w:CW,stage:CS,items,qty,pallets:null,startT:hhmm,endT:'',startISO:'',endISO:'',netMin:null,grossMin:null,date:todayStr()};
+  S.works.push(entry);_pending[tid]=true;
+  toast(`✓ ${CS} started!`,'ok');
+  updateBadges();renderMyActive();renderActFeed();
+  // Clear PICK inputs
+  if(CS==='PICK'){document.getElementById('wItems').value='';document.getElementById('wQty').value='';}
 
-  apiBg('startWork', { orderId:oid, worker:CW, stage:_curStage, items, qty },
-    res => {
-      const idx = S.works.findIndex(w=>w.id===tempId);
-      if (idx>=0 && res.entryId) { S.works[idx].id=res.entryId; S.works[idx].startT=res.startTime||hhmm; }
-      delete _pending[tempId];
-      updateNavBadges(); R.work();
-    },
-    () => {
-      S.works = S.works.filter(w=>w.id!==tempId);
-      delete _pending[tempId];
-      toast('⚠ Save failed — try again', 'err');
-      updateNavBadges(); R.work();
-    }
-  );
-  // Clear inputs
-  document.getElementById('wItems').value='';
-  document.getElementById('wQty').value='';
-};
-
-window.endWork = function(wid) {
-  const w = S.works.find(x=>x.id===wid); if (!w||_pending[wid]) return;
-  const hhmm = nowHHmm();
-  const orig  = { endT:w.endT, netMin:w.netMin };
-  const nm    = clientNetMin(w.startT, hhmm);
-  w.endT   = hhmm;
-  w.netMin = nm !== null ? nm : '';
-  _pending[wid] = { patch:{ endT:hhmm } };
-  toast(`✓ ${w.stage} ended! Net: ${fmtMin(nm)}`, 'ok');
-  updateNavBadges(); R.work();
-
-  apiBg('endWork', { entryId:wid },
-    res => {
-      if (res.endTime)    w.endT   = res.endTime;
-      if (res.netMinutes !== undefined) w.netMin = res.netMinutes;
-      delete _pending[wid];
-      if (curP()==='dash') R.dash();
-      updateNavBadges(); R.work(); renderOrderActivity();
-    },
-    () => {
-      Object.assign(w, orig);
-      delete _pending[wid];
-      toast('⚠ Save failed — try again', 'err');
-      updateNavBadges(); R.work();
-    }
+  apiBg('startWork',{orderId:oid,worker:CW,stage:CS,items,qty},
+    res=>{const idx=S.works.findIndex(w=>w.id===tid);if(idx>=0&&res.entryId){S.works[idx].id=res.entryId;S.works[idx].startT=res.startTime||hhmm;}delete _pending[tid];updateBadges();renderMyActive();renderActFeed();},
+    ()=>{S.works=S.works.filter(w=>w.id!==tid);delete _pending[tid];toast('⚠ Save failed — try again','err');updateBadges();renderMyActive();}
   );
 };
 
-// ---- KPI ----
-function kpiSetToday()  { const t=todayStr(); document.getElementById('kpiFrom').value=t; document.getElementById('kpiTo').value=t; renderKPI(); }
-function kpiSetWeek() {
-  const d=new Date(); const day=d.getDay(); const mon=new Date(d); mon.setDate(d.getDate()-(day===0?6:day-1));
-  const fmt=x=>x.toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
-  document.getElementById('kpiFrom').value=fmt(mon); document.getElementById('kpiTo').value=fmt(d);
-  renderKPI();
+// Round to nearest 0.5 — rule: < 0.5 fraction → round down to .5, >= 0.5 fraction → round up to 1.0
+// e.g. 0.3→0.5, 0.7→1.0, 1.3→1.5, 3.2→3.5, 3.6→4.0
+function roundPallets(v){
+  if(isNaN(v)||v<=0)return 0;
+  const floor=Math.floor(v);
+  const frac=v-floor;
+  if(frac===0)   return floor;          // exact integer
+  if(frac<0.5)   return floor+0.5;      // < half → round to .5
+  return floor+1;                        // >= half → round up
 }
-function kpiSetMonth() {
-  const t=todayStr(); const [y,m]=t.split('-');
-  document.getElementById('kpiFrom').value=`${y}-${m}-01`; document.getElementById('kpiTo').value=t;
-  renderKPI();
+function fmtPallets(v){
+  if(v===null||v===undefined||v==='')return'—';
+  const n=Number(v);
+  return Number.isInteger(n)?n.toString():n.toFixed(1);
 }
 
-R.kpi = function() {
-  if (!document.getElementById('kpiFrom').value) kpiSetToday();
-  else renderKPI();
-};
+// endWork — for INSP/PALL show pallet-count modal; for PICK immediate
+window.endWork=function(wid,stage){
+  const w=S.works.find(x=>x.id===wid);if(!w||_pending[wid])return;
+  if(stage==='PICK'){
+    doEndWork(wid,null);
+  }else{
+    const col=SCOL[stage];
+    // Quick-select buttons: 0, 0.5, 1, 1.5 … up to 8
+    const quickVals=[0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,6,7,8];
+    const qBtns=quickVals.map(v=>`<button class="btn btn-sm" style="min-width:46px;font-weight:700"
+      onclick="setPalletVal(${v})">${v===0?'0':fmtPallets(v)}</button>`).join('');
 
-function renderKPI() {
-  const from = document.getElementById('kpiFrom').value;
-  const to   = document.getElementById('kpiTo').value;
-  if (!from || !to) { document.getElementById('kpiContent').innerHTML='<div class="empty">Select date range</div>'; return; }
+    openModal(`<div class="end-modal-inner">
+      <i class="${SICON[stage]}" style="font-size:28px;color:${col};display:block;margin-bottom:8px"></i>
+      <div style="font-size:15px;font-weight:700;margin-bottom:2px">End ${stage}</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:16px">${w.oid} · ${w.startT} → now</div>
 
-  // Filter: completed entries within date range
-  // startISO comes from server as "2026-05-15T09:30:00" — slice to "2026-05-15" for comparison
-  const allDone = S.works.filter(w => {
-    if (!w.endT) return false;
-    const d = w.startISO ? w.startISO.slice(0,10) : '';
-    if (!d) return true; // if no ISO yet (optimistic entry), include it
-    return d >= from && d <= to;
-  });
+      <label class="fl" style="text-align:center;margin-bottom:8px">How many pallets completed?</label>
 
-  const fromLabel = from === to ? from : from + ' ~ ' + to;
+      <!-- Manual input -->
+      <div style="display:flex;align-items:center;gap:6px;justify-content:center;margin-bottom:6px">
+        <button class="btn btn-sm" style="font-size:16px;padding:4px 10px;font-weight:700" onclick="adjPallet(-0.5)">−</button>
+        <input class="fi" type="number" id="palletCount" min="0" step="0.5" placeholder="0"
+          style="width:90px;text-align:center;font-size:22px;font-weight:800;font-family:var(--mono);padding:8px"
+          oninput="updatePalletPreview()"
+          onkeydown="if(event.key==='Enter')confirmEnd('${wid}','${stage}')">
+        <button class="btn btn-sm" style="font-size:16px;padding:4px 10px;font-weight:700" onclick="adjPallet(0.5)">+</button>
+      </div>
 
-  // Group by worker × stage
-  const workerStats = {};
-  S.workers.forEach(wk => {
-    workerStats[wk] = {
-      PICK:{ entries:0, items:0, qty:0, netMin:0 },
-      INSP:{ entries:0, items:0, qty:0, netMin:0 },
-      PALL:{ entries:0, items:0, qty:0, netMin:0 }
-    };
-  });
-  allDone.forEach(w => {
-    if (!workerStats[w.w]) workerStats[w.w] = {
-      PICK:{entries:0,items:0,qty:0,netMin:0},
-      INSP:{entries:0,items:0,qty:0,netMin:0},
-      PALL:{entries:0,items:0,qty:0,netMin:0}
-    };
-    const st = workerStats[w.w][w.stage];
-    if (!st) return;
-    st.entries++;
-    st.items  += w.items;
-    st.qty    += w.qty;
-    st.netMin += (w.netMin !== '' && w.netMin !== null && w.netMin !== undefined ? Number(w.netMin) : 0);
-  });
+      <!-- Preview of rounded value -->
+      <div id="palletPreview" style="font-size:12px;color:var(--t3);margin-bottom:12px;min-height:18px;text-align:center"></div>
 
-  // Summary metrics
-  const totalEntries = allDone.length;
-  const totalItems   = allDone.reduce((s,w) => s + w.items, 0);
-  const totalQty     = allDone.reduce((s,w) => s + w.qty, 0);
-  const totalNetMin  = allDone.reduce((s,w) => s + (w.netMin !== '' && w.netMin !== null ? Number(w.netMin) : 0), 0);
+      <!-- Quick-select -->
+      <div style="font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;text-align:center">Quick select</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-bottom:18px">${qBtns}</div>
 
-  if (!allDone.length) {
-    document.getElementById('kpiContent').innerHTML = `<div class="empty"><i class="ri-bar-chart-2-line"></i>No completed entries for ${fromLabel}</div>`;
-    return;
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+        <button class="btn ${SBTN[stage]}" style="padding:10px 22px;font-weight:700" onclick="confirmEnd('${wid}','${stage}')">
+          <i class="ri-checkbox-circle-line"></i> Confirm
+        </button>
+      </div>
+    </div>`);
+    setTimeout(()=>{document.getElementById('palletCount')?.focus();},80);
   }
+};
 
-  let html = `<div style="font-size:11px;color:var(--text3);margin-bottom:10px;font-weight:600;letter-spacing:.04em">
-    <i class="ri-calendar-line"></i> ${fromLabel} — ${allDone.length} completed entries
-  </div>
-  <div class="grid g4" style="margin-bottom:14px">
-    ${[{l:'Completed entries',v:totalEntries,c:'gr'},{l:'Total items processed',v:totalItems,c:'pu'},
-       {l:'Total QTY processed',v:totalQty,c:'tl'},{l:'Total net work time',v:fmtMin(totalNetMin),c:'bl'}]
-    .map(m=>`<div class="mc ${m.c}"><div class="mc-l">${m.l}</div><div class="mc-v" style="font-size:18px;color:var(--${{gr:'green',pu:'purple',tl:'teal',bl:'blue'}[m.c]})">${m.v}</div></div>`).join('')}</div>`;
+// helpers called by modal buttons
+window.setPalletVal=function(v){
+  const el=document.getElementById('palletCount');if(!el)return;
+  el.value=v;updatePalletPreview();
+};
+window.adjPallet=function(delta){
+  const el=document.getElementById('palletCount');if(!el)return;
+  const cur=parseFloat(el.value)||0;
+  el.value=Math.max(0,+(cur+delta).toFixed(1));
+  updatePalletPreview();
+};
+window.updatePalletPreview=function(){
+  const el=document.getElementById('palletCount');
+  const prev=document.getElementById('palletPreview');
+  if(!el||!prev)return;
+  const raw=parseFloat(el.value);
+  if(isNaN(raw)||raw<0){prev.textContent='';return;}
+  const rounded=roundPallets(raw);
+  if(rounded===raw){prev.innerHTML=`<span style="color:var(--green)">✓ Saved as <strong>${fmtPallets(rounded)}</strong> pallet${rounded!==1?'s':''}</span>`;}
+  else{prev.innerHTML=`<span style="color:var(--amber)">→ Rounded to <strong>${fmtPallets(rounded)}</strong> pallet${rounded!==1?'s':''}</span>`;}
+};
 
-  // Worker breakdown table
-  html += `<div class="section">Worker × Stage breakdown</div>
+window.confirmEnd=function(wid,stage){
+  const raw=parseFloat(document.getElementById('palletCount')?.value);
+  const pallVal=isNaN(raw)||raw<0?0:roundPallets(raw);
+  closeModal();
+  doEndWork(wid,pallVal);
+};
+
+function doEndWork(wid,pallets){
+  const w=S.works.find(x=>x.id===wid);if(!w||_pending[wid])return;
+  const hhmm=nowHHmm();
+  const orig={endT:w.endT,netMin:w.netMin,pallets:w.pallets};
+  const nm=clientNet(w.startT,hhmm);
+  w.endT=hhmm;w.netMin=nm;if(pallets!==null)w.pallets=pallets;
+  _pending[wid]=true;
+
+  const pallMsg=pallets!==null?` · ${fmtPallets(pallets)} pallet${pallets!==1?'s':''} finished`:'';
+  toast(`✓ ${w.stage} ended · Net: ${fmtMin(nm)}${pallMsg}`,'ok');
+  updateBadges();renderMyActive();renderActFeed();
+  if(curPage()==='dash')R.dash();
+
+  apiBg('endWork',{entryId:wid,pallets:pallets!==null?pallets:undefined},
+    res=>{if(res.endTime)w.endT=res.endTime;if(res.netMinutes!==undefined&&res.netMinutes!==null)w.netMin=res.netMinutes;if(res.pallets!==null&&res.pallets!==undefined)w.pallets=res.pallets;delete _pending[wid];renderMyActive();renderActFeed();if(curPage()==='dash')R.dash();},
+    ()=>{Object.assign(w,orig);delete _pending[wid];toast('⚠ Save failed — try again','err');renderMyActive();}
+  );
+}
+
+// ── KPI ──
+function kpiToday(){const t=todayStr();document.getElementById('kpiFrom').value=t;document.getElementById('kpiTo').value=t;renderKPI();}
+function kpiWeek(){
+  const d=new Date(),day=d.getDay();const m=new Date(d);m.setDate(d.getDate()-(day===0?6:day-1));
+  const f=x=>x.toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  document.getElementById('kpiFrom').value=f(m);document.getElementById('kpiTo').value=f(d);renderKPI();
+}
+function kpiMonth(){const t=todayStr(),p=t.split('-');document.getElementById('kpiFrom').value=`${p[0]}-${p[1]}-01`;document.getElementById('kpiTo').value=t;renderKPI();}
+R.kpi=function(){if(!document.getElementById('kpiFrom').value)kpiToday();else renderKPI();};
+
+function renderKPI(){
+  const from=document.getElementById('kpiFrom').value;
+  const to  =document.getElementById('kpiTo').value;
+  if(!from||!to){document.getElementById('kpiContent').innerHTML='<div class="empty">Select date range</div>';return;}
+
+  // filter completed entries in range using startISO date
+  const done=S.works.filter(w=>{
+    if(!w.endT)return false;
+    const d=w.startISO?w.startISO.slice(0,10):(w.date||'');
+    if(!d)return true;
+    return d>=from&&d<=to;
+  });
+
+  const label=from===to?from:`${from} ~ ${to}`;
+  if(!done.length){document.getElementById('kpiContent').innerHTML=`<div class="empty"><i class="ri-bar-chart-2-line"></i>No completed entries for ${label}</div>`;return;}
+
+  // Build stats: worker → stage → {sessions,items,qty,pallets,netMin}
+  const stats={};
+  S.workers.forEach(wk=>{stats[wk]={PICK:{n:0,items:0,qty:0,pallets:0,min:0},INSP:{n:0,items:0,qty:0,pallets:0,min:0},PALL:{n:0,items:0,qty:0,pallets:0,min:0}};});
+
+  done.forEach(w=>{
+    if(!stats[w.w])stats[w.w]={PICK:{n:0,items:0,qty:0,pallets:0,min:0},INSP:{n:0,items:0,qty:0,pallets:0,min:0},PALL:{n:0,items:0,qty:0,pallets:0,min:0}};
+    const st=stats[w.w][w.stage];if(!st)return;
+    st.n++;
+    st.items  +=(w.items||0);
+    st.qty    +=(w.qty||0);
+    st.pallets+=(w.pallets||0);
+    st.min    +=(w.netMin||0);
+  });
+
+  const totItems=done.filter(w=>w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
+  const totQty  =done.filter(w=>w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
+  const totPall =done.filter(w=>['INSP','PALL'].includes(w.stage)).reduce((s,w)=>s+(w.pallets||0),0);
+  const totMin  =done.reduce((s,w)=>s+(w.netMin||0),0);
+
+  let html=`<div style="font-size:11px;color:var(--t3);margin-bottom:10px"><i class="ri-calendar-line"></i> ${label} — <strong style="color:var(--t2)">${done.length}</strong> completed sessions</div>
+  <div class="g4" style="margin-bottom:14px">
+    ${[{l:'Sessions done',v:done.length,c:'gr'},{l:'Items picked',v:totItems,c:'pu'},
+       {l:'QTY picked',v:totQty,c:'tl'},{l:'Pallets (INSP+PALL)',v:fmtPallets(totPall),c:'am'}]
+    .map(m=>`<div class="mc ${m.c}"><div class="mc-l">${m.l}</div><div class="mc-v" style="font-size:18px;color:var(--${{gr:'green',pu:'purple',tl:'teal',am:'amber'}[m.c]})">${m.v}</div></div>`).join('')}</div>`;
+
+  // Net time summary card
+  html+=`<div class="mc bl" style="margin-bottom:14px;padding:14px 16px"><div class="mc-l">Total net work time (lunch excluded)</div><div class="mc-v" style="font-size:20px;color:var(--blue)">${fmtMin(totMin)}</div></div>`;
+
+  // Worker × Stage breakdown
+  html+=`<div class="section">Worker × Stage — detail</div>
   <div class="card" style="padding:0;overflow-x:auto"><table class="tbl" style="min-width:680px">
-    <thead><tr>
-      <th style="padding-left:12px">Worker</th><th>Stage</th>
-      <th>Entries</th><th>Items</th><th>QTY</th>
-      <th>Net time</th><th>Avg per entry</th><th>Items/hr</th>
-    </tr></thead><tbody>`;
+  <thead><tr>
+    <th style="padding-left:12px">Worker</th><th>Stage</th>
+    <th>Sessions</th><th>Items</th><th>QTY</th><th>Pallets</th>
+    <th>Net time</th><th>Avg/session</th><th>Speed</th>
+  </tr></thead><tbody>`;
 
-  const workerTotals = [];
-  Object.entries(workerStats).forEach(([wk, stages]) => {
-    const totE = Object.values(stages).reduce((s,v)=>s+v.entries,0);
-    if (!totE) return;
-    const totItems = Object.values(stages).reduce((s,v)=>s+v.items,0);
-    const totQty   = Object.values(stages).reduce((s,v)=>s+v.qty,0);
-    const totMin   = Object.values(stages).reduce((s,v)=>s+v.netMin,0);
-    workerTotals.push({ wk, totE, totItems, totQty, totMin });
-
-    let firstRow = true;
-    ['PICK','INSP','PALL'].forEach(stage => {
-      const st = stages[stage];
-      if (!st.entries) return;
-      const avgMin = st.entries ? Math.round(st.netMin / st.entries) : 0;
-      const iphMin = st.netMin  ? Math.round(st.items / st.netMin * 60) : 0;
-      const col = {PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'}[stage];
-      html += `<tr${wk===CW?' style="background:rgba(59,130,246,.03)"':''}>
-        <td style="padding-left:12px;font-weight:${firstRow?700:400};color:${firstRow?'var(--text)':'transparent'}">${firstRow?wk:wk}<span style="visibility:hidden">${wk}</span></td>
-        <td><span style="color:${col};font-weight:700;font-size:11px">${stage}</span></td>
-        <td class="mono">${st.entries}</td>
-        <td class="mono" style="color:var(--purple)">${st.items}</td>
-        <td class="mono" style="color:var(--teal)">${st.qty}</td>
-        <td class="mono" style="color:var(--blue)">${fmtMin(st.netMin)}</td>
-        <td class="mono">${avgMin?fmtMin(avgMin):'—'}</td>
-        <td class="mono" style="color:var(--amber)">${iphMin?iphMin+'/hr':'—'}</td>
+  const workerTotals=[];
+  Object.entries(stats).forEach(([wk,stages])=>{
+    const totN=Object.values(stages).reduce((s,v)=>s+v.n,0);if(!totN)return;
+    const tI=Object.values(stages).reduce((s,v)=>s+v.items,0);
+    const tQ=Object.values(stages).reduce((s,v)=>s+v.qty,0);
+    const tP=Object.values(stages).reduce((s,v)=>s+v.pallets,0);
+    const tM=Object.values(stages).reduce((s,v)=>s+v.min,0);
+    workerTotals.push({wk,totN,tI,tQ,tP,tM});
+    let first=true;
+    ['PICK','INSP','PALL'].forEach(stage=>{
+      const st=stages[stage];if(!st.n)return;
+      const avg=Math.round(st.min/st.n);
+      const speed=stage==='PICK'&&st.min?Math.round(st.items/st.min*60):stage!=='PICK'&&st.min&&st.pallets?+(st.pallets/st.min*60).toFixed(1):null;
+      const speedStr=speed?speed+(stage==='PICK'?' i/hr':' pall/hr'):'—';
+      html+=`<tr${wk===CW?' style="background:rgba(59,130,246,.03)"':''}>
+        <td style="padding-left:12px;font-weight:${first?700:400};${!first?'color:transparent':''}">
+          ${wk}${wk===CW?' <span style="color:var(--blue);font-size:9px">YOU</span>':''}
+        </td>
+        <td><span style="color:${SCOL[stage]};font-weight:700;font-size:11px">${stage}</span></td>
+        <td class="mono">${st.n}</td>
+        <td class="mono" style="color:var(--purple)">${st.items||'—'}</td>
+        <td class="mono" style="color:var(--teal)">${st.qty||'—'}</td>
+        <td class="mono" style="color:var(--amber)">${st.pallets?fmtPallets(st.pallets):'—'}</td>
+        <td class="mono" style="color:var(--blue)">${fmtMin(st.min)}</td>
+        <td class="mono">${avg?fmtMin(avg):'—'}</td>
+        <td class="mono" style="color:var(--green)">${speedStr}</td>
       </tr>`;
-      firstRow = false;
+      first=false;
     });
   });
-  html += '</tbody></table></div>';
+  html+=`</tbody></table></div>`;
 
   // Worker totals summary
-  html += `<div class="section">Worker totals</div>
-  <div class="card" style="padding:0;overflow-x:auto"><table class="tbl" style="min-width:550px">
-    <thead><tr><th style="padding-left:12px">Worker</th><th>Entries</th><th>Items</th><th>QTY</th><th>Net time</th><th>Productivity</th></tr></thead><tbody>`;
-  workerTotals.sort((a,b)=>b.totItems-a.totItems).forEach(({wk,totE,totItems,totQty,totMin}) => {
-    const iphMin = totMin ? Math.round(totItems/totMin*60) : 0;
-    const bar = totItems ? Math.min(100, Math.round(totItems / Math.max(...workerTotals.map(w=>w.totItems)) * 100)) : 0;
-    html += `<tr${wk===CW?' style="background:rgba(59,130,246,.03)"':''}>
+  html+=`<div class="section">Worker totals</div>
+  <div class="card" style="padding:0;overflow-x:auto"><table class="tbl" style="min-width:560px">
+  <thead><tr><th style="padding-left:12px">Worker</th><th>Sessions</th><th>Items picked</th><th>Pallets (INSP+PALL)</th><th>Net time</th><th>Bar</th></tr></thead><tbody>`;
+  const maxI=Math.max(...workerTotals.map(x=>x.tI),1);
+  workerTotals.sort((a,b)=>b.tI-a.tI).forEach(({wk,totN,tI,tQ,tP,tM})=>{
+    const bar=Math.round(tI/maxI*100);
+    html+=`<tr${wk===CW?' style="background:rgba(59,130,246,.03)"':''}>
       <td style="padding-left:12px;font-weight:700">${wk}${wk===CW?' <span style="color:var(--blue);font-size:9px">YOU</span>':''}</td>
-      <td class="mono">${totE}</td>
-      <td class="mono" style="color:var(--purple);font-weight:600">${totItems}</td>
-      <td class="mono" style="color:var(--teal)">${totQty}</td>
-      <td class="mono" style="color:var(--blue)">${fmtMin(totMin)}</td>
+      <td class="mono">${totN}</td>
+      <td class="mono" style="color:var(--purple);font-weight:600">${tI}</td>
+      <td class="mono" style="color:var(--amber)">${tP?fmtPallets(tP):'—'}</td>
+      <td class="mono" style="color:var(--blue)">${fmtMin(tM)}</td>
       <td><div style="display:flex;align-items:center;gap:7px">
-        <div style="width:80px;height:5px;background:var(--bg3);border-radius:3px"><div style="height:100%;width:${bar}%;background:var(--green);border-radius:3px"></div></div>
-        <span class="mono" style="color:var(--amber)">${iphMin?iphMin+' i/hr':'—'}</span>
+        <div style="width:90px;height:5px;background:var(--bg3);border-radius:3px"><div style="height:100%;width:${bar}%;background:var(--green);border-radius:3px"></div></div>
+        <span style="font-size:10px;color:var(--t3)">${bar}%</span>
       </div></td>
     </tr>`;
   });
-  html += '</tbody></table></div>';
+  html+=`</tbody></table></div>`;
 
   // Stage leaderboard
-  html += `<div class="section">Stage leaderboard (items processed)</div><div class="grid g3">`;
-  ['PICK','INSP','PALL'].forEach(stage => {
-    const col = {PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'}[stage];
-    const rows = S.workers.map(wk => {
-      const st = workerStats[wk]?.[stage] || { entries:0, items:0, qty:0, netMin:0 };
-      return { wk, ...st };
-    }).filter(x=>x.entries>0).sort((a,b)=>b.items-a.items);
-    const maxItems = rows[0]?.items || 1;
-    html += `<div class="card" style="padding:14px"><div style="font-size:11px;font-weight:700;color:${col};letter-spacing:.06em;margin-bottom:10px">${stage}</div>`;
-    rows.forEach((r,i) => {
-      const bar = Math.round(r.items/maxItems*100);
-      html += `<div style="margin-bottom:8px">
+  html+=`<div class="section">Stage leaderboard</div><div class="g3">`;
+  ['PICK','INSP','PALL'].forEach(stage=>{
+    const col=SCOL[stage];
+    const metric=stage==='PICK'?'items':'pallets';
+    const rows=S.workers.map(wk=>{const st=stats[wk]?.[stage]||{n:0,items:0,qty:0,pallets:0,min:0};return{wk,...st};})
+      .filter(x=>x.n>0).sort((a,b)=>b[metric]-a[metric]);
+    const maxV=rows[0]?.[metric]||1;
+    html+=`<div class="card" style="padding:14px"><div style="font-size:11px;font-weight:700;color:${col};letter-spacing:.06em;margin-bottom:10px">${stage} — ${stage==='PICK'?'by items':'by pallets'}</div>`;
+    rows.forEach((r,i)=>{
+      const v=r[metric];const bar=Math.round(v/maxV*100);
+      html+=`<div style="margin-bottom:9px">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
-          <span>${i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':''}<span style="font-weight:${r.wk===CW?700:400}">${r.wk}</span></span>
-          <span class="mono" style="color:${col}">${r.items} items</span>
+          <span>${['🥇','🥈','🥉'][i]||''} <span style="font-weight:${r.wk===CW?700:400}">${r.wk}</span></span>
+          <span class="mono" style="color:${col}">${stage==='PICK'?v:fmtPallets(v)} ${metric}</span>
         </div>
         <div style="height:4px;background:var(--bg3);border-radius:3px"><div style="height:100%;width:${bar}%;background:${col};border-radius:3px"></div></div>
       </div>`;
     });
-    if (!rows.length) html += '<div style="font-size:11px;color:var(--text3)">No data</div>';
-    html += '</div>';
+    if(!rows.length)html+=`<div style="font-size:11px;color:var(--t3)">No data</div>`;
+    html+=`</div>`;
   });
-  html += '</div>';
+  html+=`</div>`;
 
-  document.getElementById('kpiContent').innerHTML = html;
+  document.getElementById('kpiContent').innerHTML=html;
 }
 
-// ---- MANAGER ----
-R.mgr = function() {
-  document.getElementById('mWList').innerHTML = S.workers.map(w =>
-    `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
+// ── MANAGER ──
+R.mgr=function(){
+  document.getElementById('workerList').innerHTML=S.workers.map(w=>
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd);font-size:12px">
       <span>${w}${w===CW?' <span style="color:var(--blue);font-size:10px">(you)</span>':''}</span>
-      <button class="btn btn-sm" style="color:var(--red);border-color:var(--red-bd);padding:2px 6px" onclick="rmW('${w}')"><i class="ri-delete-bin-line"></i></button></div>`).join('');
+      <button class="btn btn-sm" style="color:var(--red);border-color:var(--red-bd);padding:2px 6px" onclick="delWorker('${w}')"><i class="ri-delete-bin-line"></i></button></div>`).join('');
 
-  document.getElementById('mOList').innerHTML = S.orders.map(o => {
-    const ws = S.works.filter(w=>w.oid===o.id);
-    const active = ws.filter(w=>!w.endT).length;
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
-      <div>
-        <span class="mono" style="font-weight:700">${o.id}</span>
-        <span style="color:var(--text3);margin-left:6px">${o.ch}·${o.cu}</span>
-        ${active?`<span class="badge b-live" style="margin-left:6px;font-size:9px">${active} active</span>`:''}
-      </div>
+  document.getElementById('orderList').innerHTML=S.orders.map(o=>{
+    const ws=S.works.filter(w=>w.oid===o.id),act=ws.filter(w=>!w.endT).length;
+    return`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd);font-size:12px">
+      <div><span class="mono" style="font-weight:700">${o.id}</span> <span style="color:var(--t3)">${o.ch}·${o.cu}</span>${act?` <span class="badge b-live" style="font-size:9px;margin-left:4px">${act} live</span>`:''}</div>
       <div style="display:flex;gap:4px">
         <button class="btn btn-sm" style="padding:2px 6px" onclick="editOrder('${o.id}')"><i class="ri-edit-line"></i></button>
-        <button class="btn btn-sm" style="color:var(--red);border-color:var(--red-bd);padding:2px 6px" onclick="rmO('${o.id}')"><i class="ri-delete-bin-line"></i></button>
+        <button class="btn btn-sm" style="color:var(--red);border-color:var(--red-bd);padding:2px 6px" onclick="delOrder('${o.id}')"><i class="ri-delete-bin-line"></i></button>
       </div></div>`;
-  }).join('') || '<div style="font-size:12px;color:var(--text3)">No orders</div>';
-  mSearchEntries();
+  }).join('')||'<div style="font-size:12px;color:var(--t3)">No orders</div>';
+  renderEntries();
 };
 
-window.addW = function() {
-  const n = document.getElementById('mNewW').value.trim();
-  if (!n) { toast('Enter name','err'); return; }
-  if (S.workers.includes(n)) { toast('Already exists','err'); return; }
-  S.workers.push(n);
-  apiBg('setSettings', { workers:S.workers });
-  popW(); toast(n+' added','ok');
-  document.getElementById('mNewW').value=''; R.mgr();
+window.addWorker=function(){
+  const n=document.getElementById('newWorker').value.trim();
+  if(!n){toast('Enter name','err');return;}if(S.workers.includes(n)){toast('Already exists','err');return;}
+  S.workers.push(n);apiBg('setSettings',{workers:S.workers});
+  popWorker();toast(n+' added','ok');document.getElementById('newWorker').value='';R.mgr();
 };
-window.rmW = function(n) {
-  if (!confirm(`Remove "${n}"?`)) return;
-  S.workers = S.workers.filter(w=>w!==n);
-  apiBg('setSettings', { workers:S.workers });
-  popW(); toast(n+' removed','ok'); R.mgr();
+window.delWorker=function(n){
+  if(!confirm(`Remove "${n}"?`))return;
+  S.workers=S.workers.filter(w=>w!==n);apiBg('setSettings',{workers:S.workers});
+  popWorker();toast(n+' removed','ok');R.mgr();
 };
-window.addO = function() {
-  const id=document.getElementById('mNewO').value.trim();
-  const ch=document.getElementById('mOCh').value.trim()||'-';
-  const cu=document.getElementById('mOCu').value.trim()||'-';
-  if (!id) { toast('Enter order #','err'); return; }
-  if (S.orders.find(o=>o.id===id)) { toast('Already exists','err'); return; }
-  S.orders.push({ id, ch, cu, at:'' });
-  toast(id+' added','ok'); R.mgr();
-  document.getElementById('mNewO').value=''; document.getElementById('mOCh').value=''; document.getElementById('mOCu').value='';
-  apiBg('upsertOrder', { id, ch, cu }, ()=>{}, ()=>{ S.orders=S.orders.filter(o=>o.id!==id); toast('⚠ Save failed','err'); R.mgr(); });
+window.addOrder=function(){
+  const id=document.getElementById('newOrderId').value.trim();
+  const ch=document.getElementById('newOrderCh').value.trim()||'-';
+  const cu=document.getElementById('newOrderCu').value.trim()||'-';
+  if(!id){toast('Enter order #','err');return;}if(S.orders.find(o=>o.id===id)){toast('Already exists','err');return;}
+  S.orders.push({id,ch,cu,at:''});toast(id+' added','ok');
+  document.getElementById('newOrderId').value='';document.getElementById('newOrderCh').value='';document.getElementById('newOrderCu').value='';
+  R.mgr();
+  apiBg('upsertOrder',{id,ch,cu},()=>{},()=>{S.orders=S.orders.filter(o=>o.id!==id);toast('⚠ Save failed','err');R.mgr();});
 };
-window.rmO = function(id) {
-  if (!confirm(`Delete "${id}" and all its entries?`)) return;
-  const bkO=[...S.orders], bkW=[...S.works];
-  S.orders=S.orders.filter(o=>o.id!==id); S.works=S.works.filter(w=>w.oid!==id);
-  toast(id+' deleted','ok'); R.mgr();
+window.delOrder=function(id){
+  if(!confirm(`Delete "${id}" and all its entries?`))return;
+  const bkO=[...S.orders],bkW=[...S.works];
+  S.orders=S.orders.filter(o=>o.id!==id);S.works=S.works.filter(w=>w.oid!==id);
+  toast(id+' deleted','ok');R.mgr();
   apiBg('deleteOrder',{id},()=>{},()=>{S.orders=bkO;S.works=bkW;toast('⚠ Delete failed','err');R.mgr();});
 };
-window.editOrder = function(oid) {
-  const o=S.orders.find(x=>x.id===oid); if(!o) return;
+window.editOrder=function(oid){
+  const o=S.orders.find(x=>x.id===oid);if(!o)return;
   openModal(`<div style="font-size:15px;font-weight:700;margin-bottom:14px"><i class="ri-edit-line" style="color:var(--amber)"></i> Edit order</div>
-    <div class="fg"><label class="fl">Order number</label><input class="fi" id="eo_id" value="${o.id}"></div>
-    <div class="fr2"><div class="fg"><label class="fl">Channel</label><input class="fi" id="eo_ch" value="${o.ch}"></div><div class="fg"><label class="fl">Customer</label><input class="fi" id="eo_cu" value="${o.cu}"></div></div>
-    <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:12px"><button class="btn btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-blue btn-sm" onclick="saveOrder('${oid}')"><i class="ri-check-line"></i> Save</button></div>`);
+    <div class="fg"><label class="fl">Order number</label><input class="fi" id="eoId" value="${o.id}"></div>
+    <div class="frow"><div class="fg"><label class="fl">Channel</label><input class="fi" id="eoCh" value="${o.ch}"></div><div class="fg"><label class="fl">Customer</label><input class="fi" id="eoCu" value="${o.cu}"></div></div>
+    <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-blue btn-sm" onclick="saveOrder('${oid}')"><i class="ri-check-line"></i> Save</button>
+    </div>`);
 };
-window.saveOrder = function(origId) {
-  const newId=document.getElementById('eo_id').value.trim();
-  const ch=document.getElementById('eo_ch').value.trim();
-  const cu=document.getElementById('eo_cu').value.trim();
-  if (!newId){toast('Order # required','err');return;}
-  const o=S.orders.find(x=>x.id===origId);
-  if(o){o.id=newId;o.ch=ch;o.cu=cu;}
-  S.works.filter(w=>w.oid===origId).forEach(w=>w.oid=newId);
-  toast('Order updated','ok'); closeModal(); R.mgr();
-  apiBg('upsertOrder',{id:origId,newId:newId!==origId?newId:undefined,ch,cu});
+window.saveOrder=function(orig){
+  const newId=document.getElementById('eoId').value.trim();
+  const ch=document.getElementById('eoCh').value.trim();
+  const cu=document.getElementById('eoCu').value.trim();
+  if(!newId){toast('Order # required','err');return;}
+  const o=S.orders.find(x=>x.id===orig);if(o){o.id=newId;o.ch=ch;o.cu=cu;}
+  S.works.filter(w=>w.oid===orig).forEach(w=>w.oid=newId);
+  toast('Updated','ok');closeModal();R.mgr();
+  apiBg('upsertOrder',{id:orig,newId:newId!==orig?newId:undefined,ch,cu});
 };
-window.mSearchEntries = function() {
-  const q=(document.getElementById('mSearchW')?.value||'').toUpperCase();
-  const ws=q?S.works.filter(w=>w.oid.toUpperCase().includes(q)||w.w.toUpperCase().includes(q)):S.works.slice(0,40);
-  document.getElementById('mWEntries').innerHTML = ws.length ?
-    `<table class="tbl"><thead><tr><th>Order</th><th>Worker</th><th>Stage</th><th>Items</th><th>QTY</th><th>Start</th><th>End</th><th>Net</th><th></th></tr></thead><tbody>${
+window.renderEntries=function(){
+  const q=(document.getElementById('entrySearch')?.value||'').toUpperCase();
+  const ws=q?S.works.filter(w=>w.oid.toUpperCase().includes(q)||w.w.toUpperCase().includes(q)):S.works.slice(0,50);
+  document.getElementById('entryTable').innerHTML=ws.length?
+    `<table class="tbl"><thead><tr><th>Order</th><th>Worker</th><th>Stage</th><th>Items</th><th>QTY</th><th>Pallets</th><th>Start</th><th>End</th><th>Net</th><th></th></tr></thead><tbody>${
       ws.map(w=>`<tr>
         <td class="mono">${w.oid}</td><td>${w.w}</td>
-        <td><span style="color:${{PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'}[w.stage]||'var(--text)'};font-weight:700;font-size:11px">${w.stage}</span></td>
-        <td class="mono">${w.items}</td><td class="mono">${w.qty}</td>
+        <td><span style="color:${SCOL[w.stage]||'var(--t)'};font-weight:700;font-size:11px">${w.stage}</span></td>
+        <td class="mono">${w.items!==null?w.items:'—'}</td>
+        <td class="mono">${w.qty!==null?w.qty:'—'}</td>
+        <td class="mono" style="color:var(--amber)">${w.pallets!==null?fmtPallets(w.pallets):'—'}</td>
         <td class="mono">${w.startT||'—'}</td><td class="mono">${w.endT||'—'}</td>
         <td class="mono" style="color:var(--teal)">${fmtMin(w.netMin)}</td>
-        <td><button class="btn btn-sm" style="color:var(--red);padding:2px 5px" onclick="rmEntry('${w.id}')"><i class="ri-delete-bin-line"></i></button></td>
+        <td><button class="btn btn-sm" style="color:var(--red);padding:2px 5px" onclick="delEntry('${w.id}')"><i class="ri-delete-bin-line"></i></button></td>
       </tr>`).join('')}</tbody></table>`
-    : '<div style="font-size:12px;color:var(--text3)">No entries</div>';
+    :'<div style="font-size:12px;color:var(--t3);padding:8px 0">No entries</div>';
 };
-window.rmEntry = function(wid) {
-  if (!confirm('Delete this entry?')) return;
+window.delEntry=function(wid){
+  if(!confirm('Delete this entry?'))return;
   const bk=S.works.find(w=>w.id===wid);
-  S.works=S.works.filter(w=>w.id!==wid);
-  toast('Deleted','ok'); mSearchEntries();
-  apiBg('deleteEntry',{entryId:wid},()=>{},()=>{if(bk)S.works.push(bk);toast('⚠ Delete failed','err');mSearchEntries();});
+  S.works=S.works.filter(w=>w.id!==wid);toast('Deleted','ok');renderEntries();
+  apiBg('deleteEntry',{entryId:wid},()=>{},()=>{if(bk)S.works.push(bk);toast('⚠ Delete failed','err');renderEntries();});
 };
-window.changePin = function() {
-  const c=document.getElementById('cpCur').value, n=document.getElementById('cpNew').value, cf=document.getElementById('cpConf').value;
+window.changePin=function(){
+  const c=document.getElementById('cpCur').value,n=document.getElementById('cpNew').value,cf=document.getElementById('cpConf').value;
   if(!c||!n||!cf){toast('Fill all fields','err');return;}
   if(c!==S.pin){toast('Wrong current password','err');return;}
   if(n.length<4){toast('Min 4 chars','err');return;}
   if(n!==cf){toast("Passwords don't match",'err');return;}
-  S.pin=n; toast('Password changed','ok');
-  document.getElementById('cpCur').value=''; document.getElementById('cpNew').value=''; document.getElementById('cpConf').value='';
+  S.pin=n;toast('Password changed','ok');
+  ['cpCur','cpNew','cpConf'].forEach(id=>document.getElementById(id).value='');
   apiBg('setSettings',{managerPin:n});
 };
 
-// =============================================
+// ═══════════════════════════════════════════════
 // INIT
-// =============================================
-(async function init() {
-  updateClock(); setInterval(updateClock, 1000);
-  const ok = await loadData();
-  document.getElementById('loadingOverlay').style.display = 'none';
-  document.getElementById('appShell').style.display = 'block';
-  if (!ok) toast('Failed to connect to server', 'err');
-  popW();
-  document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => go(b.dataset.p)));
+// ═══════════════════════════════════════════════
+(async function init(){
+  updateClock();setInterval(updateClock,1000);
+  const ok=await loadData();
+  document.getElementById('loadingScreen').style.display='none';
+  document.getElementById('app').style.display='block';
+  if(!ok)toast('Failed to connect — check API URL','err');
+  popWorker();
+  document.querySelectorAll('.nb').forEach(b=>b.addEventListener('click',()=>go(b.dataset.p)));
   go('dash');
-  updateNavBadges();
-  // Auto-refresh (only when no pending saves)
-  setInterval(async () => {
-    if (Object.keys(_pending).length === 0) {
-      await loadData(); updateNavBadges();
-      const p = curP();
-      if (p === 'dash') R.dash();
-      else if (p === 'work') R.work();
+  updateBadges();
+  // Auto-refresh every 30s — skips if saves in-flight
+  setInterval(async()=>{
+    if(Object.keys(_pending).length===0){
+      await loadData();updateBadges();
+      const p=curPage();if(p==='dash')R.dash();else if(p==='work'){renderMyActive();renderActFeed();}
     }
-  }, 30000);
-  if ('serviceWorker' in navigator) {
-    if ('caches' in window) caches.keys().then(names => names.forEach(n => caches.delete(n)));
+  },30000);
+  if('serviceWorker'in navigator){
+    if('caches'in window)caches.keys().then(ns=>ns.forEach(n=>caches.delete(n)));
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
   }
 })();
