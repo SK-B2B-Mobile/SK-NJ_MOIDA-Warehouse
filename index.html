@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>STYLEKOREAN_NJ / MOIDA — Warehouse</title>
+<title>STYLEKOREAN_NJ / MOIDA — Warehouse v2</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#3b82f6">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -14,12 +14,12 @@
   --bg:#0b0e14;--bg2:#131720;--bg3:#1a2030;--bg4:#242e40;
   --border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.14);
   --text:#f1f5f9;--text2:#c2cad6;--text3:#8896a8;
-  --blue:#3b82f6;--blue2:#2563eb;--blue-bg:rgba(59,130,246,.1);--blue-bd:rgba(59,130,246,.25);
-  --green:#22c55e;--green-bg:rgba(34,197,94,.1);--green-bd:rgba(34,197,94,.25);
-  --amber:#f59e0b;--amber-bg:rgba(245,158,11,.1);--amber-bd:rgba(245,158,11,.25);
-  --red:#ef4444;--red-bg:rgba(239,68,68,.1);
-  --purple:#a855f7;--purple-bg:rgba(168,85,247,.1);--purple-bd:rgba(168,85,247,.25);
-  --teal:#14b8a6;--teal-bg:rgba(20,184,166,.1);--teal-bd:rgba(20,184,166,.25);
+  --blue:#3b82f6;--blue2:#2563eb;--blue-bg:rgba(59,130,246,.1);--blue-bd:rgba(59,130,246,.3);
+  --green:#22c55e;--green-bg:rgba(34,197,94,.1);--green-bd:rgba(34,197,94,.3);
+  --amber:#f59e0b;--amber-bg:rgba(245,158,11,.1);--amber-bd:rgba(245,158,11,.3);
+  --red:#ef4444;--red-bg:rgba(239,68,68,.1);--red-bd:rgba(239,68,68,.3);
+  --purple:#a855f7;--purple-bg:rgba(168,85,247,.1);--purple-bd:rgba(168,85,247,.3);
+  --teal:#14b8a6;--teal-bg:rgba(20,184,166,.1);--teal-bd:rgba(20,184,166,.3);
   --cyan:#06b6d4;--cyan-bg:rgba(6,182,212,.1);
   --font:'Inter',-apple-system,system-ui,sans-serif;
   --mono:'JetBrains Mono',monospace;
@@ -27,218 +27,247 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
-.shell{width:100%;max-width:1600px;margin:0 auto;padding:0 36px 100px}
-@media(max-width:1200px){.shell{padding:0 24px 100px}}
-@media(max-width:768px){.shell{padding:0 12px 100px}}
-.hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border);margin-bottom:14px;position:sticky;top:0;background:var(--bg);z-index:100}
-.hdr-left{display:flex;align-items:center;gap:16px}
-.hdr-logo{font-family:var(--mono);font-size:15px;font-weight:800;color:var(--text);letter-spacing:-.3px}
-.hdr-clock{font-family:var(--mono);font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px}
-.hdr-right{display:flex;align-items:center;gap:10px}
-.sel{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);padding:7px 12px;font-family:var(--font);font-size:13px;cursor:pointer;outline:none}
-.sel:focus{border-color:var(--blue)}
-/* ---- sync indicator ---- */
-.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;transition:background .3s}
-.sync-dot.syncing{background:var(--amber);animation:pulseDot 1s infinite}
+.shell{width:100%;max-width:1400px;margin:0 auto;padding:0 28px 100px}
+@media(max-width:900px){.shell{padding:0 14px 100px}}
+
+/* Header */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border);margin-bottom:12px;position:sticky;top:0;background:var(--bg);z-index:100;gap:10px;flex-wrap:wrap}
+.hdr-logo{font-family:var(--mono);font-size:14px;font-weight:800;letter-spacing:-.2px}
+.hdr-right{display:flex;align-items:center;gap:8px}
+.hdr-clock{font-family:var(--mono);font-size:11px;color:var(--text2)}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;transition:background .3s}
+.sync-dot.syncing{background:var(--amber);animation:pd 1s infinite}
 .sync-dot.err{background:var(--red)}
-@keyframes pulseDot{0%,100%{opacity:1}50%{opacity:.3}}
-/* ---- offline banner ---- */
-#offlineBanner{display:none;background:rgba(245,158,11,.15);border-bottom:1px solid var(--amber-bd);padding:6px 16px;text-align:center;font-size:12px;color:var(--amber);position:sticky;top:54px;z-index:98}
-#offlineBanner.show{display:block}
-.nav{display:flex;gap:2px;background:var(--bg2);border-radius:var(--r2);padding:3px;margin-bottom:16px;position:sticky;top:54px;z-index:99;border:1px solid var(--border)}
-.nav-btn{flex:1;padding:9px 6px;border:none;background:transparent;color:var(--text3);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;border-radius:var(--r);transition:all .12s;white-space:nowrap;display:flex;flex-direction:column;align-items:center;gap:2px}
-.nav-btn i{font-size:17px}
+@keyframes pd{0%,100%{opacity:1}50%{opacity:.2}}
+.sel{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);padding:6px 10px;font-family:var(--font);font-size:13px;cursor:pointer;outline:none;max-width:140px}
+.sel:focus{border-color:var(--blue)}
+
+/* Nav */
+.nav{display:flex;gap:2px;background:var(--bg2);border-radius:var(--r2);padding:3px;margin-bottom:14px;position:sticky;top:50px;z-index:99;border:1px solid var(--border)}
+.nav-btn{flex:1;padding:8px 4px;border:none;background:transparent;color:var(--text3);font-family:var(--font);font-size:10px;font-weight:700;cursor:pointer;border-radius:var(--r);transition:all .12s;white-space:nowrap;display:flex;flex-direction:column;align-items:center;gap:2px;position:relative;letter-spacing:.03em}
+.nav-btn i{font-size:16px}
 .nav-btn:hover{color:var(--text2);background:var(--bg3)}
 .nav-btn.on{background:var(--blue);color:#fff}
-.pg{display:none}.pg.on{display:block;animation:fadeUp .2s ease}
-@keyframes fadeUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.nav-badge{position:absolute;top:3px;right:6px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 4px;min-width:14px;text-align:center;line-height:1.4}
+
+/* Pages */
+.pg{display:none}.pg.on{display:block;animation:fu .18s ease}
+@keyframes fu{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+
+/* Layout */
 .grid{display:grid;gap:10px}
-.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g5{grid-template-columns:repeat(5,1fr)}.g6{grid-template-columns:repeat(6,1fr)}
-@media(max-width:1000px){.g5,.g6{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:600px){.g2,.g3{grid-template-columns:1fr}.g5,.g6{grid-template-columns:repeat(2,1fr)}}
-.mc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;position:relative;overflow:hidden}
-.mc::after{content:'';position:absolute;top:0;left:0;right:0;height:2px}
-.mc.bl::after{background:var(--blue)}.mc.gr::after{background:var(--green)}.mc.am::after{background:var(--amber)}.mc.pu::after{background:var(--purple)}.mc.tl::after{background:var(--teal)}.mc.cy::after{background:var(--cyan)}
-.mc-l{font-size:10px;color:var(--text2);font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px}
-.mc-v{font-family:var(--mono);font-size:24px;font-weight:700}
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:16px 18px;margin-bottom:10px}
-.card-t{font-weight:700;font-size:14px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.section{font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin:18px 0 10px;display:flex;align-items:center;gap:8px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}.g5{grid-template-columns:repeat(5,1fr)}
+.g6{grid-template-columns:repeat(6,1fr)}
+@media(max-width:900px){.g4,.g5,.g6{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.g2,.g3{grid-template-columns:1fr}.g4,.g5,.g6{grid-template-columns:repeat(2,1fr)}}
+
+/* Metric cards */
+.mc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:12px 14px;position:relative;overflow:hidden}
+.mc::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:2px 2px 0 0}
+.mc.bl::after{background:var(--blue)}.mc.gr::after{background:var(--green)}.mc.am::after{background:var(--amber)}
+.mc.pu::after{background:var(--purple)}.mc.tl::after{background:var(--teal)}.mc.cy::after{background:var(--cyan)}
+.mc.rd::after{background:var(--red)}
+.mc-l{font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:3px}
+.mc-v{font-family:var(--mono);font-size:22px;font-weight:700;line-height:1.2}
+
+/* Cards */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;margin-bottom:10px}
+.card-t{font-weight:700;font-size:13px;margin-bottom:11px;display:flex;align-items:center;gap:7px}
+.section{font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 9px;display:flex;align-items:center;gap:8px}
 .section::after{content:'';flex:1;height:1px;background:var(--border)}
-.badge{display:inline-flex;align-items:center;gap:3px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700}
-.b-wait{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd)}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
 .b-pick{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-bd)}
 .b-insp{background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-bd)}
-.b-pal{background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-bd)}
+.b-pall{background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-bd)}
 .b-done{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)}
+.b-wait{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd)}
 .b-live{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);animation:pulse 2s infinite}
-.b-saving{background:rgba(245,158,11,.15);color:var(--amber);border:1px solid var(--amber-bd);animation:pulse 1.2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.b-saving{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
 
-/* ---- Action buttons — bigger & clearer ---- */
-.btn{padding:9px 16px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:5px;position:relative;overflow:hidden}
+/* Stage pill row (dashboard) */
+.stage-row{display:flex;gap:3px;align-items:center;flex-wrap:wrap}
+.sp{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.04em;border:1px solid var(--border)}
+.sp-done{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)}
+.sp-active{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-bd)}
+.sp-insp-active{background:var(--purple-bg);color:var(--purple);border-color:var(--purple-bd)}
+.sp-pall-active{background:var(--teal-bg);color:var(--teal);border-color:var(--teal-bd)}
+.sp-wait{background:var(--bg3);color:var(--text3)}
+.sp-arrow{color:var(--text3);font-size:10px}
+
+/* Buttons */
+.btn{padding:8px 14px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:5px;position:relative;overflow:hidden}
 .btn:hover{background:var(--bg4);border-color:var(--text3)}.btn:active{transform:scale(.97)}
 .btn-blue{background:var(--blue);color:#fff;border-color:var(--blue)}.btn-blue:hover{background:var(--blue2)}
 .btn-green{background:var(--green);color:#fff;border-color:var(--green)}
 .btn-red{background:var(--red);color:#fff;border-color:var(--red)}
 .btn-purple{background:var(--purple);color:#fff;border-color:var(--purple)}
 .btn-teal{background:var(--teal);color:#fff;border-color:var(--teal)}
-.btn-sm{padding:5px 10px;font-size:11px}
-.btn-lg{padding:14px 20px;font-size:14px;border-radius:10px}
-.btn-block{width:100%;justify-content:center;padding:13px}
-.btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
-/* saving shimmer */
-.btn.saving::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);animation:shimmer 1s infinite}
-@keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
-.action-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
-.fg{margin-bottom:10px}
-.fl{display:block;font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600}
-.fi{width:100%;padding:9px 12px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);font-size:13px;outline:none;transition:border-color .15s}
-.fi:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.12)}
+.btn-amber{background:var(--amber);color:#000;border-color:var(--amber)}
+.btn-sm{padding:4px 9px;font-size:11px}
+.btn-lg{padding:13px 18px;font-size:14px;font-weight:700;border-radius:10px}
+.btn-block{width:100%;justify-content:center}
+.btn:disabled{opacity:.3;cursor:not-allowed;pointer-events:none}
+.btn.saving::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);animation:sh 1s infinite}
+@keyframes sh{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+
+/* Forms */
+.fg{margin-bottom:9px}
+.fl{display:block;font-size:11px;color:var(--text2);margin-bottom:3px;font-weight:600}
+.fi{width:100%;padding:8px 11px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);font-size:13px;outline:none;transition:border-color .15s}
+.fi:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
 .fi::placeholder{color:var(--text3)}
-.fr{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-@media(max-width:480px){.fr{grid-template-columns:1fr}}
+.fr2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+@media(max-width:440px){.fr2{grid-template-columns:1fr}}
+
+/* Table */
 .tbl{width:100%;border-collapse:collapse}
-.tbl th{text-align:left;font-size:11px;color:var(--text2);padding:8px 8px;border-bottom:1px solid var(--border2);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
-.tbl td{padding:9px 8px;border-bottom:1px solid var(--border);font-size:13px}
+.tbl th{text-align:left;font-size:10px;color:var(--text3);padding:7px 8px;border-bottom:1px solid var(--border2);font-weight:700;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.tbl td{padding:8px 8px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle}
 .tbl tr:last-child td{border-bottom:none}
-.tbl tr:hover td{background:rgba(255,255,255,.015)}
+.tbl tr:hover td{background:rgba(255,255,255,.012)}
 .mono{font-family:var(--mono);font-size:11px;font-weight:500}
-.stage-row{display:flex;gap:4px;align-items:center}
-.stage-dot{padding:4px 10px;border-radius:5px;font-size:11px;font-weight:700;letter-spacing:.04em;border:1px solid var(--border);white-space:nowrap}
-.sd-done{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)}
-.sd-active{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-bd);animation:blink .8s infinite}
-.sd-active-insp{background:var(--purple-bg);color:var(--purple);border-color:var(--purple-bd);animation:blinkP .8s infinite}
-.sd-active-pall{background:var(--teal-bg);color:var(--teal);border-color:var(--teal-bd);animation:blinkT .8s infinite}
-.sd-wait{background:var(--bg3);color:var(--text3)}
-.stage-arrow{color:var(--text3);font-size:11px;font-weight:700}
-@keyframes blink{0%,100%{opacity:1;box-shadow:0 0 8px rgba(59,130,246,.5)}50%{opacity:.35;box-shadow:none}}
-@keyframes blinkP{0%,100%{opacity:1;box-shadow:0 0 8px rgba(168,85,247,.5)}50%{opacity:.35;box-shadow:none}}
-@keyframes blinkT{0%,100%{opacity:1;box-shadow:0 0 8px rgba(20,184,166,.5)}50%{opacity:.35;box-shadow:none}}
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:10px 22px;border-radius:var(--r2);font-size:13px;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:999}
-.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.toast.ok{border-color:var(--green);background:rgba(34,197,94,.12)}.toast.err{border-color:var(--red);background:rgba(239,68,68,.12)}
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;padding:16px}
-.modal-bg.show{display:flex}
-.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;padding:24px}
-.empty{text-align:center;padding:32px 20px;color:var(--text3);font-size:13px}
-.empty i{font-size:28px;display:block;margin-bottom:6px;opacity:.4}
 
-/* ---- Work entry card — improved ---- */
-.we{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);padding:14px 16px;margin-bottom:8px;transition:border-color .2s,opacity .2s}
-.we.optimistic{border-color:var(--amber-bd);opacity:.92}
-.we.optimistic-done{border-color:var(--green-bd)}
-.we-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:4px}
+/* Work Entry Card */
+.we{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);padding:13px 15px;margin-bottom:7px;transition:border-color .2s}
+.we.pending{border-color:var(--amber-bd)}
+.we-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:6px;flex-wrap:wrap}
 .we-id{font-family:var(--mono);font-weight:700;font-size:13px}
-.we-info{font-size:12px;color:var(--text2)}
-.we-meta{display:flex;gap:12px;font-size:11px;color:var(--text3);margin-top:4px;flex-wrap:wrap}
-.we-meta span{display:flex;align-items:center;gap:3px}
+.we-meta{display:flex;gap:10px;font-size:11px;color:var(--text3);flex-wrap:wrap;margin-top:3px}
+.we-meta i{font-size:12px}
 
-.loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
-.spinner{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+/* Stage selector tabs */
+.stage-tabs{display:flex;gap:4px;margin-bottom:12px}
+.stage-tab{flex:1;padding:9px 6px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text3);font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:all .12s}
+.stage-tab:hover{border-color:var(--text3);color:var(--text2)}
+.stage-tab.pick.on{background:var(--blue-bg);border-color:var(--blue-bd);color:var(--blue)}
+.stage-tab.insp.on{background:var(--purple-bg);border-color:var(--purple-bd);color:var(--purple)}
+.stage-tab.pall.on{background:var(--teal-bg);border-color:var(--teal-bd);color:var(--teal)}
+
+/* KPI date picker row */
+.kpi-filter{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.kpi-filter label{font-size:11px;color:var(--text2);font-weight:600}
+.kpi-filter .fi{width:130px;padding:6px 9px;font-size:12px}
+
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;padding:14px}
+.modal-bg.show{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:400px;max-height:88vh;overflow-y:auto;padding:22px}
+
+/* Toast */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:9px 20px;border-radius:var(--r2);font-size:13px;font-weight:600;opacity:0;transition:all .28s;pointer-events:none;z-index:999;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.ok{border-color:var(--green);background:rgba(34,197,94,.1)}.toast.err{border-color:var(--red);background:rgba(239,68,68,.1)}
+
+/* Loading */
+.loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px}
+.spinner{width:30px;height:30px;border:3px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* ---- Pending queue counter badge ---- */
-.nav-badge{position:absolute;top:3px;right:8px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center}
-
-/* ---- Step indicator in pick form ---- */
-.step-ind{display:flex;gap:0;margin-bottom:16px;border-radius:var(--r);overflow:hidden;border:1px solid var(--border2)}
-.step-ind-item{flex:1;padding:8px 4px;text-align:center;font-size:10px;font-weight:700;color:var(--text3);background:var(--bg3);border-right:1px solid var(--border2);letter-spacing:.04em;text-transform:uppercase}
-.step-ind-item:last-child{border-right:none}
-.step-ind-item.active{background:var(--blue-bg);color:var(--blue)}
-.step-ind-item.done{background:var(--green-bg);color:var(--green)}
-
-/* ---- Quick status bar ---- */
-.status-bar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;font-size:12px;flex-wrap:wrap}
-.status-bar-item{display:flex;align-items:center;gap:5px;color:var(--text2)}
-.status-bar-sep{color:var(--border2);font-size:16px}
-
-/* bigger action buttons in work cards */
-.btn-action{padding:12px 18px;font-size:13px;font-weight:700;border-radius:var(--r);letter-spacing:.02em}
+/* Misc */
+.empty{text-align:center;padding:28px 16px;color:var(--text3);font-size:12px}
+.empty i{font-size:26px;display:block;margin-bottom:5px;opacity:.35}
+.divider{height:1px;background:var(--border);margin:12px 0}
 </style>
 </head>
 <body>
+
 <div class="loading-overlay" id="loadingOverlay">
   <div class="spinner"></div>
-  <div style="font-size:13px;color:var(--text2)">Connecting to server...</div>
+  <div style="font-size:12px;color:var(--text2)">Loading warehouse system...</div>
 </div>
-
-<div id="offlineBanner"><i class="ri-wifi-off-line"></i> Offline — changes will sync when reconnected</div>
 
 <div class="shell" style="display:none" id="appShell">
   <header class="hdr">
-    <div class="hdr-left">
-      <div class="hdr-logo">STYLEKOREAN_NJ / MOIDA</div>
-    </div>
+    <div class="hdr-logo">STYLEKOREAN_NJ / MOIDA</div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
-      <span id="syncDot" class="sync-dot" title="Sync status"></span>
+      <span class="sync-dot" id="syncDot" title="Sync"></span>
       <select class="sel" id="selW" onchange="swW()"></select>
       <button class="btn btn-sm" onclick="refreshData()" title="Refresh"><i class="ri-refresh-line"></i></button>
     </div>
   </header>
+
   <nav class="nav">
-    <button class="nav-btn on" data-p="dash" style="position:relative"><i class="ri-dashboard-3-line"></i>Dashboard</button>
-    <button class="nav-btn" data-p="pick" style="position:relative"><i class="ri-route-line"></i>Picking</button>
-    <button class="nav-btn" data-p="insp" style="position:relative"><i class="ri-search-eye-line"></i>Inspection</button>
-    <button class="nav-btn" data-p="pall" style="position:relative"><i class="ri-stack-line"></i>Palletizing</button>
-    <button class="nav-btn" data-p="kpi" style="position:relative"><i class="ri-bar-chart-grouped-line"></i>KPI</button>
-    <button class="nav-btn" data-p="mgr" style="position:relative"><i class="ri-shield-keyhole-line"></i>Manager</button>
+    <button class="nav-btn on" data-p="dash"><i class="ri-dashboard-3-line"></i>Dashboard</button>
+    <button class="nav-btn" data-p="work"><i class="ri-play-circle-line"></i>Work</button>
+    <button class="nav-btn" data-p="kpi"><i class="ri-bar-chart-2-line"></i>KPI</button>
+    <button class="nav-btn" data-p="mgr"><i class="ri-shield-keyhole-line"></i>Manager</button>
   </nav>
+
+  <!-- ========== DASHBOARD ========== -->
   <div class="pg on" id="pg-dash">
-    <div id="dMetrics"></div>
-    <div class="section">Order status — All</div>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+    <div id="dMetrics" style="margin-bottom:12px"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap">
       <div id="dFilterTabs" style="display:flex;gap:4px"></div>
       <div style="flex:1"></div>
-      <div style="position:relative;min-width:200px">
-        <i class="ri-search-line" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px"></i>
-        <input class="fi" id="dSearch" placeholder="Search order, channel, customer..." style="padding-left:32px;font-size:12px" oninput="_dPage=0;renderDashTable()">
+      <div style="position:relative;min-width:190px">
+        <i class="ri-search-line" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px"></i>
+        <input class="fi" id="dSearch" placeholder="Order / channel / customer" style="padding-left:30px;font-size:12px" oninput="_dPage=0;renderDashTable()">
       </div>
     </div>
     <div id="dOrderTable"></div>
-    <div id="dOrderPager" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px"></div>
+    <div id="dOrderPager" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:7px"></div>
   </div>
-  <div class="pg" id="pg-pick">
-    <div id="pickForm"></div>
-    <div class="section">My active picking</div>
-    <div id="pickMy"></div>
-    <div class="section">All picking — Selected order</div>
-    <div id="pickAll"></div>
-  </div>
-  <div class="pg" id="pg-insp">
-    <div id="inspMyForm"></div>
-    <div class="card">
-      <div class="card-t"><i class="ri-search-eye-line" style="color:var(--purple)"></i> Inspect other entries</div>
-      <div class="fg"><label class="fl">Select order</label><select class="fi" id="inspOrd"></select></div>
-      <div id="inspInfo"></div>
-      <div class="action-row" id="inspActs"></div>
+
+  <!-- ========== WORK (unified pick/insp/pall) ========== -->
+  <div class="pg" id="pg-work">
+    <!-- Stage selector -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-t" id="workCardTitle"><i class="ri-play-circle-line" style="color:var(--blue)"></i> Start work</div>
+      <div class="stage-tabs" id="stageTabs">
+        <div class="stage-tab pick on" onclick="selStage('PICK')"><i class="ri-route-line"></i> PICK</div>
+        <div class="stage-tab insp" onclick="selStage('INSP')"><i class="ri-search-eye-line"></i> INSP</div>
+        <div class="stage-tab pall" onclick="selStage('PALL')"><i class="ri-stack-line"></i> PALL</div>
+      </div>
+      <div class="fg"><label class="fl">Order</label>
+        <select class="fi" id="wOrd">
+          <option value="">— Select order —</option>
+        </select>
+      </div>
+      <div id="wOrdSummary"></div>
+      <div class="fr2">
+        <div class="fg"><label class="fl" id="wItemsLbl">Items (SKU count)</label><input class="fi" type="number" id="wItems" placeholder="e.g. 15" min="1"></div>
+        <div class="fg"><label class="fl">Total QTY</label><input class="fi" type="number" id="wQty" placeholder="e.g. 120" min="1"></div>
+      </div>
+      <button class="btn btn-blue btn-block btn-lg" id="btnStartWork" onclick="startWork()">
+        <i class="ri-play-circle-line"></i> <span id="btnStartLabel">Start Picking</span>
+      </button>
     </div>
-    <div class="section">Active inspections</div>
-    <div id="inspList"></div>
+
+    <!-- My active sessions -->
+    <div class="section">My active sessions</div>
+    <div id="myActive"></div>
+
+    <!-- Order activity feed -->
+    <div class="section">All active — this order</div>
+    <div id="orderActivity"></div>
   </div>
-  <div class="pg" id="pg-pall">
-    <div id="pallMyForm"></div>
-    <div class="card">
-      <div class="card-t"><i class="ri-stack-line" style="color:var(--teal)"></i> Palletize other entries</div>
-      <div class="fg"><label class="fl">Select order</label><select class="fi" id="pallOrd"></select></div>
-      <div id="pallInfo"></div>
-      <div class="action-row" id="pallActs"></div>
-    </div>
-    <div class="section">Active palletizing</div>
-    <div id="pallList"></div>
-  </div>
+
+  <!-- ========== KPI ========== -->
   <div class="pg" id="pg-kpi">
-    <div class="section">Worker performance — Today</div>
-    <div id="kpiList"></div>
-    <div class="section">Team summary</div>
-    <div id="kpiTeam"></div>
+    <div class="kpi-filter">
+      <label>From</label>
+      <input class="fi" type="date" id="kpiFrom">
+      <label>To</label>
+      <input class="fi" type="date" id="kpiTo">
+      <button class="btn btn-blue btn-sm" onclick="renderKPI()"><i class="ri-filter-line"></i> Apply</button>
+      <button class="btn btn-sm" onclick="kpiSetToday()">Today</button>
+      <button class="btn btn-sm" onclick="kpiSetWeek()">This week</button>
+      <button class="btn btn-sm" onclick="kpiSetMonth()">This month</button>
+    </div>
+    <div id="kpiContent"></div>
   </div>
+
+  <!-- ========== MANAGER ========== -->
   <div class="pg" id="pg-mgr">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div class="g2 grid" style="margin-bottom:12px">
       <div class="card">
         <div class="card-t"><i class="ri-user-settings-line" style="color:var(--amber)"></i> Workers</div>
-        <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="display:flex;gap:7px;margin-bottom:9px">
           <input class="fi" id="mNewW" placeholder="New worker name" style="flex:1">
           <button class="btn btn-blue btn-sm" onclick="addW()"><i class="ri-user-add-line"></i> Add</button>
         </div>
@@ -247,31 +276,31 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
       <div class="card">
         <div class="card-t"><i class="ri-file-list-3-line" style="color:var(--blue)"></i> Orders</div>
         <div class="fg"><label class="fl">Order number</label><input class="fi" id="mNewO" placeholder="e.g. IM003232"></div>
-        <div class="fr">
+        <div class="fr2">
           <div class="fg"><label class="fl">Channel</label><input class="fi" id="mOCh" placeholder="e.g. NJ"></div>
           <div class="fg"><label class="fl">Customer</label><input class="fi" id="mOCu" placeholder="e.g. MOIDA"></div>
         </div>
-        <button class="btn btn-blue" onclick="addO()"><i class="ri-add-line"></i> Add order</button>
-        <div class="section" style="margin-top:14px">All orders</div>
-        <div id="mOList" style="max-height:350px;overflow-y:auto"></div>
+        <button class="btn btn-blue btn-sm" onclick="addO()"><i class="ri-add-line"></i> Add order</button>
+        <div class="section" style="margin-top:12px">All orders</div>
+        <div id="mOList" style="max-height:320px;overflow-y:auto"></div>
       </div>
     </div>
-    <div class="card" style="margin-top:12px">
+    <div class="card">
       <div class="card-t"><i class="ri-edit-line" style="color:var(--purple)"></i> Work entries</div>
       <div class="fg"><input class="fi" id="mSearchW" placeholder="Search by order number..." oninput="mSearchEntries()"></div>
-      <div id="mWEntries"></div>
+      <div id="mWEntries" style="overflow-x:auto"></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+    <div class="g2 grid" style="margin-top:12px">
       <div class="card" style="border-color:var(--amber-bd)">
         <div class="card-t" style="color:var(--amber)"><i class="ri-lock-line"></i> Change password</div>
         <div class="fg"><input class="fi" type="password" id="cpCur" placeholder="Current password"></div>
         <div class="fg"><input class="fi" type="password" id="cpNew" placeholder="New password"></div>
-        <div class="fg"><input class="fi" type="password" id="cpConf" placeholder="Confirm new password"></div>
+        <div class="fg"><input class="fi" type="password" id="cpConf" placeholder="Confirm"></div>
         <button class="btn btn-blue btn-sm" onclick="changePin()"><i class="ri-lock-line"></i> Change</button>
       </div>
-      <div class="card" style="border-color:rgba(239,68,68,.2)">
+      <div class="card" style="border-color:var(--red-bd)">
         <div class="card-t" style="color:var(--red)"><i class="ri-error-warning-line"></i> Danger zone</div>
-        <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Manage data carefully.</p>
+        <p style="font-size:12px;color:var(--text2)">Data modifications here are permanent.</p>
       </div>
     </div>
   </div>
@@ -283,859 +312,760 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--text);min-hei
 <div class="toast" id="toast"></div>
 
 <script>
-// ==========================================
-// API CONFIGURATION
-// ==========================================
+// =============================================
+// CONFIG
+// =============================================
 const API_URL = 'https://script.google.com/macros/s/AKfycbw-rEUoQz5c38k0I7P6ykyhEFfZ5P4tGf0wF4zc96742O8KVlpB7-3Unh6W6S7RQctAjA/exec';
 
-// ==========================================
+// Work schedule (for display only — net calc is server-side)
+const LUNCH_S = 12 * 60;      // 12:00 in minutes
+const LUNCH_E = 13 * 60;      // 13:00 in minutes
+
+// =============================================
 // STATE
-// ==========================================
+// =============================================
 let S = { orders: [], works: [], workers: [], pin: '1234' };
 let CW = '';
 let _mgrOK = false;
-// Optimistic update queue — tracks in-flight ops
-let _pending = {};  // key: entryId/tempId → { op, data, originalState }
-let _syncCount = 0; // number of in-flight requests
+let _curStage = 'PICK';
+let _syncCount = 0;
+let _pending = {}; // entryId → patch
 
-// ==========================================
-// SYNC INDICATOR
-// ==========================================
-function setSyncing(active) {
-  const dot = document.getElementById('syncDot');
-  if (!dot) return;
-  if (active) dot.className = 'sync-dot syncing';
-  else dot.className = 'sync-dot';
-}
-function setSyncErr() {
-  const dot = document.getElementById('syncDot'); if (dot) dot.className = 'sync-dot err';
-  setTimeout(() => { const d = document.getElementById('syncDot'); if(d) d.className='sync-dot'; }, 4000);
-}
-
-// ==========================================
-// UTILS — local time helpers
-// ==========================================
-function nowHHmm() {
-  // Returns current time in LA timezone HH:mm
-  try {
-    const s = new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12:false, timeZone:'America/Los_Angeles' });
-    return s;
-  } catch(e) {
-    const d = new Date();
-    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
-  }
-}
-function genTempId() { return 'W' + Date.now() + Math.floor(Math.random()*1000); }
-
-// ==========================================
-// API CALLS — JSONP
-// ==========================================
-let _jsonpCounter = 0;
+// =============================================
+// SYNC / JSONP
+// =============================================
+let _jc = 0;
 function apiCall(url) {
   return new Promise((resolve, reject) => {
-    const callbackName = '_jsonp_' + (++_jsonpCounter) + '_' + Date.now();
-    const timeout = setTimeout(() => {
-      delete window[callbackName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-      reject(new Error('Request timeout'));
-    }, 30000);
-    window[callbackName] = function(data) {
-      clearTimeout(timeout);
-      delete window[callbackName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-      resolve(data);
-    };
+    const cb = '_j_' + (++_jc) + '_' + Date.now();
+    const to = setTimeout(() => { cleanup(); reject(new Error('Timeout')); }, 30000);
     const script = document.createElement('script');
-    const sep = url.includes('?') ? '&' : '?';
-    script.src = url + sep + 'callback=' + callbackName;
-    script.onerror = function() {
-      clearTimeout(timeout);
-      delete window[callbackName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-      reject(new Error('Network error'));
-    };
+    function cleanup() { clearTimeout(to); delete window[cb]; if (script.parentNode) script.parentNode.removeChild(script); }
+    window[cb] = d => { cleanup(); resolve(d); };
+    script.onerror = () => { cleanup(); reject(new Error('Network error')); };
+    script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
     document.head.appendChild(script);
   });
 }
+function setSyncing(on) {
+  const d = document.getElementById('syncDot'); if (!d) return;
+  d.className = 'sync-dot' + (on ? ' syncing' : '');
+}
+function setSyncErr() { const d = document.getElementById('syncDot'); if (d) { d.className = 'sync-dot err'; setTimeout(() => d.className = 'sync-dot', 4000); } }
 
-// Fire-and-forget background save — never blocks UI
-async function apiBackground(op, data, onSuccess, onError) {
+async function apiGet(op) {
+  try { return await apiCall(API_URL + '?op=' + op); }
+  catch(e) { return { ok:false, error:e.message }; }
+}
+async function apiBg(op, data, onOk, onErr) {
   _syncCount++;
   setSyncing(true);
   try {
-    const url = API_URL + '?op=' + encodeURIComponent(op) + '&data=' + encodeURIComponent(JSON.stringify(data || {}));
-    const result = await apiCall(url);
-    if (result && result.ok) {
-      if (onSuccess) onSuccess(result);
-    } else {
-      console.error('API bg error:', result);
-      setSyncErr();
-      if (onError) onError(result);
-    }
-    return result;
-  } catch (err) {
-    console.error('API bg exception:', err);
-    setSyncErr();
-    if (onError) onError({ error: err.message });
-    return { ok: false, error: err.message };
-  } finally {
-    _syncCount--;
-    if (_syncCount <= 0) { _syncCount = 0; setSyncing(false); }
-  }
+    const url = API_URL + '?op=' + encodeURIComponent(op) + '&data=' + encodeURIComponent(JSON.stringify(data||{}));
+    const r = await apiCall(url);
+    if (r && r.ok) { if (onOk) onOk(r); }
+    else { setSyncErr(); if (onErr) onErr(r); }
+    return r;
+  } catch(e) { setSyncErr(); if (onErr) onErr({ error:e.message }); return { ok:false }; }
+  finally { _syncCount--; if (_syncCount <= 0) { _syncCount = 0; setSyncing(false); } }
 }
-
-// Blocking API call — for data load, settings
-async function api(op, data) {
+async function apiBlock(op, data) {
   try {
-    const url = API_URL + '?op=' + encodeURIComponent(op) + '&data=' + encodeURIComponent(JSON.stringify(data || {}));
-    const result = await apiCall(url);
-    return result;
-  } catch (err) {
-    console.error('API error:', err);
-    toast('Server error: ' + err.message, 'err');
-    return { ok: false, error: err.message };
-  }
-}
-
-async function apiGet(op) {
-  try {
-    const url = API_URL + '?op=' + op;
+    const url = API_URL + '?op=' + encodeURIComponent(op) + '&data=' + encodeURIComponent(JSON.stringify(data||{}));
     return await apiCall(url);
-  } catch (err) {
-    console.error('API GET error:', err);
-    return { ok: false, error: err.message };
-  }
+  } catch(e) { toast(e.message, 'err'); return { ok:false }; }
 }
 
 async function loadData() {
-  const result = await apiGet('listAll');
-  if (result.ok) {
-    S.orders = result.orders || [];
-    S.works = result.works || [];
-    S.workers = result.workers || [];
-    S.pin = result.pin || '1234';
-    // Re-apply any optimistic states still pending
-    applyPendingOptimistic();
-  }
-  return result.ok;
+  const r = await apiGet('listAll');
+  if (r.ok) { S.orders = r.orders||[]; S.works = r.works||[]; S.workers = r.workers||[]; S.pin = r.pin||'1234'; }
+  return r.ok;
 }
-
-// Re-apply pending optimistic updates on top of fresh server data
-function applyPendingOptimistic() {
-  for (const key in _pending) {
-    const p = _pending[key];
-    const w = S.works.find(x => x.id === key);
-    if (w && p.patch) Object.assign(w, p.patch);
-  }
-}
-
 async function refreshData() {
   toast('Refreshing...', '');
-  await loadData();
-  popW();
-  go(curP());
-  toast('Data refreshed', 'ok');
+  await loadData(); popW(); go(curP()); updateNavBadges();
+  toast('Refreshed', 'ok');
 }
 
-// ==========================================
+// =============================================
 // HELPERS
-// ==========================================
+// =============================================
 function toast(m, c) {
   const t = document.getElementById('toast');
   t.textContent = m; t.className = 'toast show' + (c ? ' ' + c : '');
-  clearTimeout(t._to);
-  t._to = setTimeout(() => t.className = 'toast', 2800);
+  clearTimeout(t._to); t._to = setTimeout(() => t.className = 'toast', 2800);
 }
 function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+function openModal(html) { document.getElementById('modalContent').innerHTML = html; document.getElementById('modalBg').classList.add('show'); }
 
 function updateClock() {
   const d = new Date();
-  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  document.getElementById('clock').innerHTML =
-    `<i class="ri-time-line" style="font-size:13px"></i>${days[d.getDay()]} ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} · ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+  const D=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('clock').textContent =
+    D[d.getDay()]+' '+M[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear()+' · '+
+    String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
 }
 
-function oSt(oid) {
-  const ws = S.works.filter(w => w.oid === oid);
-  if (!ws.length) return 'waiting';
-  if (ws.every(w => w.pe)) return 'done';
-  if (ws.some(w => w.ps && !w.pe)) return 'pall-active';
-  if (ws.every(w => w.ie)) return 'pall-wait';
-  if (ws.some(w => w.is && !w.ie)) return 'insp-active';
-  if (ws.every(w => w.e)) return 'insp-wait';
-  if (ws.some(w => w.s && !w.e)) return 'pick-active';
-  return 'pick-wait';
+function nowHHmm() {
+  try {
+    return new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Los_Angeles'});
+  } catch(e) { const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 }
-function stBadge(st) {
-  const m = { 'waiting':['Waiting','b-wait'],'pick-wait':['Pick queue','b-pick'],'pick-active':['Picking','b-live'],
-    'insp-wait':['Insp. queue','b-insp'],'insp-active':['Inspecting','b-live'],
-    'pall-wait':['Pallet queue','b-pal'],'pall-active':['Palletizing','b-live'],'done':['Done','b-done'] };
-  const [l, c] = m[st] || ['?','b-wait'];
-  return `<span class="badge ${c}">${l}</span>`;
+function todayStr() {
+  try { return new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'}); }
+  catch(e) { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 }
-function stageInd(oid) {
-  const ws = S.works.filter(w => w.oid === oid);
-  const e = (cls) => `<div class="stage-dot ${cls}">`;
-  if (!ws.length) return `<div class="stage-row">${e('sd-wait')}PICK</div><span class="stage-arrow">→</span>${e('sd-wait')}INSP</div><span class="stage-arrow">→</span>${e('sd-wait')}PALL</div></div>`;
-  const pCls = ws.every(w => w.e) ? 'sd-done' : ws.some(w => w.s && !w.e) ? 'sd-active' : 'sd-wait';
-  const iCls = ws.every(w => w.ie) ? 'sd-done' : ws.some(w => w.is && !w.ie) ? 'sd-active-insp' : 'sd-wait';
-  const lCls = ws.every(w => w.pe) ? 'sd-done' : ws.some(w => w.ps && !w.pe) ? 'sd-active-pall' : 'sd-wait';
-  return `<div class="stage-row">${e(pCls)}PICK</div><span class="stage-arrow">→</span>${e(iCls)}INSP</div><span class="stage-arrow">→</span>${e(lCls)}PALL</div></div>`;
+function genId() { return 'W'+Date.now()+Math.floor(Math.random()*999); }
+
+// Client-side net minutes calc (same logic as server)
+function clientNetMin(startHHmm, endHHmm) {
+  if (!startHHmm || !endHHmm) return null;
+  const [sh,sm] = startHHmm.split(':').map(Number);
+  const [eh,em] = endHHmm.split(':').map(Number);
+  const s = sh*60+sm, e = eh*60+em;
+  if (e <= s) return null;
+  const gross = e - s;
+  const overlap = Math.max(0, Math.min(e,LUNCH_E) - Math.max(s,LUNCH_S));
+  return Math.max(0, gross - overlap);
+}
+
+function fmtMin(m) {
+  if (m === '' || m === null || m === undefined) return '—';
+  const n = Number(m);
+  if (isNaN(n)) return '—';
+  if (n < 60) return n + 'm';
+  return Math.floor(n/60) + 'h ' + (n%60) + 'm';
 }
 
 function popW() {
   const s = document.getElementById('selW'), c = s.value;
-  s.innerHTML = S.workers.map(w => `<option${w === c ? ' selected' : ''}>${w}</option>`).join('');
+  s.innerHTML = S.workers.map(w => `<option${w===c?' selected':''}>${w}</option>`).join('');
   if (!c && S.workers.length) s.value = S.workers[0];
   CW = s.value;
 }
 function swW() { CW = document.getElementById('selW').value; _mgrOK = false; go(curP()); }
 
-// Update nav badges (pending queue counts)
-function updateNavBadges() {
-  // Inspection badge: entries pending inspection for current worker
-  const inspPending = S.works.filter(w => w.w === CW && w.e && !w.is).length;
-  const pallPending = S.works.filter(w => w.w === CW && w.ie && !w.ps).length;
-  const setB = (p, n) => {
-    const btn = document.querySelector(`[data-p="${p}"]`);
-    if (!btn) return;
-    let b = btn.querySelector('.nav-badge');
-    if (n > 0) {
-      if (!b) { b = document.createElement('span'); b.className='nav-badge'; btn.appendChild(b); }
-      b.textContent = n;
-    } else {
-      if (b) b.remove();
-    }
+// Order status based on work entries
+function orderActivities(oid) {
+  const ws = S.works.filter(w => w.oid === oid);
+  const byStage = s => ws.filter(w => w.stage === s);
+  return {
+    PICK: { all: byStage('PICK'), active: byStage('PICK').filter(w => !w.endT), done: byStage('PICK').filter(w => w.endT) },
+    INSP: { all: byStage('INSP'), active: byStage('INSP').filter(w => !w.endT), done: byStage('INSP').filter(w => w.endT) },
+    PALL: { all: byStage('PALL'), active: byStage('PALL').filter(w => !w.endT), done: byStage('PALL').filter(w => w.endT) },
   };
-  setB('insp', inspPending);
-  setB('pall', pallPending);
 }
 
-// ==========================================
+function stagePills(oid) {
+  const a = orderActivities(oid);
+  const stages = ['PICK','INSP','PALL'];
+  const colors = {PICK:'sp-active',INSP:'sp-insp-active',PALL:'sp-pall-active'};
+  return `<div class="stage-row">${stages.map((s,i) => {
+    const aa = a[s];
+    let cls = 'sp-wait';
+    if (aa.active.length) cls = colors[s];
+    else if (aa.done.length) cls = 'sp-done';
+    const cnt = aa.all.length ? ` (${aa.done.length}/${aa.all.length})` : '';
+    return (i>0?'<span class="sp-arrow">→</span>':'') + `<div class="sp ${cls}">${s}${cnt}</div>`;
+  }).join('')}</div>`;
+}
+
+function updateNavBadges() {
+  const myActive = S.works.filter(w => w.w === CW && !w.endT).length;
+  const b = document.querySelector('[data-p="work"] .nav-badge');
+  const btn = document.querySelector('[data-p="work"]');
+  if (!btn) return;
+  if (myActive > 0) {
+    if (!b) { const nb = document.createElement('span'); nb.className='nav-badge'; nb.textContent=myActive; btn.appendChild(nb); }
+    else b.textContent = myActive;
+  } else { if (b) b.remove(); }
+}
+
+// =============================================
 // NAV
-// ==========================================
+// =============================================
 function go(id) {
   if (id === 'mgr' && !_mgrOK) { showPinPrompt(); return; }
   document.querySelectorAll('.pg').forEach(p => p.classList.remove('on'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('on'));
-  const pg = document.getElementById('pg-' + id); if (pg) pg.classList.add('on');
+  const pg = document.getElementById('pg-'+id); if (pg) pg.classList.add('on');
   const nb = document.querySelector(`[data-p="${id}"]`); if (nb) nb.classList.add('on');
   R[id]?.();
 }
 function curP() { const a = document.querySelector('.nav-btn.on'); return a ? a.dataset.p : 'dash'; }
 
 function showPinPrompt() {
-  document.getElementById('modalContent').innerHTML = `
-    <div style="text-align:center;padding:8px 0">
-      <i class="ri-shield-keyhole-line" style="font-size:32px;color:var(--amber);display:block;margin-bottom:10px"></i>
-      <div style="font-size:15px;font-weight:700;margin-bottom:3px">Manager access</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:16px">Enter password</div>
-      <input class="fi" type="password" id="pinInput" placeholder="Password" style="max-width:200px;margin:0 auto 12px;text-align:center;font-size:18px;letter-spacing:4px" onkeydown="if(event.key==='Enter')checkPin()">
-      <div id="pinErr" style="font-size:11px;color:var(--red);min-height:16px;margin-bottom:10px"></div>
-      <div style="display:flex;gap:8px;justify-content:center">
-        <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-blue btn-sm" onclick="checkPin()"><i class="ri-lock-unlock-line"></i> Unlock</button>
-      </div>
-    </div>`;
-  document.getElementById('modalBg').classList.add('show');
-  setTimeout(() => { const e = document.getElementById('pinInput'); if (e) e.focus(); }, 100);
+  openModal(`<div style="text-align:center;padding:8px 0">
+    <i class="ri-shield-keyhole-line" style="font-size:30px;color:var(--amber);display:block;margin-bottom:8px"></i>
+    <div style="font-size:15px;font-weight:700;margin-bottom:3px">Manager access</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Enter password</div>
+    <input class="fi" type="password" id="pinInput" placeholder="Password" style="max-width:180px;margin:0 auto 10px;text-align:center;font-size:18px;letter-spacing:4px" onkeydown="if(event.key==='Enter')checkPin()">
+    <div id="pinErr" style="font-size:11px;color:var(--red);min-height:15px;margin-bottom:10px"></div>
+    <div style="display:flex;gap:7px;justify-content:center">
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-blue btn-sm" onclick="checkPin()"><i class="ri-lock-unlock-line"></i> Unlock</button>
+    </div></div>`);
+  setTimeout(() => { const e = document.getElementById('pinInput'); if(e) e.focus(); }, 80);
 }
 function checkPin() {
-  const v = document.getElementById('pinInput')?.value || '';
-  if (v === S.pin) { _mgrOK = true; closeModal(); toast('Manager unlocked', 'ok'); go('mgr'); }
-  else { document.getElementById('pinErr').textContent = 'Incorrect password'; const i = document.getElementById('pinInput'); if (i) { i.value = ''; i.focus(); } }
+  const v = document.getElementById('pinInput')?.value||'';
+  if (v === S.pin) { _mgrOK=true; closeModal(); toast('Manager unlocked','ok'); go('mgr'); }
+  else { document.getElementById('pinErr').textContent='Incorrect password'; const i=document.getElementById('pinInput'); if(i){i.value='';i.focus();} }
 }
 
-// ==========================================
+// =============================================
 // RENDERERS
-// ==========================================
+// =============================================
 const R = {};
 
-// DASHBOARD
+// ---- DASHBOARD ----
 let _dFilter = 'all', _dPage = 0;
-const D_PER = 15;
+const D_PER = 20;
 
 R.dash = function() {
   const os = S.orders;
-  const ct = (f) => os.filter(o => { const s = oSt(o.id); return f(s); }).length;
-  document.getElementById('dMetrics').innerHTML = `<div class="grid g6" style="margin-bottom:14px">
-    ${[{l:'Waiting',v:ct(s=>s==='waiting'),c:'am'},{l:'Picking',v:ct(s=>s.startsWith('pick')),c:'bl'},{l:'Inspection',v:ct(s=>s.startsWith('insp')),c:'pu'},{l:'Palletizing',v:ct(s=>s.startsWith('pall')),c:'tl'},{l:'Completed',v:ct(s=>s==='done'),c:'gr'},{l:'Total',v:os.length,c:'cy'}]
+  // Count active by stage
+  let wait=0,pickA=0,inspA=0,pallA=0,done=0;
+  os.forEach(o => {
+    const a = orderActivities(o.id);
+    const hasAny = a.PICK.all.length||a.INSP.all.length||a.PALL.all.length;
+    const allDone = hasAny && a.PICK.all.every(w=>w.endT) && a.INSP.all.every(w=>w.endT) && a.PALL.all.every(w=>w.endT)
+                           && a.PALL.done.length>0;
+    if (!hasAny) wait++;
+    else if (allDone) done++;
+    else {
+      if (a.PICK.active.length) pickA++;
+      if (a.INSP.active.length) inspA++;
+      if (a.PALL.active.length) pallA++;
+    }
+  });
+  document.getElementById('dMetrics').innerHTML = `<div class="grid g6">
+    ${[{l:'Waiting',v:wait,c:'am'},{l:'Picking',v:pickA,c:'bl'},{l:'Inspection',v:inspA,c:'pu'},
+       {l:'Palletizing',v:pallA,c:'tl'},{l:'Completed',v:done,c:'gr'},{l:'Total orders',v:os.length,c:'cy'}]
     .map(m=>`<div class="mc ${m.c}"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${{am:'amber',bl:'blue',pu:'purple',tl:'teal',gr:'green',cy:'cyan'}[m.c]})">${m.v}</div></div>`).join('')}</div>`;
   renderDashTable();
 };
 
 function renderDashTable() {
-  const tabs=[{k:'all',l:'All'},{k:'active',l:'Active'},{k:'done',l:'Completed'},{k:'waiting',l:'Waiting'}];
-  document.getElementById('dFilterTabs').innerHTML=tabs.map(t=>`<button class="btn btn-sm" style="${_dFilter===t.k?'background:var(--bg4);color:var(--text);border-color:var(--text3)':'color:var(--text3)'}" onclick="_dFilter='${t.k}';_dPage=0;renderDashTable()">${t.l}</button>`).join('');
-  let filtered=S.orders;
-  if(_dFilter==='active')filtered=filtered.filter(o=>{const s=oSt(o.id);return s!=='waiting'&&s!=='done'});
-  else if(_dFilter==='done')filtered=filtered.filter(o=>oSt(o.id)==='done');
-  else if(_dFilter==='waiting')filtered=filtered.filter(o=>oSt(o.id)==='waiting');
+  const tabs=[{k:'all',l:'All'},{k:'active',l:'Active'},{k:'done',l:'Done'},{k:'waiting',l:'Waiting'}];
+  document.getElementById('dFilterTabs').innerHTML=tabs.map(t=>`<button class="btn btn-sm" style="${_dFilter===t.k?'background:var(--bg4);border-color:var(--text3)':'color:var(--text3)'}" onclick="_dFilter='${t.k}';_dPage=0;renderDashTable()">${t.l}</button>`).join('');
+
+  let filtered = S.orders;
+  if (_dFilter==='active') filtered=filtered.filter(o=>{const a=orderActivities(o.id);return Object.values(a).some(s=>s.active.length>0);});
+  else if (_dFilter==='done') filtered=filtered.filter(o=>{const a=orderActivities(o.id);const h=a.PICK.all.length||a.INSP.all.length||a.PALL.all.length;return h&&Object.values(a).every(s=>s.all.every(w=>w.endT))&&a.PALL.done.length>0;});
+  else if (_dFilter==='waiting') filtered=filtered.filter(o=>{const a=orderActivities(o.id);return !a.PICK.all.length&&!a.INSP.all.length&&!a.PALL.all.length;});
+
   const sq=(document.getElementById('dSearch')?.value||'').trim().toUpperCase();
-  if(sq) filtered=filtered.filter(o=>{const ws=S.works.filter(w=>w.oid===o.id);const wn=ws.map(w=>w.w).join(' ').toUpperCase();return o.id.toUpperCase().includes(sq)||o.ch.toUpperCase().includes(sq)||o.cu.toUpperCase().includes(sq)||wn.includes(sq)});
-  const total=filtered.length,totalPages=Math.max(1,Math.ceil(total/D_PER));
-  if(_dPage>=totalPages)_dPage=totalPages-1;if(_dPage<0)_dPage=0;
-  const slice=filtered.slice(_dPage*D_PER,_dPage*D_PER+D_PER);
-  document.getElementById('dOrderTable').innerHTML=slice.length?
-    `<div class="card" style="padding:0;overflow-x:auto"><table class="tbl" style="margin:0;min-width:750px">
-      <tr><th style="padding-left:14px">Order</th><th>Channel</th><th>Customer</th><th>Workers</th><th>Items</th><th>QTY</th><th>Progress</th><th>Status</th><th></th></tr>
-      ${slice.map(o=>{const ws=S.works.filter(w=>w.oid===o.id);const workers=[...new Set(ws.map(w=>w.w))];const tSku=ws.reduce((s,w)=>s+w.sku,0);const tQty=ws.reduce((s,w)=>s+w.qty,0);const st=oSt(o.id);const isMe=ws.some(w=>w.w===CW);const canEdit=ws.some(w=>w.w===CW);
-        return`<tr${isMe?' style="background:rgba(59,130,246,.04)"':''}>
-          <td class="mono" style="padding-left:14px;font-weight:700;font-size:12px">${o.id}</td><td>${o.ch}</td><td>${o.cu}</td>
-          <td style="font-size:11px">${workers.length?workers.join(', '):'<span style="color:var(--text3)">—</span>'}</td>
-          <td class="mono">${tSku||'—'}</td><td class="mono">${tQty||'—'}</td>
-          <td>${stageInd(o.id)}</td><td>${stBadge(st)}</td>
-          <td>${canEdit?`<button class="btn btn-sm" style="padding:3px 7px;font-size:10px" onclick="editMyEntry('${o.id}')"><i class="ri-edit-line"></i></button>`:''}</td></tr>`}).join('')}</table></div>`
-    :'<div class="empty"><i class="ri-inbox-line"></i>No orders found</div>';
-  const pg=document.getElementById('dOrderPager');
-  if(totalPages>1) pg.innerHTML=`<button class="btn btn-sm" onclick="_dPage--;renderDashTable()" ${_dPage===0?'disabled':''}><i class="ri-arrow-left-s-line"></i></button><span style="font-size:11px;color:var(--text2)">${_dPage+1}/${totalPages} (${total})</span><button class="btn btn-sm" onclick="_dPage++;renderDashTable()" ${_dPage>=totalPages-1?'disabled':''}><i class="ri-arrow-right-s-line"></i></button>`;
-  else pg.innerHTML=total?`<span style="font-size:11px;color:var(--text3)">${total} order${total>1?'s':''}</span>`:'';
-}
-
-// EDIT
-window.editMyEntry = function(oid) {
-  const myE = S.works.filter(w => w.oid === oid && w.w === CW);
-  if (!myE.length) { toast('No entries to edit', 'err'); return; }
-  const o = S.orders.find(x => x.id === oid);
-  let html = `<div style="margin-bottom:14px"><div style="font-size:15px;font-weight:700;margin-bottom:4px"><i class="ri-edit-line" style="color:var(--blue)"></i> Edit — ${oid}</div><div style="font-size:12px;color:var(--text2)">${o?.ch} · ${o?.cu}</div></div>`;
-  myE.forEach((w, i) => {
-    const isDone = !!w.pe;
-    html += `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:8px">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Entry ${i+1}${isDone?' <span style="color:var(--green)">· Completed</span>':''}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div><label class="fl">Items</label><input class="fi" type="number" id="ed_sku_${w.id}" value="${w.sku}" min="1" ${isDone?'disabled':''}></div>
-        <div><label class="fl">QTY</label><input class="fi" type="number" id="ed_qty_${w.id}" value="${w.qty}" min="1" ${isDone?'disabled':''}></div>
-      </div></div>`;
+  if(sq) filtered=filtered.filter(o=>{
+    const ws=S.works.filter(w=>w.oid===o.id);
+    return o.id.toUpperCase().includes(sq)||o.ch.toUpperCase().includes(sq)||o.cu.toUpperCase().includes(sq)||ws.some(w=>w.w.toUpperCase().includes(sq));
   });
-  html += `<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-blue btn-sm" onclick="saveEdits('${oid}')"><i class="ri-check-line"></i> Save</button></div>`;
-  document.getElementById('modalContent').innerHTML = html;
-  document.getElementById('modalBg').classList.add('show');
+
+  const total=filtered.length, pages=Math.max(1,Math.ceil(total/D_PER));
+  if(_dPage>=pages)_dPage=pages-1; if(_dPage<0)_dPage=0;
+  const slice=filtered.slice(_dPage*D_PER,_dPage*D_PER+D_PER);
+
+  if (!slice.length) { document.getElementById('dOrderTable').innerHTML='<div class="empty"><i class="ri-inbox-line"></i>No orders found</div>'; document.getElementById('dOrderPager').innerHTML=''; return; }
+
+  let rows = slice.map(o => {
+    const ws = S.works.filter(w=>w.oid===o.id);
+    const workers = [...new Set(ws.map(w=>w.w))];
+    const totalItems = ws.reduce((s,w)=>s+w.items,0);
+    const totalQty   = ws.reduce((s,w)=>s+w.qty,0);
+    const totalNetMin = ws.filter(w=>w.endT&&w.netMin!=='').reduce((s,w)=>s+Number(w.netMin),0);
+    const isMe = ws.some(w=>w.w===CW);
+    return `<tr${isMe?' style="background:rgba(59,130,246,.03)"':''}>
+      <td class="mono" style="font-weight:700;padding-left:12px">${o.id}</td>
+      <td>${o.ch}</td><td>${o.cu}</td>
+      <td style="font-size:11px">${workers.join(', ')||'<span style="color:var(--text3)">—</span>'}</td>
+      <td class="mono">${totalItems||'—'}</td>
+      <td class="mono">${totalQty||'—'}</td>
+      <td class="mono" style="color:var(--teal)">${totalNetMin?fmtMin(totalNetMin):'—'}</td>
+      <td>${stagePills(o.id)}</td>
+      <td style="padding-right:10px">
+        <button class="btn btn-sm" style="font-size:10px;padding:2px 6px" onclick="showOrderDetail('${o.id}')"><i class="ri-eye-line"></i></button>
+      </td></tr>`;
+  });
+
+  document.getElementById('dOrderTable').innerHTML=`<div class="card" style="padding:0;overflow-x:auto"><table class="tbl" style="min-width:700px"><thead><tr>
+    <th style="padding-left:12px">Order</th><th>Ch.</th><th>Customer</th><th>Workers</th>
+    <th>Items</th><th>QTY</th><th>Net time</th><th>Stage progress</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+
+  const pg=document.getElementById('dOrderPager');
+  pg.innerHTML=pages>1?`<button class="btn btn-sm" onclick="_dPage--;renderDashTable()" ${_dPage===0?'disabled':''}><i class="ri-arrow-left-s-line"></i></button><span style="font-size:11px;color:var(--text2)">${_dPage+1}/${pages} (${total})</span><button class="btn btn-sm" onclick="_dPage++;renderDashTable()" ${_dPage>=pages-1?'disabled':''}><i class="ri-arrow-right-s-line"></i></button>`:`<span style="font-size:11px;color:var(--text3)">${total} order${total>1?'s':''}</span>`;
+}
+
+window.showOrderDetail = function(oid) {
+  const o = S.orders.find(x=>x.id===oid); if(!o) return;
+  const ws = S.works.filter(w=>w.oid===oid);
+  const byStage = s => ws.filter(w=>w.stage===s);
+  let html = `<div style="margin-bottom:14px"><div style="font-size:15px;font-weight:700">${oid}</div><div style="font-size:12px;color:var(--text2)">${o.ch} · ${o.cu}</div></div>`;
+  ['PICK','INSP','PALL'].forEach(stage => {
+    const sw = byStage(stage);
+    if (!sw.length) return;
+    const col = {PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'}[stage];
+    html += `<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:${col};letter-spacing:.06em;margin-bottom:6px">${stage}</div>`;
+    sw.forEach(w => {
+      const done = !!w.endT;
+      html += `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;margin-bottom:4px;font-size:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600">${w.w}</span>
+          ${done?`<span class="badge b-done">Done</span>`:`<span class="badge b-live">Active</span>`}
+        </div>
+        <div style="color:var(--text3);margin-top:3px">${w.items} items · ${w.qty} QTY · ${w.startT}${done?' → '+w.endT:' → now'} · Net: ${fmtMin(w.netMin)}</div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  if (!ws.length) html += '<div class="empty"><i class="ri-inbox-line"></i>No work entries yet</div>';
+  html += `<div style="text-align:right;margin-top:12px"><button class="btn btn-sm" onclick="closeModal()">Close</button></div>`;
+  openModal(html);
 };
 
-window.saveEdits = async function(oid) {
-  const myE = S.works.filter(w => w.oid === oid && w.w === CW);
-  for (const w of myE) {
-    if (w.pe) continue;
-    const sEl = document.getElementById('ed_sku_' + w.id);
-    const qEl = document.getElementById('ed_qty_' + w.id);
-    if (sEl && qEl) {
-      const newSku = parseInt(sEl.value) || w.sku;
-      const newQty = parseInt(qEl.value) || w.qty;
-      if (newSku !== w.sku || newQty !== w.qty) {
-        // Optimistic update local state
-        w.sku = newSku; w.qty = newQty;
-        apiBackground('editEntry', { entryId: w.id, items: newSku, qty: newQty });
-      }
-    }
-  }
-  toast('Updated', 'ok');
-  closeModal();
-  go(curP());
+// ---- WORK PAGE ----
+function selStage(stage) {
+  _curStage = stage;
+  document.querySelectorAll('.stage-tab').forEach(t => t.classList.remove('on'));
+  document.querySelector(`.stage-tab.${stage.toLowerCase()}`)?.classList.add('on');
+  const colors = {PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'};
+  const icons  = {PICK:'ri-route-line',INSP:'ri-search-eye-line',PALL:'ri-stack-line'};
+  const labels = {PICK:'Start Picking',INSP:'Start Inspection',PALL:'Start Palletizing'};
+  const itemL  = {PICK:'Items (SKU count)',INSP:'Items checked',PALL:'Items palletized'};
+  document.getElementById('workCardTitle').innerHTML = `<i class="${icons[stage]}" style="color:${colors[stage]}"></i> Start ${stage.charAt(0)+stage.slice(1).toLowerCase()}`;
+  document.getElementById('btnStartLabel').textContent = labels[stage];
+  document.getElementById('btnStartWork').className = `btn btn-${stage==='PICK'?'blue':stage==='INSP'?'purple':'teal'} btn-block btn-lg`;
+  document.getElementById('wItemsLbl').textContent = itemL[stage];
+  updateOrderSummary();
+}
+
+function updateOrderSummary() {
+  const oid = document.getElementById('wOrd')?.value;
+  const el = document.getElementById('wOrdInfo'); // may not exist, using wOrdSummary
+  const sum = document.getElementById('wOrdSummary'); if (!sum) return;
+  if (!oid) { sum.innerHTML=''; return; }
+  const o = S.orders.find(x=>x.id===oid);
+  const ws = S.works.filter(w=>w.oid===oid);
+  const stageWs = ws.filter(w=>w.stage===_curStage);
+  const active = stageWs.filter(w=>!w.endT);
+  const done   = stageWs.filter(w=>w.endT);
+  const myHere = stageWs.filter(w=>w.w===CW);
+  sum.innerHTML=`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 11px;margin-bottom:10px;font-size:12px">
+    <span style="font-weight:600">${o.ch} · ${o.cu}</span>
+    <span style="color:var(--text3);margin-left:10px">${_curStage}: ${active.length} active · ${done.length} done</span>
+    ${myHere.length?`<span style="color:var(--amber);margin-left:8px">⚠ You already have ${myHere.length} ${_curStage} entry here</span>`:''}
+  </div>`;
+}
+
+R.work = function() {
+  // Populate order dropdown
+  const sel = document.getElementById('wOrd');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Select order —</option>' + S.orders.map(o=>`<option value="${o.id}"${o.id===cur?' selected':''}>${o.id} (${o.ch}·${o.cu})</option>`).join('');
+  sel.onchange = () => { updateOrderSummary(); renderOrderActivity(); };
+  selStage(_curStage);
+
+  // My active sessions
+  const myActive = S.works.filter(w=>w.w===CW&&!w.endT);
+  const stageColor = {PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'};
+  const stageBdColor = {PICK:'var(--blue-bd)',INSP:'var(--purple-bd)',PALL:'var(--teal-bd)'};
+  const stageEndLabel = {PICK:'End Picking',INSP:'End Inspection',PALL:'End Palletizing'};
+  const stageEndClass = {PICK:'btn-green',INSP:'btn-green',PALL:'btn-green'};
+
+  document.getElementById('myActive').innerHTML = myActive.length ?
+    myActive.map(w => {
+      const o = S.orders.find(x=>x.id===w.oid);
+      const inf = !!_pending[w.id];
+      return `<div class="we${inf?' pending':''}" style="border-color:${stageBdColor[w.stage]}">
+        <div class="we-top">
+          <div>
+            <div class="we-id">${w.oid} <span style="color:${stageColor[w.stage]};font-size:11px">${w.stage}</span></div>
+            <div style="font-size:11px;color:var(--text2)">${o?.ch}·${o?.cu}</div>
+          </div>
+          ${inf?'<span class="badge b-saving">Saving...</span>':'<span class="badge b-live">Active</span>'}
+        </div>
+        <div class="we-meta">
+          <span><i class="ri-box-3-line"></i> ${w.items} items</span>
+          <span><i class="ri-stack-line"></i> ${w.qty} QTY</span>
+          <span><i class="ri-time-line"></i> ${w.startT} → now</span>
+        </div>
+        <button class="btn btn-green btn-block btn-lg" style="margin-top:11px" onclick="endWork('${w.id}')" ${inf?'disabled':''}>
+          <i class="ri-checkbox-circle-line"></i> ${stageEndLabel[w.stage]}
+        </button>
+      </div>`;
+    }).join('')
+    : '<div style="font-size:12px;color:var(--text3);padding:4px 0">No active sessions</div>';
+
+  // Order activity feed
+  renderOrderActivity();
 };
 
-// ==========================================
-// PICKING  — with Optimistic Update
-// ==========================================
-let _pickSel = '';
-R.pick = function() {
-  const myActive = S.works.filter(w => w.w === CW && w.s && !w.e);
-  if (myActive.length) {
-    document.getElementById('pickForm').innerHTML = '';
+function renderOrderActivity() {
+  const selOid = document.getElementById('wOrd')?.value;
+  const stageColor = {PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'};
+  if (selOid) {
+    const allForOrder = S.works.filter(w=>w.oid===selOid);
+    document.getElementById('orderActivity').innerHTML = allForOrder.length ?
+      allForOrder.map(w=>{
+        const done=!!w.endT;
+        const nm = done ? fmtMin(w.netMin) : '...';
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
+          <span style="color:${stageColor[w.stage]||'var(--text)'};font-weight:700;width:36px;font-size:11px">${w.stage}</span>
+          <span style="flex:1;font-weight:500">${w.w}</span>
+          <span class="mono" style="color:var(--text3)">${w.items}i / ${w.qty}q</span>
+          <span class="mono" style="color:var(--text2)">${w.startT}${done?' → '+w.endT:' → now'}</span>
+          ${done
+            ? `<span class="mono" style="color:var(--teal);width:52px;text-align:right">${nm}</span>`
+            : `<span class="badge b-live" style="font-size:9px">Live</span>`
+          }
+        </div>`;
+      }).join('')
+      : '<div class="empty" style="padding:16px 0"><i class="ri-inbox-line"></i>No work entries for this order yet</div>';
   } else {
-    const avail = S.orders.filter(o => { const st = oSt(o.id); return st === 'waiting' || st.startsWith('pick'); });
-    document.getElementById('pickForm').innerHTML = `<div class="card">
-      <div class="card-t"><i class="ri-route-line" style="color:var(--blue)"></i> Start picking</div>
-      <div class="fg"><label class="fl">Select order</label>
-        <select class="fi" id="pOrd"><option value="">— Select order —</option>${avail.map(o => `<option value="${o.id}"${o.id===_pickSel?' selected':''}>${o.id} (${o.ch} · ${o.cu})</option>`).join('')}</select></div>
-      <div id="pOrdInfo"></div>
-      <div class="fr">
-        <div class="fg"><label class="fl">SKU count (Items)</label><input class="fi" type="number" id="pSku" placeholder="e.g. 15" min="1"></div>
-        <div class="fg"><label class="fl">Total QTY</label><input class="fi" type="number" id="pQty" placeholder="e.g. 120" min="1"></div>
-      </div>
-      <button class="btn btn-blue btn-block btn-lg" id="btnStartPick" onclick="startPick()"><i class="ri-play-circle-line"></i> Start Picking</button></div>`;
-    const sel = document.getElementById('pOrd');
-    if (sel) sel.addEventListener('change', pOrdChg);
-    if (_pickSel) pOrdChg();
+    document.getElementById('orderActivity').innerHTML = '<div style="font-size:12px;color:var(--text3);padding:4px 0">Select an order above to see activity</div>';
   }
-  // Render active picking cards
-  document.getElementById('pickMy').innerHTML = myActive.length ? myActive.map(w =>
-    `<div class="we${_pending[w.id] ? ' optimistic' : ''}" id="we_${w.id}">
-      <div class="we-top">
-        <span class="we-id">${w.oid}</span>
-        ${_pending[w.id] ? '<span class="badge b-saving"><i class="ri-loader-4-line"></i> Saving...</span>' : '<span class="badge b-live"><i class="ri-record-circle-line"></i> Picking</span>'}
-      </div>
-      <div class="we-meta">
-        <span><i class="ri-box-3-line"></i> ${w.sku} items</span>
-        <span><i class="ri-stack-line"></i> ${w.qty} QTY</span>
-        <span><i class="ri-time-line"></i> Started: ${w.s}</span>
-      </div>
-      <button class="btn btn-green btn-block btn-action" style="margin-top:12px" onclick="endPick('${w.id}')" ${_pending[w.id]?'disabled':''}>
-        <i class="ri-checkbox-circle-line"></i> End Picking
-      </button>
-    </div>`
-  ).join('') : '<div style="font-size:12px;color:var(--text3);padding:6px 0">No active picking</div>';
-  updatePickAll();
+}
+
+window.startWork = function() {
+  const oid = document.getElementById('wOrd')?.value;
+  const items = parseInt(document.getElementById('wItems')?.value);
+  const qty   = parseInt(document.getElementById('wQty')?.value);
+  if (!oid)   { toast('Select an order', 'err'); return; }
+  if (!items||items<1) { toast('Enter item count', 'err'); return; }
+  if (!qty||qty<1)     { toast('Enter total QTY', 'err'); return; }
+
+  // Optimistic
+  const tempId = genId();
+  const hhmm   = nowHHmm();
+  const entry  = { id:tempId, oid, w:CW, stage:_curStage, items, qty, startT:hhmm, endT:'', netMin:'', grossMin:'' };
+  S.works.push(entry);
+  _pending[tempId] = { patch:null };
+  toast(`✓ ${_curStage} started!`, 'ok');
+  updateNavBadges(); R.work(); renderOrderActivity();
+
+  apiBg('startWork', { orderId:oid, worker:CW, stage:_curStage, items, qty },
+    res => {
+      const idx = S.works.findIndex(w=>w.id===tempId);
+      if (idx>=0 && res.entryId) { S.works[idx].id=res.entryId; S.works[idx].startT=res.startTime||hhmm; }
+      delete _pending[tempId];
+      updateNavBadges(); R.work();
+    },
+    () => {
+      S.works = S.works.filter(w=>w.id!==tempId);
+      delete _pending[tempId];
+      toast('⚠ Save failed — try again', 'err');
+      updateNavBadges(); R.work();
+    }
+  );
+  // Clear inputs
+  document.getElementById('wItems').value='';
+  document.getElementById('wQty').value='';
 };
 
-function updatePickAll() {
-  if (!_pickSel) { document.getElementById('pickAll').innerHTML = ''; return; }
-  const all = S.works.filter(w => w.oid === _pickSel);
-  document.getElementById('pickAll').innerHTML = all.length ? `<div class="card" style="padding:0;overflow:hidden"><table class="tbl"><tr><th>Worker</th><th>Items</th><th>QTY</th><th>Status</th><th>Start</th><th>End</th></tr>${all.map(w => `<tr><td>${w.w}</td><td class="mono">${w.sku}</td><td class="mono">${w.qty}</td><td>${w.e?'<span class="badge b-done">Done</span>':'<span class="badge b-live">Active</span>'}</td><td class="mono">${w.s||'-'}</td><td class="mono">${w.e||'-'}</td></tr>`).join('')}</table></div>` : '';
-}
-
-function pOrdChg() {
-  const sel = document.getElementById('pOrd'); if (!sel) return;
-  _pickSel = sel.value;
-  const info = document.getElementById('pOrdInfo');
-  if (!_pickSel) { if (info) info.innerHTML = ''; updatePickAll(); return; }
-  const o = S.orders.find(x => x.id === _pickSel);
-  const ws = S.works.filter(w => w.oid === _pickSel);
-  const act = ws.filter(w => w.s && !w.e).length;
-  info.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;margin-bottom:10px;font-size:12px"><span style="font-weight:600">${o.ch} · ${o.cu}</span> · ${act} worker(s) active · Items ${ws.reduce((s,w)=>s+w.sku,0)} / QTY ${ws.reduce((s,w)=>s+w.qty,0)}</div>`;
-  updatePickAll();
-}
-
-window.startPick = async function() {
-  const oid = document.getElementById('pOrd')?.value;
-  const sku = parseInt(document.getElementById('pSku')?.value);
-  const qty = parseInt(document.getElementById('pQty')?.value);
-  if (!oid) { toast('Select an order', 'err'); return; }
-  if (!sku || sku < 1) { toast('Enter item count', 'err'); return; }
-  if (!qty || qty < 1) { toast('Enter total QTY', 'err'); return; }
-
-  // ── OPTIMISTIC UPDATE ──
-  const tempId = genTempId();
+window.endWork = function(wid) {
+  const w = S.works.find(x=>x.id===wid); if (!w||_pending[wid]) return;
   const hhmm = nowHHmm();
-  const newEntry = { id: tempId, oid, w: CW, sku, qty, s: hhmm, e: '', is: '', ie: '', ps: '', pe: '', pickMin: '', inspMin: '', pallMin: '', totalMin: '' };
-  S.works.push(newEntry);
-  _pickSel = oid;
-  _pending[tempId] = { patch: null };
-  toast('✓ Picking started!', 'ok');
-  R.pick(); // instant UI update
+  const orig  = { endT:w.endT, netMin:w.netMin };
+  const nm    = clientNetMin(w.startT, hhmm);
+  w.endT   = hhmm;
+  w.netMin = nm !== null ? nm : '';
+  _pending[wid] = { patch:{ endT:hhmm } };
+  toast(`✓ ${w.stage} ended! Net: ${fmtMin(nm)}`, 'ok');
+  updateNavBadges(); R.work();
 
-  // ── BACKGROUND SAVE ──
-  apiBackground('startPick', { orderId: oid, worker: CW, items: sku, qty: qty },
-    (res) => {
-      // Replace temp entry with server-assigned ID
-      const idx = S.works.findIndex(w => w.id === tempId);
-      if (idx >= 0 && res.entryId) {
-        S.works[idx].id = res.entryId;
-        if (res.pickStart) S.works[idx].s = res.pickStart;
-      }
-      delete _pending[tempId];
-      if (_pending[res.entryId]) delete _pending[res.entryId];
-      R.pick();
+  apiBg('endWork', { entryId:wid },
+    res => {
+      if (res.endTime)    w.endT   = res.endTime;
+      if (res.netMinutes !== undefined) w.netMin = res.netMinutes;
+      delete _pending[wid];
+      if (curP()==='dash') R.dash();
+      updateNavBadges(); R.work(); renderOrderActivity();
     },
-    (err) => {
-      // Rollback
-      S.works = S.works.filter(w => w.id !== tempId);
-      delete _pending[tempId];
-      toast('⚠ Failed to save — please try again', 'err');
-      R.pick();
+    () => {
+      Object.assign(w, orig);
+      delete _pending[wid];
+      toast('⚠ Save failed — try again', 'err');
+      updateNavBadges(); R.work();
     }
   );
 };
 
-window.endPick = async function(wid) {
-  const w = S.works.find(x => x.id === wid); if (!w) return;
-  if (_pending[wid]) return; // already in-flight
-
-  // ── OPTIMISTIC UPDATE ──
-  const hhmm = nowHHmm();
-  const original = { e: w.e };
-  w.e = hhmm;
-  _pending[wid] = { patch: { e: hhmm } };
-  toast('✓ Picking done → Inspection queue', 'ok');
-  updateNavBadges();
-  R.pick();
-
-  // ── BACKGROUND SAVE ──
-  apiBackground('endPick', { entryId: wid },
-    (res) => {
-      if (res.pickEnd) w.e = res.pickEnd;
-      delete _pending[wid];
-      R.pick();
-    },
-    (err) => {
-      // Rollback
-      Object.assign(w, original);
-      delete _pending[wid];
-      toast('⚠ Failed to save — please try again', 'err');
-      R.pick();
-    }
-  );
-};
-
-// ==========================================
-// INSPECTION  — with Optimistic Update
-// ==========================================
-R.insp = function() {
-  const myPending = S.works.filter(w => w.w === CW && w.e && !w.is);
-  const el = document.getElementById('inspMyForm');
-  el.innerHTML = myPending.length ? `<div class="card"><div class="card-t"><i class="ri-search-eye-line" style="color:var(--purple)"></i> My entries — Ready for inspection</div>${myPending.map(w => {
-    const o = S.orders.find(x => x.id === w.oid);
-    const inFlight = !!_pending[w.id];
-    return`<div class="we${inFlight?' optimistic':''}">
-      <div class="we-top">
-        <span class="we-id">${w.oid}</span>
-        ${inFlight ? '<span class="badge b-saving"><i class="ri-loader-4-line"></i> Saving...</span>' : '<span class="badge b-insp">Ready</span>'}
-      </div>
-      <div class="we-meta">
-        <span><i class="ri-store-2-line"></i> ${o?.ch}·${o?.cu}</span>
-        <span><i class="ri-box-3-line"></i> ${w.sku} items / ${w.qty} QTY</span>
-        <span><i class="ri-time-line"></i> Pick: ${w.s} → ${w.e}</span>
-      </div>
-      <button class="btn btn-purple btn-block btn-action" style="margin-top:12px" onclick="startInspEntry('${w.id}')" ${inFlight?'disabled':''}>
-        <i class="ri-play-circle-line"></i> Start Inspection
-      </button>
-    </div>`
-  }).join('')}</div>` : '';
-
-  const sel = document.getElementById('inspOrd'), cur = sel.value;
-  const avail = S.orders.filter(o => S.works.some(w => w.oid === o.id && w.e && !w.is && w.w !== CW));
-  sel.innerHTML = '<option value="">— Select order —</option>' + avail.map(o => `<option value="${o.id}"${o.id===cur?' selected':''}>${o.id}</option>`).join('');
-  sel.onchange = updateInspInfo; updateInspInfo();
-
-  const active = S.works.filter(w => w.is && !w.ie);
-  document.getElementById('inspList').innerHTML = active.length ? active.map(w => {
-    const inFlight = !!_pending[w.id];
-    return `<div class="we${inFlight?' optimistic-done':''}" style="border-color:var(--purple-bd)">
-      <div class="we-top">
-        <span class="we-id">${w.oid} · ${w.w}</span>
-        ${inFlight ? '<span class="badge b-saving">Saving...</span>' : '<span class="badge b-live">Inspecting</span>'}
-      </div>
-      <div class="we-meta">
-        <span><i class="ri-box-3-line"></i> ${w.sku} items / ${w.qty} QTY</span>
-        <span><i class="ri-time-line"></i> Started: ${w.is}</span>
-      </div>
-      <button class="btn btn-green btn-block btn-action" style="margin-top:12px" onclick="endInsp('${w.id}')" ${inFlight?'disabled':''}>
-        <i class="ri-checkbox-circle-line"></i> End Inspection
-      </button>
-    </div>`;
-  }).join('') : '<div style="font-size:12px;color:var(--text3);padding:6px 0">No active inspections</div>';
-};
-
-function updateInspInfo() {
-  const oid = document.getElementById('inspOrd')?.value;
-  const info = document.getElementById('inspInfo'), acts = document.getElementById('inspActs');
-  if (!oid) { info.innerHTML = ''; acts.innerHTML = ''; return; }
-  const ws = S.works.filter(w => w.oid === oid && w.e && w.w !== CW);
-  const pending = ws.filter(w => !w.is).length;
-  info.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;margin-bottom:8px;font-size:12px">${ws.length} entries · ${pending} pending</div>`;
-  acts.innerHTML = pending > 0 ? `<button class="btn btn-purple btn-block btn-action" onclick="startInspBatch('${oid}')"><i class="ri-play-circle-line"></i> Start Inspection (${pending})</button>` : '<div style="font-size:12px;color:var(--green)">All inspected</div>';
+// ---- KPI ----
+function kpiSetToday()  { const t=todayStr(); document.getElementById('kpiFrom').value=t; document.getElementById('kpiTo').value=t; renderKPI(); }
+function kpiSetWeek() {
+  const d=new Date(); const day=d.getDay(); const mon=new Date(d); mon.setDate(d.getDate()-(day===0?6:day-1));
+  const fmt=x=>x.toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  document.getElementById('kpiFrom').value=fmt(mon); document.getElementById('kpiTo').value=fmt(d);
+  renderKPI();
+}
+function kpiSetMonth() {
+  const t=todayStr(); const [y,m]=t.split('-');
+  document.getElementById('kpiFrom').value=`${y}-${m}-01`; document.getElementById('kpiTo').value=t;
+  renderKPI();
 }
 
-window.startInspEntry = async function(wid) {
-  const w = S.works.find(x => x.id === wid); if (!w) return;
-  if (_pending[wid]) return;
-
-  // ── OPTIMISTIC ──
-  const hhmm = nowHHmm();
-  const original = { is: w.is };
-  w.is = hhmm;
-  _pending[wid] = { patch: { is: hhmm } };
-  toast('✓ Inspection started!', 'ok');
-  updateNavBadges();
-  R.insp();
-
-  apiBackground('startInsp', { entryId: wid },
-    (res) => { if (res.inspStart) w.is = res.inspStart; delete _pending[wid]; R.insp(); },
-    () => { Object.assign(w, original); delete _pending[wid]; toast('⚠ Failed to save — please try again', 'err'); R.insp(); }
-  );
-};
-
-window.startInspBatch = async function(oid) {
-  const ws = S.works.filter(w => w.oid === oid && w.e && !w.is && w.w !== CW);
-  if (!ws.length) return;
-  const hhmm = nowHHmm();
-  ws.forEach(w => { w.is = hhmm; _pending[w.id] = { patch: { is: hhmm } }; });
-  toast(`✓ Inspection started (${ws.length})!`, 'ok');
-  updateNavBadges(); R.insp();
-  for (const w of ws) {
-    apiBackground('startInsp', { entryId: w.id },
-      (res) => { if (res.inspStart) w.is = res.inspStart; delete _pending[w.id]; },
-      () => { w.is = ''; delete _pending[w.id]; toast('⚠ Partial save failure', 'err'); }
-    );
-  }
-};
-
-window.endInsp = async function(wid) {
-  const w = S.works.find(x => x.id === wid); if (!w) return;
-  if (_pending[wid]) return;
-
-  const hhmm = nowHHmm();
-  const original = { ie: w.ie };
-  w.ie = hhmm;
-  _pending[wid] = { patch: { ie: hhmm } };
-  toast('✓ Inspection done → Palletizing queue', 'ok');
-  updateNavBadges(); R.insp();
-
-  apiBackground('endInsp', { entryId: wid },
-    (res) => { if (res.inspEnd) w.ie = res.inspEnd; delete _pending[wid]; R.insp(); },
-    () => { Object.assign(w, original); delete _pending[wid]; toast('⚠ Failed to save — please try again', 'err'); R.insp(); }
-  );
-};
-
-// ==========================================
-// PALLETIZING  — with Optimistic Update
-// ==========================================
-R.pall = function() {
-  const myPending = S.works.filter(w => w.w === CW && w.ie && !w.ps);
-  const el = document.getElementById('pallMyForm');
-  el.innerHTML = myPending.length ? `<div class="card"><div class="card-t"><i class="ri-stack-line" style="color:var(--teal)"></i> My entries — Ready for palletizing</div>${myPending.map(w => {
-    const o = S.orders.find(x => x.id === w.oid);
-    const inFlight = !!_pending[w.id];
-    return`<div class="we${inFlight?' optimistic':''}">
-      <div class="we-top">
-        <span class="we-id">${w.oid}</span>
-        ${inFlight ? '<span class="badge b-saving">Saving...</span>' : '<span class="badge b-pal">Ready</span>'}
-      </div>
-      <div class="we-meta">
-        <span><i class="ri-store-2-line"></i> ${o?.ch}·${o?.cu}</span>
-        <span><i class="ri-box-3-line"></i> ${w.sku} items / ${w.qty} QTY</span>
-        <span><i class="ri-time-line"></i> Insp: ${w.is} → ${w.ie}</span>
-      </div>
-      <button class="btn btn-teal btn-block btn-action" style="margin-top:12px" onclick="startPallEntry('${w.id}')" ${inFlight?'disabled':''}>
-        <i class="ri-play-circle-line"></i> Start Palletizing
-      </button>
-    </div>`
-  }).join('')}</div>` : '';
-
-  const sel = document.getElementById('pallOrd'), cur = sel.value;
-  const avail = S.orders.filter(o => S.works.some(w => w.oid === o.id && w.ie && !w.ps && w.w !== CW));
-  sel.innerHTML = '<option value="">— Select order —</option>' + avail.map(o => `<option value="${o.id}"${o.id===cur?' selected':''}>${o.id}</option>`).join('');
-  sel.onchange = updatePallInfo; updatePallInfo();
-
-  const active = S.works.filter(w => w.ps && !w.pe);
-  document.getElementById('pallList').innerHTML = active.length ? active.map(w => {
-    const inFlight = !!_pending[w.id];
-    return `<div class="we${inFlight?' optimistic-done':''}" style="border-color:var(--teal-bd)">
-      <div class="we-top">
-        <span class="we-id">${w.oid} · ${w.w}</span>
-        ${inFlight ? '<span class="badge b-saving">Saving...</span>' : '<span class="badge b-live">Palletizing</span>'}
-      </div>
-      <div class="we-meta">
-        <span><i class="ri-box-3-line"></i> ${w.sku} items / ${w.qty} QTY</span>
-        <span><i class="ri-time-line"></i> Started: ${w.ps}</span>
-      </div>
-      <button class="btn btn-green btn-block btn-action" style="margin-top:12px" onclick="endPall('${w.id}')" ${inFlight?'disabled':''}>
-        <i class="ri-checkbox-circle-line"></i> End Palletizing
-      </button>
-    </div>`;
-  }).join('') : '<div style="font-size:12px;color:var(--text3);padding:6px 0">No active palletizing</div>';
-};
-
-function updatePallInfo() {
-  const oid = document.getElementById('pallOrd')?.value;
-  const info = document.getElementById('pallInfo'), acts = document.getElementById('pallActs');
-  if (!oid) { info.innerHTML = ''; acts.innerHTML = ''; return; }
-  const ws = S.works.filter(w => w.oid === oid && w.ie && w.w !== CW);
-  const pending = ws.filter(w => !w.ps).length;
-  info.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;margin-bottom:8px;font-size:12px">${ws.length} entries · ${pending} pending</div>`;
-  acts.innerHTML = pending > 0 ? `<button class="btn btn-teal btn-block btn-action" onclick="startPallBatch('${oid}')"><i class="ri-play-circle-line"></i> Start Palletizing (${pending})</button>` : '<div style="font-size:12px;color:var(--green)">All palletized</div>';
-}
-
-window.startPallEntry = async function(wid) {
-  const w = S.works.find(x => x.id === wid); if (!w) return;
-  if (_pending[wid]) return;
-
-  const hhmm = nowHHmm();
-  const original = { ps: w.ps };
-  w.ps = hhmm;
-  _pending[wid] = { patch: { ps: hhmm } };
-  toast('✓ Palletizing started!', 'ok');
-  updateNavBadges(); R.pall();
-
-  apiBackground('startPall', { entryId: wid },
-    (res) => { if (res.pallStart) w.ps = res.pallStart; delete _pending[wid]; R.pall(); },
-    () => { Object.assign(w, original); delete _pending[wid]; toast('⚠ Failed to save — please try again', 'err'); R.pall(); }
-  );
-};
-
-window.startPallBatch = async function(oid) {
-  const ws = S.works.filter(w => w.oid === oid && w.ie && !w.ps && w.w !== CW);
-  if (!ws.length) return;
-  const hhmm = nowHHmm();
-  ws.forEach(w => { w.ps = hhmm; _pending[w.id] = { patch: { ps: hhmm } }; });
-  toast(`✓ Palletizing started (${ws.length})!`, 'ok');
-  updateNavBadges(); R.pall();
-  for (const w of ws) {
-    apiBackground('startPall', { entryId: w.id },
-      (res) => { if (res.pallStart) w.ps = res.pallStart; delete _pending[w.id]; },
-      () => { w.ps = ''; delete _pending[w.id]; toast('⚠ Partial save failure', 'err'); }
-    );
-  }
-};
-
-window.endPall = async function(wid) {
-  const w = S.works.find(x => x.id === wid); if (!w) return;
-  if (_pending[wid]) return;
-
-  const hhmm = nowHHmm();
-  const original = { pe: w.pe };
-  w.pe = hhmm;
-  _pending[wid] = { patch: { pe: hhmm } };
-  toast('✓ Palletizing complete! 🎉', 'ok');
-  updateNavBadges(); R.pall();
-
-  apiBackground('endPall', { entryId: wid },
-    (res) => {
-      if (res.pallEnd) w.pe = res.pallEnd;
-      delete _pending[wid];
-      // Update dashboard metrics
-      if (curP() === 'dash') R.dash();
-      R.pall();
-    },
-    () => { Object.assign(w, original); delete _pending[wid]; toast('⚠ Failed to save — please try again', 'err'); R.pall(); }
-  );
-};
-
-// ==========================================
-// KPI
-// ==========================================
 R.kpi = function() {
-  const stats = S.workers.map(w => {
-    const my = S.works.filter(x => x.w === w);
-    const done = my.filter(x => x.pe).length;
-    return { w, total: my.length, done, active: my.length - done, tSku: my.reduce((s,x)=>s+x.sku,0), tQty: my.reduce((s,x)=>s+x.qty,0), rate: my.length ? Math.round(done/my.length*100) : 0 };
-  }).sort((a,b) => b.done - a.done || b.tSku - a.tSku);
-  document.getElementById('kpiList').innerHTML = `<div class="card" style="padding:0;overflow:hidden"><table class="tbl"><tr><th style="padding-left:14px">#</th><th>Worker</th><th>Done</th><th>Active</th><th>Total</th><th>Items</th><th>QTY</th><th>Rate</th><th style="width:100px">Progress</th></tr>${stats.map((s,i)=>{const me=s.w===CW;const rc=s.rate>=80?'var(--green)':s.rate>=50?'var(--amber)':s.rate>0?'var(--blue)':'var(--text3)';return`<tr${me?' style="background:rgba(59,130,246,.05)"':''}><td style="padding-left:14px;color:var(--text3);font-weight:700">${i+1}</td><td style="font-weight:${me?700:500}">${s.w}${me?' <span style="color:var(--blue);font-size:9px">YOU</span>':''}</td><td class="mono" style="color:var(--green);font-weight:600">${s.done}</td><td class="mono" style="color:${s.active?'var(--amber)':'var(--text3)'}">${s.active}</td><td class="mono">${s.total}</td><td class="mono" style="color:var(--purple)">${s.tSku}</td><td class="mono" style="color:var(--teal)">${s.tQty}</td><td class="mono" style="color:${rc};font-weight:600">${s.rate}%</td><td><div style="height:5px;background:var(--bg);border-radius:3px;overflow:hidden"><div style="height:100%;width:${s.rate}%;background:${rc};border-radius:3px"></div></div></td></tr>`}).join('')}</table></div>`;
-  const tW=S.works.length,tD=S.works.filter(w=>w.pe).length;
-  document.getElementById('kpiTeam').innerHTML=`<div class="grid g5">${[{l:'Total entries',v:tW,c:'bl'},{l:'Completed',v:tD,c:'gr'},{l:'Active',v:tW-tD,c:'am'},{l:'Total Items',v:S.works.reduce((s,w)=>s+w.sku,0),c:'pu'},{l:'Total QTY',v:S.works.reduce((s,w)=>s+w.qty,0),c:'tl'}].map(m=>`<div class="mc ${m.c}"><div class="mc-l">${m.l}</div><div class="mc-v" style="font-size:20px">${m.v}</div></div>`).join('')}</div>`;
+  if (!document.getElementById('kpiFrom').value) kpiSetToday();
+  else renderKPI();
 };
 
-// ==========================================
-// MANAGER
-// ==========================================
+function renderKPI() {
+  const from = document.getElementById('kpiFrom').value;
+  const to   = document.getElementById('kpiTo').value;
+  if (!from || !to) { document.getElementById('kpiContent').innerHTML='<div class="empty">Select date range</div>'; return; }
+
+  // Filter: completed entries within date range
+  // startISO comes from server as "2026-05-15T09:30:00" — slice to "2026-05-15" for comparison
+  const allDone = S.works.filter(w => {
+    if (!w.endT) return false;
+    const d = w.startISO ? w.startISO.slice(0,10) : '';
+    if (!d) return true; // if no ISO yet (optimistic entry), include it
+    return d >= from && d <= to;
+  });
+
+  const fromLabel = from === to ? from : from + ' ~ ' + to;
+
+  // Group by worker × stage
+  const workerStats = {};
+  S.workers.forEach(wk => {
+    workerStats[wk] = {
+      PICK:{ entries:0, items:0, qty:0, netMin:0 },
+      INSP:{ entries:0, items:0, qty:0, netMin:0 },
+      PALL:{ entries:0, items:0, qty:0, netMin:0 }
+    };
+  });
+  allDone.forEach(w => {
+    if (!workerStats[w.w]) workerStats[w.w] = {
+      PICK:{entries:0,items:0,qty:0,netMin:0},
+      INSP:{entries:0,items:0,qty:0,netMin:0},
+      PALL:{entries:0,items:0,qty:0,netMin:0}
+    };
+    const st = workerStats[w.w][w.stage];
+    if (!st) return;
+    st.entries++;
+    st.items  += w.items;
+    st.qty    += w.qty;
+    st.netMin += (w.netMin !== '' && w.netMin !== null && w.netMin !== undefined ? Number(w.netMin) : 0);
+  });
+
+  // Summary metrics
+  const totalEntries = allDone.length;
+  const totalItems   = allDone.reduce((s,w) => s + w.items, 0);
+  const totalQty     = allDone.reduce((s,w) => s + w.qty, 0);
+  const totalNetMin  = allDone.reduce((s,w) => s + (w.netMin !== '' && w.netMin !== null ? Number(w.netMin) : 0), 0);
+
+  if (!allDone.length) {
+    document.getElementById('kpiContent').innerHTML = `<div class="empty"><i class="ri-bar-chart-2-line"></i>No completed entries for ${fromLabel}</div>`;
+    return;
+  }
+
+  let html = `<div style="font-size:11px;color:var(--text3);margin-bottom:10px;font-weight:600;letter-spacing:.04em">
+    <i class="ri-calendar-line"></i> ${fromLabel} — ${allDone.length} completed entries
+  </div>
+  <div class="grid g4" style="margin-bottom:14px">
+    ${[{l:'Completed entries',v:totalEntries,c:'gr'},{l:'Total items processed',v:totalItems,c:'pu'},
+       {l:'Total QTY processed',v:totalQty,c:'tl'},{l:'Total net work time',v:fmtMin(totalNetMin),c:'bl'}]
+    .map(m=>`<div class="mc ${m.c}"><div class="mc-l">${m.l}</div><div class="mc-v" style="font-size:18px;color:var(--${{gr:'green',pu:'purple',tl:'teal',bl:'blue'}[m.c]})">${m.v}</div></div>`).join('')}</div>`;
+
+  // Worker breakdown table
+  html += `<div class="section">Worker × Stage breakdown</div>
+  <div class="card" style="padding:0;overflow-x:auto"><table class="tbl" style="min-width:680px">
+    <thead><tr>
+      <th style="padding-left:12px">Worker</th><th>Stage</th>
+      <th>Entries</th><th>Items</th><th>QTY</th>
+      <th>Net time</th><th>Avg per entry</th><th>Items/hr</th>
+    </tr></thead><tbody>`;
+
+  const workerTotals = [];
+  Object.entries(workerStats).forEach(([wk, stages]) => {
+    const totE = Object.values(stages).reduce((s,v)=>s+v.entries,0);
+    if (!totE) return;
+    const totItems = Object.values(stages).reduce((s,v)=>s+v.items,0);
+    const totQty   = Object.values(stages).reduce((s,v)=>s+v.qty,0);
+    const totMin   = Object.values(stages).reduce((s,v)=>s+v.netMin,0);
+    workerTotals.push({ wk, totE, totItems, totQty, totMin });
+
+    let firstRow = true;
+    ['PICK','INSP','PALL'].forEach(stage => {
+      const st = stages[stage];
+      if (!st.entries) return;
+      const avgMin = st.entries ? Math.round(st.netMin / st.entries) : 0;
+      const iphMin = st.netMin  ? Math.round(st.items / st.netMin * 60) : 0;
+      const col = {PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'}[stage];
+      html += `<tr${wk===CW?' style="background:rgba(59,130,246,.03)"':''}>
+        <td style="padding-left:12px;font-weight:${firstRow?700:400};color:${firstRow?'var(--text)':'transparent'}">${firstRow?wk:wk}<span style="visibility:hidden">${wk}</span></td>
+        <td><span style="color:${col};font-weight:700;font-size:11px">${stage}</span></td>
+        <td class="mono">${st.entries}</td>
+        <td class="mono" style="color:var(--purple)">${st.items}</td>
+        <td class="mono" style="color:var(--teal)">${st.qty}</td>
+        <td class="mono" style="color:var(--blue)">${fmtMin(st.netMin)}</td>
+        <td class="mono">${avgMin?fmtMin(avgMin):'—'}</td>
+        <td class="mono" style="color:var(--amber)">${iphMin?iphMin+'/hr':'—'}</td>
+      </tr>`;
+      firstRow = false;
+    });
+  });
+  html += '</tbody></table></div>';
+
+  // Worker totals summary
+  html += `<div class="section">Worker totals</div>
+  <div class="card" style="padding:0;overflow-x:auto"><table class="tbl" style="min-width:550px">
+    <thead><tr><th style="padding-left:12px">Worker</th><th>Entries</th><th>Items</th><th>QTY</th><th>Net time</th><th>Productivity</th></tr></thead><tbody>`;
+  workerTotals.sort((a,b)=>b.totItems-a.totItems).forEach(({wk,totE,totItems,totQty,totMin}) => {
+    const iphMin = totMin ? Math.round(totItems/totMin*60) : 0;
+    const bar = totItems ? Math.min(100, Math.round(totItems / Math.max(...workerTotals.map(w=>w.totItems)) * 100)) : 0;
+    html += `<tr${wk===CW?' style="background:rgba(59,130,246,.03)"':''}>
+      <td style="padding-left:12px;font-weight:700">${wk}${wk===CW?' <span style="color:var(--blue);font-size:9px">YOU</span>':''}</td>
+      <td class="mono">${totE}</td>
+      <td class="mono" style="color:var(--purple);font-weight:600">${totItems}</td>
+      <td class="mono" style="color:var(--teal)">${totQty}</td>
+      <td class="mono" style="color:var(--blue)">${fmtMin(totMin)}</td>
+      <td><div style="display:flex;align-items:center;gap:7px">
+        <div style="width:80px;height:5px;background:var(--bg3);border-radius:3px"><div style="height:100%;width:${bar}%;background:var(--green);border-radius:3px"></div></div>
+        <span class="mono" style="color:var(--amber)">${iphMin?iphMin+' i/hr':'—'}</span>
+      </div></td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+
+  // Stage leaderboard
+  html += `<div class="section">Stage leaderboard (items processed)</div><div class="grid g3">`;
+  ['PICK','INSP','PALL'].forEach(stage => {
+    const col = {PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'}[stage];
+    const rows = S.workers.map(wk => {
+      const st = workerStats[wk]?.[stage] || { entries:0, items:0, qty:0, netMin:0 };
+      return { wk, ...st };
+    }).filter(x=>x.entries>0).sort((a,b)=>b.items-a.items);
+    const maxItems = rows[0]?.items || 1;
+    html += `<div class="card" style="padding:14px"><div style="font-size:11px;font-weight:700;color:${col};letter-spacing:.06em;margin-bottom:10px">${stage}</div>`;
+    rows.forEach((r,i) => {
+      const bar = Math.round(r.items/maxItems*100);
+      html += `<div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+          <span>${i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':''}<span style="font-weight:${r.wk===CW?700:400}">${r.wk}</span></span>
+          <span class="mono" style="color:${col}">${r.items} items</span>
+        </div>
+        <div style="height:4px;background:var(--bg3);border-radius:3px"><div style="height:100%;width:${bar}%;background:${col};border-radius:3px"></div></div>
+      </div>`;
+    });
+    if (!rows.length) html += '<div style="font-size:11px;color:var(--text3)">No data</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  document.getElementById('kpiContent').innerHTML = html;
+}
+
+// ---- MANAGER ----
 R.mgr = function() {
   document.getElementById('mWList').innerHTML = S.workers.map(w =>
-    `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
-      <span>${w}${w===CW?' <span style="color:var(--blue);font-size:10px;font-weight:600">(current)</span>':''}</span>
-      <button class="btn btn-sm" style="color:var(--red);border-color:rgba(239,68,68,.3);padding:3px 6px" onclick="rmW('${w}')"><i class="ri-delete-bin-line"></i></button></div>`).join('');
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <span>${w}${w===CW?' <span style="color:var(--blue);font-size:10px">(you)</span>':''}</span>
+      <button class="btn btn-sm" style="color:var(--red);border-color:var(--red-bd);padding:2px 6px" onclick="rmW('${w}')"><i class="ri-delete-bin-line"></i></button></div>`).join('');
+
   document.getElementById('mOList').innerHTML = S.orders.map(o => {
-    const st = oSt(o.id);
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
-      <div><span class="mono" style="font-weight:600">${o.id}</span> ${o.ch}·${o.cu} ${stBadge(st)}</div>
+    const ws = S.works.filter(w=>w.oid===o.id);
+    const active = ws.filter(w=>!w.endT).length;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <div>
+        <span class="mono" style="font-weight:700">${o.id}</span>
+        <span style="color:var(--text3);margin-left:6px">${o.ch}·${o.cu}</span>
+        ${active?`<span class="badge b-live" style="margin-left:6px;font-size:9px">${active} active</span>`:''}
+      </div>
       <div style="display:flex;gap:4px">
-        <button class="btn btn-sm" style="padding:3px 6px" onclick="editOrder('${o.id}')"><i class="ri-edit-line"></i></button>
-        <button class="btn btn-sm" style="color:var(--red);border-color:rgba(239,68,68,.3);padding:3px 6px" onclick="rmO('${o.id}')"><i class="ri-delete-bin-line"></i></button>
+        <button class="btn btn-sm" style="padding:2px 6px" onclick="editOrder('${o.id}')"><i class="ri-edit-line"></i></button>
+        <button class="btn btn-sm" style="color:var(--red);border-color:var(--red-bd);padding:2px 6px" onclick="rmO('${o.id}')"><i class="ri-delete-bin-line"></i></button>
       </div></div>`;
   }).join('') || '<div style="font-size:12px;color:var(--text3)">No orders</div>';
   mSearchEntries();
 };
 
-window.addW = async function() {
+window.addW = function() {
   const n = document.getElementById('mNewW').value.trim();
-  if (!n) { toast('Enter name', 'err'); return; }
-  if (S.workers.includes(n)) { toast('Exists', 'err'); return; }
+  if (!n) { toast('Enter name','err'); return; }
+  if (S.workers.includes(n)) { toast('Already exists','err'); return; }
   S.workers.push(n);
-  apiBackground('setSettings', { workers: S.workers });
-  popW(); toast(n + ' added', 'ok');
-  document.getElementById('mNewW').value = ''; R.mgr();
+  apiBg('setSettings', { workers:S.workers });
+  popW(); toast(n+' added','ok');
+  document.getElementById('mNewW').value=''; R.mgr();
 };
-window.rmW = async function(n) {
+window.rmW = function(n) {
   if (!confirm(`Remove "${n}"?`)) return;
-  S.workers = S.workers.filter(w => w !== n);
-  apiBackground('setSettings', { workers: S.workers });
-  popW(); toast(n + ' removed', 'ok'); R.mgr();
+  S.workers = S.workers.filter(w=>w!==n);
+  apiBg('setSettings', { workers:S.workers });
+  popW(); toast(n+' removed','ok'); R.mgr();
 };
-window.addO = async function() {
-  const id = document.getElementById('mNewO').value.trim();
-  const ch = document.getElementById('mOCh').value.trim() || '-';
-  const cu = document.getElementById('mOCu').value.trim() || '-';
-  if (!id) { toast('Enter order#', 'err'); return; }
-  if (S.orders.find(o => o.id === id)) { toast('Exists', 'err'); return; }
-
-  // Optimistic: add to local state immediately
-  const newOrder = { id, ch, cu, at: new Date().toLocaleString(), completedAt: '' };
-  S.orders.push(newOrder);
-  toast(id + ' added', 'ok');
-  R.mgr();
-  document.getElementById('mNewO').value = ''; document.getElementById('mOCh').value = ''; document.getElementById('mOCu').value = '';
-
-  apiBackground('upsertOrder', { id, ch, cu },
-    () => {},
-    () => { S.orders = S.orders.filter(o => o.id !== id); toast('⚠ Failed to save order', 'err'); R.mgr(); }
-  );
+window.addO = function() {
+  const id=document.getElementById('mNewO').value.trim();
+  const ch=document.getElementById('mOCh').value.trim()||'-';
+  const cu=document.getElementById('mOCu').value.trim()||'-';
+  if (!id) { toast('Enter order #','err'); return; }
+  if (S.orders.find(o=>o.id===id)) { toast('Already exists','err'); return; }
+  S.orders.push({ id, ch, cu, at:'' });
+  toast(id+' added','ok'); R.mgr();
+  document.getElementById('mNewO').value=''; document.getElementById('mOCh').value=''; document.getElementById('mOCu').value='';
+  apiBg('upsertOrder', { id, ch, cu }, ()=>{}, ()=>{ S.orders=S.orders.filter(o=>o.id!==id); toast('⚠ Save failed','err'); R.mgr(); });
 };
-window.rmO = async function(id) {
-  if (!confirm(`Delete "${id}"?`)) return;
-  const backup = [...S.orders];
-  const backupW = [...S.works];
-  S.orders = S.orders.filter(o => o.id !== id);
-  S.works = S.works.filter(w => w.oid !== id);
-  toast(id + ' deleted', 'ok'); R.mgr();
-  apiBackground('deleteOrder', { id },
-    () => {},
-    () => { S.orders = backup; S.works = backupW; toast('⚠ Delete failed', 'err'); R.mgr(); }
-  );
+window.rmO = function(id) {
+  if (!confirm(`Delete "${id}" and all its entries?`)) return;
+  const bkO=[...S.orders], bkW=[...S.works];
+  S.orders=S.orders.filter(o=>o.id!==id); S.works=S.works.filter(w=>w.oid!==id);
+  toast(id+' deleted','ok'); R.mgr();
+  apiBg('deleteOrder',{id},()=>{},()=>{S.orders=bkO;S.works=bkW;toast('⚠ Delete failed','err');R.mgr();});
 };
 window.editOrder = function(oid) {
-  const o = S.orders.find(x => x.id === oid); if (!o) return;
-  const ws = S.works.filter(w => w.oid === oid);
-  let html = `<div style="font-size:15px;font-weight:700;margin-bottom:14px"><i class="ri-edit-line" style="color:var(--amber)"></i> Edit order — ${oid}</div>
+  const o=S.orders.find(x=>x.id===oid); if(!o) return;
+  openModal(`<div style="font-size:15px;font-weight:700;margin-bottom:14px"><i class="ri-edit-line" style="color:var(--amber)"></i> Edit order</div>
     <div class="fg"><label class="fl">Order number</label><input class="fi" id="eo_id" value="${o.id}"></div>
-    <div class="fr"><div class="fg"><label class="fl">Channel</label><input class="fi" id="eo_ch" value="${o.ch}"></div><div class="fg"><label class="fl">Customer</label><input class="fi" id="eo_cu" value="${o.cu}"></div></div>`;
-  if (ws.length) {
-    html += `<div class="section" style="margin-top:12px">Work entries (${ws.length})</div>`;
-    ws.forEach((w, i) => {
-      html += `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:10px;margin-bottom:6px"><div style="font-size:11px;color:var(--text3);margin-bottom:6px">Entry ${i+1}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><div><label class="fl">Worker</label><select class="fi" id="ew_w_${w.id}" style="font-size:12px">${S.workers.map(wk=>`<option${wk===w.w?' selected':''}>${wk}</option>`).join('')}</select></div><div><label class="fl">Items</label><input class="fi" type="number" id="ew_sku_${w.id}" value="${w.sku}" min="1"></div><div><label class="fl">QTY</label><input class="fi" type="number" id="ew_qty_${w.id}" value="${w.qty}" min="1"></div></div></div>`;
-    });
-  }
-  html += `<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-blue btn-sm" onclick="saveOrder('${oid}')"><i class="ri-check-line"></i> Save</button></div>`;
-  document.getElementById('modalContent').innerHTML = html;
-  document.getElementById('modalBg').classList.add('show');
+    <div class="fr2"><div class="fg"><label class="fl">Channel</label><input class="fi" id="eo_ch" value="${o.ch}"></div><div class="fg"><label class="fl">Customer</label><input class="fi" id="eo_cu" value="${o.cu}"></div></div>
+    <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:12px"><button class="btn btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-blue btn-sm" onclick="saveOrder('${oid}')"><i class="ri-check-line"></i> Save</button></div>`);
 };
-window.saveOrder = async function(origId) {
-  const newId = document.getElementById('eo_id').value.trim();
-  const ch = document.getElementById('eo_ch').value.trim();
-  const cu = document.getElementById('eo_cu').value.trim();
-  if (!newId) { toast('Order# required', 'err'); return; }
-  // Optimistic update
-  const o = S.orders.find(x => x.id === origId);
-  if (o) { o.id = newId; o.ch = ch; o.cu = cu; }
-  const ws = S.works.filter(w => w.oid === origId);
-  ws.forEach(w => { w.oid = newId; });
-  toast('Order updated', 'ok'); closeModal(); R.mgr();
-  apiBackground('upsertOrder', { id: origId, newId: newId !== origId ? newId : undefined, ch, cu });
-  for (const w of ws) {
-    const wEl = document.getElementById('ew_w_' + w.id);
-    const sEl = document.getElementById('ew_sku_' + w.id);
-    const qEl = document.getElementById('ew_qty_' + w.id);
-    if (wEl || sEl || qEl) apiBackground('editEntry', { entryId: w.id, worker: wEl?.value, items: parseInt(sEl?.value), qty: parseInt(qEl?.value) });
-  }
+window.saveOrder = function(origId) {
+  const newId=document.getElementById('eo_id').value.trim();
+  const ch=document.getElementById('eo_ch').value.trim();
+  const cu=document.getElementById('eo_cu').value.trim();
+  if (!newId){toast('Order # required','err');return;}
+  const o=S.orders.find(x=>x.id===origId);
+  if(o){o.id=newId;o.ch=ch;o.cu=cu;}
+  S.works.filter(w=>w.oid===origId).forEach(w=>w.oid=newId);
+  toast('Order updated','ok'); closeModal(); R.mgr();
+  apiBg('upsertOrder',{id:origId,newId:newId!==origId?newId:undefined,ch,cu});
 };
 window.mSearchEntries = function() {
-  const q = (document.getElementById('mSearchW')?.value || '').toUpperCase();
-  const ws = q ? S.works.filter(w => w.oid.toUpperCase().includes(q)) : S.works.slice(0, 30);
-  document.getElementById('mWEntries').innerHTML = ws.length ? `<table class="tbl"><tr><th>Order</th><th>Worker</th><th>Items</th><th>QTY</th><th>Pick</th><th>Insp.</th><th>Pallet</th><th></th></tr>${ws.map(w => `<tr><td class="mono">${w.oid}</td><td>${w.w}</td><td class="mono">${w.sku}</td><td class="mono">${w.qty}</td><td class="mono" style="font-size:10px">${w.s||'-'}→${w.e||'-'}</td><td class="mono" style="font-size:10px">${w.is||'-'}→${w.ie||'-'}</td><td class="mono" style="font-size:10px">${w.ps||'-'}→${w.pe||'-'}</td><td><button class="btn btn-sm" style="color:var(--red);padding:2px 5px" onclick="rmEntry('${w.id}')"><i class="ri-delete-bin-line"></i></button></td></tr>`).join('')}</table>` : '<div style="font-size:12px;color:var(--text3)">No entries</div>';
+  const q=(document.getElementById('mSearchW')?.value||'').toUpperCase();
+  const ws=q?S.works.filter(w=>w.oid.toUpperCase().includes(q)||w.w.toUpperCase().includes(q)):S.works.slice(0,40);
+  document.getElementById('mWEntries').innerHTML = ws.length ?
+    `<table class="tbl"><thead><tr><th>Order</th><th>Worker</th><th>Stage</th><th>Items</th><th>QTY</th><th>Start</th><th>End</th><th>Net</th><th></th></tr></thead><tbody>${
+      ws.map(w=>`<tr>
+        <td class="mono">${w.oid}</td><td>${w.w}</td>
+        <td><span style="color:${{PICK:'var(--blue)',INSP:'var(--purple)',PALL:'var(--teal)'}[w.stage]||'var(--text)'};font-weight:700;font-size:11px">${w.stage}</span></td>
+        <td class="mono">${w.items}</td><td class="mono">${w.qty}</td>
+        <td class="mono">${w.startT||'—'}</td><td class="mono">${w.endT||'—'}</td>
+        <td class="mono" style="color:var(--teal)">${fmtMin(w.netMin)}</td>
+        <td><button class="btn btn-sm" style="color:var(--red);padding:2px 5px" onclick="rmEntry('${w.id}')"><i class="ri-delete-bin-line"></i></button></td>
+      </tr>`).join('')}</tbody></table>`
+    : '<div style="font-size:12px;color:var(--text3)">No entries</div>';
 };
-window.rmEntry = async function(wid) {
+window.rmEntry = function(wid) {
   if (!confirm('Delete this entry?')) return;
-  const backup = S.works.find(w => w.id === wid);
-  S.works = S.works.filter(w => w.id !== wid);
-  toast('Deleted', 'ok'); mSearchEntries();
-  apiBackground('deleteEntry', { entryId: wid },
-    () => {},
-    () => { if (backup) S.works.push(backup); toast('⚠ Delete failed', 'err'); mSearchEntries(); }
-  );
+  const bk=S.works.find(w=>w.id===wid);
+  S.works=S.works.filter(w=>w.id!==wid);
+  toast('Deleted','ok'); mSearchEntries();
+  apiBg('deleteEntry',{entryId:wid},()=>{},()=>{if(bk)S.works.push(bk);toast('⚠ Delete failed','err');mSearchEntries();});
 };
-window.changePin = async function() {
-  const c = document.getElementById('cpCur').value, n = document.getElementById('cpNew').value, cf = document.getElementById('cpConf').value;
-  if (!c || !n || !cf) { toast('Fill all fields', 'err'); return; }
-  if (c !== S.pin) { toast('Wrong current password', 'err'); return; }
-  if (n.length < 4) { toast('Min 4 chars', 'err'); return; }
-  if (n !== cf) { toast("Passwords don't match", 'err'); return; }
-  S.pin = n;
-  toast('Password changed', 'ok');
-  document.getElementById('cpCur').value = ''; document.getElementById('cpNew').value = ''; document.getElementById('cpConf').value = '';
-  apiBackground('setSettings', { managerPin: n });
+window.changePin = function() {
+  const c=document.getElementById('cpCur').value, n=document.getElementById('cpNew').value, cf=document.getElementById('cpConf').value;
+  if(!c||!n||!cf){toast('Fill all fields','err');return;}
+  if(c!==S.pin){toast('Wrong current password','err');return;}
+  if(n.length<4){toast('Min 4 chars','err');return;}
+  if(n!==cf){toast("Passwords don't match",'err');return;}
+  S.pin=n; toast('Password changed','ok');
+  document.getElementById('cpCur').value=''; document.getElementById('cpNew').value=''; document.getElementById('cpConf').value='';
+  apiBg('setSettings',{managerPin:n});
 };
 
-// ==========================================
+// =============================================
 // INIT
-// ==========================================
+// =============================================
 (async function init() {
   updateClock(); setInterval(updateClock, 1000);
   const ok = await loadData();
@@ -1146,21 +1076,18 @@ window.changePin = async function() {
   document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => go(b.dataset.p)));
   go('dash');
   updateNavBadges();
-  // Auto refresh every 30 seconds — silent, doesn't block UI
+  // Auto-refresh (only when no pending saves)
   setInterval(async () => {
-    const saved = Object.keys(_pending).length;
-    if (saved === 0) { // Don't reload while saves are in-flight
-      await loadData();
-      updateNavBadges();
-      go(curP());
+    if (Object.keys(_pending).length === 0) {
+      await loadData(); updateNavBadges();
+      const p = curP();
+      if (p === 'dash') R.dash();
+      else if (p === 'work') R.work();
     }
   }, 30000);
-  // Register service worker for PWA + clear old caches
   if ('serviceWorker' in navigator) {
-    if ('caches' in window) {
-      caches.keys().then(names => names.forEach(name => caches.delete(name)));
-    }
-    navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW:', e));
+    if ('caches' in window) caches.keys().then(names => names.forEach(n => caches.delete(n)));
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
   }
 })();
 </script>
