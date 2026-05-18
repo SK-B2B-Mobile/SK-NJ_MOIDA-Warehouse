@@ -11,7 +11,7 @@
 <style>
 :root{
   --bg:#080c12;--bg2:#0f1520;--bg3:#161e2e;--bg4:#1d2840;
-  --bd:rgba(255,255,255,.07);--bd2:rgba(255,255,255,.13);
+  --bd:rgba(255,255,255,.07);--bd2:rgba(255,255,255,.14);
   --t:#eef2f7;--t2:#b4bfcc;--t3:#6b7a8d;
   --blue:#3b82f6;--blue2:#2563eb;--blue-bg:rgba(59,130,246,.1);--blue-bd:rgba(59,130,246,.28);
   --green:#22c55e;--green-bg:rgba(34,197,94,.1);--green-bd:rgba(34,197,94,.28);
@@ -24,50 +24,67 @@
   --r:8px;--r2:12px;--r3:16px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height:100vh;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
-/* ── Layout ── */
-.shell{max-width:1360px;margin:0 auto;padding:0 24px 90px}
-@media(max-width:800px){.shell{padding:0 12px 90px}}
-/* ── Header ── */
-.hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--bd);margin-bottom:12px;position:sticky;top:0;background:var(--bg);z-index:100;gap:8px;flex-wrap:wrap}
-.hdr-brand{font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:-.1px;color:var(--t)}
-.hdr-right{display:flex;align-items:center;gap:8px}
-.hdr-clock{font-family:var(--mono);font-size:11px;color:var(--t3)}
-.sync{width:7px;height:7px;border-radius:50%;background:var(--green);transition:background .3s;flex-shrink:0}
+html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height:100vh;font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+
+/* Layout */
+.shell{max-width:1440px;margin:0 auto;padding:0 32px 100px}
+@media(max-width:900px){.shell{padding:0 16px 100px}}
+
+/* Header */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--bd);margin-bottom:14px;position:sticky;top:0;background:var(--bg);z-index:100;gap:10px;flex-wrap:wrap}
+.hdr-brand{font-family:var(--mono);font-size:15px;font-weight:800;letter-spacing:-.2px;color:var(--t)}
+.hdr-right{display:flex;align-items:center;gap:10px}
+.hdr-clock{font-family:var(--mono);font-size:12px;color:var(--t2)}
+.sync{width:8px;height:8px;border-radius:50%;background:var(--green);transition:background .3s;flex-shrink:0}
 .sync.busy{background:var(--amber);animation:pp 1s infinite}.sync.fail{background:var(--red)}
 @keyframes pp{0%,100%{opacity:1}50%{opacity:.2}}
-.worker-sel{background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r);color:var(--t);padding:6px 10px;font-family:var(--font);font-size:13px;cursor:pointer;outline:none;max-width:150px}
+.worker-sel{background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r);color:var(--t);padding:8px 13px;font-family:var(--font);font-size:14px;cursor:pointer;outline:none;max-width:170px}
 .worker-sel:focus{border-color:var(--blue)}
-/* ── Nav ── */
-.nav{display:flex;gap:2px;background:var(--bg2);border-radius:var(--r2);padding:3px;margin-bottom:14px;position:sticky;top:48px;z-index:99;border:1px solid var(--bd)}
-.nb{flex:1;padding:8px 4px;border:none;background:transparent;color:var(--t3);font-family:var(--font);font-size:10px;font-weight:700;cursor:pointer;border-radius:var(--r);transition:all .12s;display:flex;flex-direction:column;align-items:center;gap:2px;position:relative;letter-spacing:.03em;white-space:nowrap}
-.nb i{font-size:16px}.nb:hover{color:var(--t2);background:var(--bg3)}.nb.on{background:var(--blue);color:#fff}
-.nb-badge{position:absolute;top:3px;right:5px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 4px;min-width:14px;text-align:center;line-height:1.4}
-/* ── Pages ── */
+
+/* Nav */
+.nav{display:flex;gap:3px;background:var(--bg2);border-radius:var(--r2);padding:4px;margin-bottom:20px;position:sticky;top:54px;z-index:99;border:1px solid var(--bd)}
+.nb{flex:1;padding:10px 6px;border:none;background:transparent;color:var(--t3);font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;border-radius:var(--r);transition:all .12s;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative;letter-spacing:.04em;white-space:nowrap}
+.nb i{font-size:18px}.nb:hover{color:var(--t2);background:var(--bg3)}.nb.on{background:var(--blue);color:#fff}
+.nb-badge{position:absolute;top:4px;right:6px;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;line-height:1.4}
+
+/* Pages */
 .pg{display:none}.pg.on{display:block;animation:fu .16s ease}
-@keyframes fu{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
-/* ── Grid ── */
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-.g6{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
-@media(max-width:900px){.g5,.g6{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:580px){.g2,.g3{grid-template-columns:1fr}.g4,.g5,.g6{grid-template-columns:repeat(2,1fr)}}
-/* ── Metric cards ── */
-.mc{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r2);padding:12px 14px;position:relative;overflow:hidden}
-.mc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:2px 2px 0 0}
+@keyframes fu{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* Grid */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.g6{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}
+@media(max-width:1000px){.g5,.g6{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.g2,.g3{grid-template-columns:1fr}.g4,.g5,.g6{grid-template-columns:repeat(2,1fr)}}
+
+/* ── Metric cards (dashboard) ── */
+.mc{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r2);padding:20px 22px;position:relative;overflow:hidden;transition:border-color .2s}
+.mc:hover{border-color:var(--bd2)}
+.mc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:3px 3px 0 0}
 .mc.bl::before{background:var(--blue)}.mc.gr::before{background:var(--green)}.mc.am::before{background:var(--amber)}
 .mc.pu::before{background:var(--purple)}.mc.tl::before{background:var(--teal)}.mc.cy::before{background:var(--cyan)}.mc.rd::before{background:var(--red)}
-.mc-l{font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:3px}
-.mc-v{font-family:var(--mono);font-size:22px;font-weight:700;line-height:1.2}
-/* ── Card ── */
-.card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r2);padding:14px 16px;margin-bottom:10px}
-.card-t{font-weight:700;font-size:13px;margin-bottom:12px;display:flex;align-items:center;gap:7px}
-.section{font-size:10px;font-weight:700;color:var(--t2);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 9px;display:flex;align-items:center;gap:8px}
+.mc-l{font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.09em;text-transform:uppercase;margin-bottom:10px}
+.mc-v{font-family:var(--mono);font-size:36px;font-weight:800;line-height:1;letter-spacing:-1px}
+
+/* ── KPI summary cards ── */
+.kmc{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r2);padding:20px 22px;position:relative;overflow:hidden}
+.kmc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:3px 3px 0 0}
+.kmc.gr::before{background:var(--green)}.kmc.pu::before{background:var(--purple)}
+.kmc.tl::before{background:var(--teal)}.kmc.am::before{background:var(--amber)}.kmc.bl::before{background:var(--blue)}
+.kmc-l{font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.09em;text-transform:uppercase;margin-bottom:10px}
+.kmc-v{font-family:var(--mono);font-size:30px;font-weight:800;line-height:1;letter-spacing:-.5px}
+
+/* Card */
+.card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r2);padding:18px 20px;margin-bottom:12px}
+.card-t{font-weight:700;font-size:15px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.section{font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.1em;text-transform:uppercase;margin:20px 0 12px;display:flex;align-items:center;gap:10px}
 .section::after{content:'';flex:1;height:1px;background:var(--bd)}
-/* ── Badges ── */
-.badge{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap}
 .b-pick{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-bd)}
 .b-insp{background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-bd)}
 .b-pall{background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-bd)}
@@ -76,48 +93,68 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .b-live{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);animation:pulse 2s infinite}
 .b-saving{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-/* ── Stage pills ── */
-.srow{display:flex;gap:3px;align-items:center;flex-wrap:wrap}
-.sp{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;border:1px solid var(--bd);white-space:nowrap}
+
+/* Stage pills */
+.srow{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.sp{padding:4px 10px;border-radius:5px;font-size:12px;font-weight:700;border:1px solid var(--bd);white-space:nowrap;letter-spacing:.03em}
 .sp-wait{background:var(--bg3);color:var(--t3)}
 .sp-pick{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-bd)}
 .sp-insp{background:var(--purple-bg);color:var(--purple);border-color:var(--purple-bd)}
 .sp-pall{background:var(--teal-bg);color:var(--teal);border-color:var(--teal-bd)}
 .sp-done{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)}
-.sp-arr{color:var(--t3);font-size:10px}
-/* ── Stage tabs — redesigned ── */
-.stabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px}
-.stab{padding:12px 8px;border-radius:var(--r2);border:1px solid var(--bd2);background:var(--bg3);color:var(--t3);font-weight:700;cursor:pointer;text-align:center;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px;position:relative}
+.sp-arr{color:var(--t3);font-size:12px}
+
+/* Stage tabs */
+.stabs{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:16px}
+.stab{padding:14px 8px;border-radius:var(--r2);border:1px solid var(--bd2);background:var(--bg3);color:var(--t3);font-weight:700;cursor:pointer;text-align:center;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;position:relative;font-size:13px}
 .stab:hover{border-color:var(--t3);color:var(--t2)}
 .stab.pick.on{background:var(--blue-bg);border-color:var(--blue-bd);color:var(--blue);box-shadow:0 0 0 1px var(--blue-bd)}
 .stab.insp.on{background:var(--purple-bg);border-color:var(--purple-bd);color:var(--purple);box-shadow:0 0 0 1px var(--purple-bd)}
 .stab.pall.on{background:var(--teal-bg);border-color:var(--teal-bd);color:var(--teal);box-shadow:0 0 0 1px var(--teal-bd)}
-/* active dot on tab */
-.stab-dot{position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
-/* stage content panels */
-.stage-panel{animation:fu .16s ease}
-/* start card */
-.start-card{background:var(--bg2);border:2px solid var(--bd2);border-radius:var(--r3);padding:18px 20px;margin-bottom:12px}
-.start-card.pick{border-color:var(--blue-bd)}
-.start-card.insp{border-color:var(--purple-bd)}
-.start-card.pall{border-color:var(--teal-bd)}
-/* active session card — stage-colored */
-.session-card{background:var(--bg2);border-radius:var(--r2);padding:16px 18px;margin-bottom:10px;border-left:4px solid var(--bd2)}
-.session-card.pick{border-left-color:var(--blue);background:linear-gradient(135deg,rgba(59,130,246,.04),var(--bg2))}
-.session-card.insp{border-left-color:var(--purple);background:linear-gradient(135deg,rgba(168,85,247,.04),var(--bg2))}
-.session-card.pall{border-left-color:var(--teal);background:linear-gradient(135deg,rgba(20,184,166,.04),var(--bg2))}
-.session-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
-.session-title{font-family:var(--mono);font-weight:700;font-size:15px}
-.session-sub{font-size:11px;color:var(--t2);margin-top:2px}
-.session-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-.chip{display:inline-flex;align-items:center;gap:3px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;background:var(--bg3);border:1px solid var(--bd2);color:var(--t2)}
-.chip.hi{color:var(--amber);border-color:var(--amber-bd);background:var(--amber-bg)}
-/* activity feed rows */
-.act-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bd);font-size:12px}
-.act-row:last-child{border-bottom:none}
-.act-stage{font-weight:700;font-size:10px;width:38px;flex-shrink:0;letter-spacing:.04em}
-/* ── Buttons ── */
-.btn{padding:8px 14px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg3);color:var(--t);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:5px;position:relative;overflow:hidden;white-space:nowrap}
+.stab-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+
+/* ── Dashboard table — professional ── */
+.dash-tbl{width:100%;border-collapse:collapse}
+.dash-tbl thead{background:var(--bg3)}
+.dash-tbl th{
+  text-align:left;font-size:11px;color:var(--t3);
+  padding:12px 16px;border-bottom:2px solid var(--bd2);
+  font-weight:700;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap
+}
+.dash-tbl td{
+  padding:14px 16px;border-bottom:1px solid var(--bd);
+  font-size:14px;vertical-align:middle;white-space:nowrap
+}
+.dash-tbl tr:last-child td{border-bottom:none}
+.dash-tbl tbody tr{transition:background .1s}
+.dash-tbl tbody tr:hover td{background:rgba(255,255,255,.022)}
+.dash-tbl .oid{font-family:var(--mono);font-weight:800;font-size:15px;color:var(--t);letter-spacing:-.2px}
+.dash-tbl .num{font-family:var(--mono);font-size:14px;font-weight:600}
+.dash-tbl .dim{font-size:14px;color:var(--t2)}
+
+/* ── KPI table ── */
+.kpi-tbl{width:100%;border-collapse:collapse}
+.kpi-tbl thead{background:var(--bg3)}
+.kpi-tbl th{
+  text-align:left;font-size:11px;color:var(--t3);
+  padding:12px 16px;border-bottom:2px solid var(--bd2);
+  font-weight:700;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap
+}
+.kpi-tbl td{padding:13px 16px;border-bottom:1px solid var(--bd);font-size:14px;vertical-align:middle}
+.kpi-tbl tr:last-child td{border-bottom:none}
+.kpi-tbl tbody tr:hover td{background:rgba(255,255,255,.018)}
+
+/* Manager table */
+.mgr-tbl{width:100%;border-collapse:collapse}
+.mgr-tbl th{text-align:left;font-size:11px;color:var(--t3);padding:9px 10px;border-bottom:1px solid var(--bd2);font-weight:700;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.mgr-tbl td{padding:10px 10px;border-bottom:1px solid var(--bd);font-size:13px;vertical-align:middle}
+.mgr-tbl tr:last-child td{border-bottom:none}
+.mgr-tbl tbody tr:hover td{background:rgba(255,255,255,.01)}
+
+.mono{font-family:var(--mono);font-weight:500}
+
+/* Buttons */
+.btn{padding:9px 16px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg3);color:var(--t);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:6px;position:relative;overflow:hidden;white-space:nowrap}
 .btn:hover{background:var(--bg4);border-color:var(--t3)}.btn:active{transform:scale(.97)}
 .btn-blue{background:var(--blue);color:#fff;border-color:var(--blue)}.btn-blue:hover{background:var(--blue2)}
 .btn-green{background:var(--green);color:#000;border-color:var(--green)}
@@ -125,64 +162,76 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .btn-purple{background:var(--purple);color:#fff;border-color:var(--purple)}
 .btn-teal{background:var(--teal);color:#000;border-color:var(--teal)}
 .btn-amber{background:var(--amber);color:#000;border-color:var(--amber)}
-.btn-sm{padding:4px 9px;font-size:11px}
-.btn-lg{padding:14px 20px;font-size:14px;font-weight:700;border-radius:var(--r2)}
+.btn-sm{padding:5px 11px;font-size:12px}
+.btn-lg{padding:15px 22px;font-size:15px;font-weight:700;border-radius:var(--r2)}
 .btn-block{width:100%;justify-content:center}
 .btn:disabled{opacity:.28;cursor:not-allowed;pointer-events:none}
 .btn.saving::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);animation:sh 1s infinite}
 @keyframes sh{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
-/* ── Forms ── */
-.fg{margin-bottom:10px}
-.fl{display:block;font-size:11px;color:var(--t2);margin-bottom:3px;font-weight:600;letter-spacing:.02em}
-.fi{width:100%;padding:9px 12px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg3);color:var(--t);font-family:var(--font);font-size:13px;outline:none;transition:border-color .15s}
+
+/* Forms */
+.fg{margin-bottom:12px}
+.fl{display:block;font-size:12px;color:var(--t2);margin-bottom:4px;font-weight:600;letter-spacing:.02em}
+.fi{width:100%;padding:10px 13px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg3);color:var(--t);font-family:var(--font);font-size:14px;outline:none;transition:border-color .15s}
 .fi:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
 .fi::placeholder{color:var(--t3)}
-.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:440px){.frow{grid-template-columns:1fr}}
-/* ── Table ── */
-.tbl{width:100%;border-collapse:collapse}
-.tbl th{text-align:left;font-size:10px;color:var(--t3);padding:7px 9px;border-bottom:1px solid var(--bd2);font-weight:700;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
-.tbl td{padding:8px 9px;border-bottom:1px solid var(--bd);font-size:12px;vertical-align:middle}
-.tbl tr:last-child td{border-bottom:none}
-.tbl tr:hover td{background:rgba(255,255,255,.011)}
-.mono{font-family:var(--mono);font-size:11px;font-weight:500}
-/* ── Work entry card ── */
-.we{background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r2);padding:14px 16px;margin-bottom:8px;transition:border-color .2s,opacity .2s}
-.we.pending{border-color:var(--amber-bd);opacity:.88}
-.we-header{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:5px;flex-wrap:wrap}
-.we-title{font-family:var(--mono);font-weight:700;font-size:13px}
-.we-sub{font-size:11px;color:var(--t2);margin-top:2px}
-.we-meta{display:flex;gap:10px;font-size:11px;color:var(--t3);flex-wrap:wrap;margin-top:5px}
-.we-meta i{font-size:12px}
-/* ── Activity row ── */
-.act-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12px}
+
+/* Session cards */
+.session-card{background:var(--bg2);border-radius:var(--r2);padding:18px 20px;margin-bottom:12px;border-left:4px solid var(--bd2)}
+.session-card.pick{border-left-color:var(--blue);background:linear-gradient(135deg,rgba(59,130,246,.04),var(--bg2))}
+.session-card.insp{border-left-color:var(--purple);background:linear-gradient(135deg,rgba(168,85,247,.04),var(--bg2))}
+.session-card.pall{border-left-color:var(--teal);background:linear-gradient(135deg,rgba(20,184,166,.04),var(--bg2))}
+.session-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.session-title{font-family:var(--mono);font-weight:800;font-size:17px}
+.session-sub{font-size:13px;color:var(--t2);margin-top:3px}
+.session-chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:5px 13px;border-radius:20px;font-size:13px;font-weight:600;background:var(--bg3);border:1px solid var(--bd2);color:var(--t2)}
+.chip.hi{color:var(--amber);border-color:var(--amber-bd);background:var(--amber-bg)}
+
+/* Start card */
+.start-card{background:var(--bg2);border:2px solid var(--bd2);border-radius:var(--r3);padding:22px 24px;margin-bottom:14px}
+.start-card.pick{border-color:var(--blue-bd)}
+.start-card.insp{border-color:var(--purple-bd)}
+.start-card.pall{border-color:var(--teal-bd)}
+
+/* Activity row */
+.act-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd);font-size:14px}
 .act-row:last-child{border-bottom:none}
-.act-stage{font-weight:700;font-size:11px;width:36px;flex-shrink:0}
-/* ── End modal ── */
+.act-stage{font-weight:700;font-size:11px;width:42px;flex-shrink:0;letter-spacing:.05em}
+
+/* End modal */
 .end-modal-inner{text-align:center;padding:4px 0}
-.pallet-input{font-size:36px;font-weight:800;text-align:center;font-family:var(--mono);width:140px;margin:0 auto}
-/* ── KPI filters ── */
-.kpi-bar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-.kpi-bar label{font-size:11px;color:var(--t2);font-weight:600}
-.kpi-bar .fi{width:130px;padding:6px 9px;font-size:12px}
-/* ── Modal ── */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;padding:14px}
+.pallet-input{font-size:38px;font-weight:800;text-align:center;font-family:var(--mono);width:150px;margin:0 auto}
+
+/* KPI filters */
+.kpi-bar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.kpi-bar label{font-size:13px;color:var(--t2);font-weight:600}
+.kpi-bar .fi{width:145px;padding:8px 11px;font-size:13px}
+
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;align-items:center;justify-content:center;padding:16px}
 .modal-bg.show{display:flex}
-.modal{background:var(--bg2);border:1px solid var(--bd2);border-radius:var(--r3);width:100%;max-width:400px;max-height:88vh;overflow-y:auto;padding:22px}
-/* ── Toast ── */
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--bd2);color:var(--t);padding:9px 20px;border-radius:var(--r2);font-size:13px;font-weight:600;opacity:0;transition:all .28s;pointer-events:none;z-index:999;white-space:nowrap}
+.modal{background:var(--bg2);border:1px solid var(--bd2);border-radius:var(--r3);width:100%;max-width:420px;max-height:88vh;overflow-y:auto;padding:24px}
+
+/* Toast */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--bd2);color:var(--t);padding:11px 24px;border-radius:var(--r2);font-size:14px;font-weight:600;opacity:0;transition:all .28s;pointer-events:none;z-index:999;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.ok{border-color:var(--green);background:rgba(34,197,94,.1)}.toast.err{border-color:var(--red);background:rgba(239,68,68,.1)}
-/* ── Loading ── */
-.loading{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px}
-.spinner{width:30px;height:30px;border:3px solid var(--bd2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+
+/* Loading */
+.loading{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.spinner{width:34px;height:34px;border:3px solid var(--bd2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-/* ── Live timer on active cards ── */
-.elapsed-timer{color:var(--amber);font-weight:600;display:flex;align-items:center;gap:3px}
+
+/* Elapsed timer */
+.elapsed-timer{color:var(--amber);font-weight:600;display:flex;align-items:center;gap:4px;font-size:13px}
 .elapsed-timer i{animation:tick 2s infinite}
 @keyframes tick{0%,100%{opacity:1}50%{opacity:.4}}
-.empty{text-align:center;padding:26px 16px;color:var(--t3);font-size:12px}
-.empty i{font-size:26px;display:block;margin-bottom:5px;opacity:.3}
+
+.empty{text-align:center;padding:40px 20px;color:var(--t3);font-size:14px}
+.empty i{font-size:32px;display:block;margin-bottom:8px;opacity:.3}
 </style>
 </head>
 <body>
@@ -591,23 +640,24 @@ function renderDashTable(){
     const totalPallets=ws.filter(w=>w.stage==='PALL'&&w.endT&&w.pallets!==null).reduce((s,w)=>s+(w.pallets||0),0);
     const totalNet  =ws.filter(w=>w.endT&&w.netMin!==null).reduce((s,w)=>s+(w.netMin||0),0);
     const isMe=ws.some(w=>w.w===CW);
-    return`<tr${isMe?' style="background:rgba(59,130,246,.03)"':''}>
-      <td class="mono" style="font-weight:700;padding-left:12px">${o.id}</td>
-      <td style="color:var(--t2)">${o.ch}</td><td style="color:var(--t2)">${o.cu}</td>
-      <td style="font-size:11px">${workers.join(', ')||'<span style="color:var(--t3)">—</span>'}</td>
-      <td class="mono">${totalItems||'—'}</td>
-      <td class="mono">${totalQty||'—'}</td>
-      <td class="mono" style="color:var(--teal)">${totalPallets?fmtPallets(totalPallets):'—'}</td>
-      <td class="mono" style="color:var(--blue)">${totalNet?fmtMin(totalNet):'—'}</td>
+    return`<tr${isMe?' style="background:rgba(59,130,246,.04)"':''}>
+      <td><span class="oid">${o.id}</span></td>
+      <td><span class="dim">${o.ch}</span></td>
+      <td><span class="dim">${o.cu}</span></td>
+      <td style="font-size:13px;color:var(--t2)">${workers.join(', ')||'<span style="color:var(--t3)">—</span>'}</td>
+      <td><span class="num">${totalItems||'—'}</span></td>
+      <td><span class="num">${totalQty||'—'}</span></td>
+      <td><span class="num" style="color:var(--teal)">${totalPallets?fmtPallets(totalPallets):'—'}</span></td>
+      <td><span class="num" style="color:var(--blue)">${totalNet?fmtMin(totalNet):'—'}</span></td>
       <td>${stagePills(o.id)}</td>
-      <td style="padding-right:10px"><button class="btn btn-sm" style="padding:2px 6px;font-size:10px" onclick="showOrderDetail('${o.id}')"><i class="ri-eye-line"></i></button></td>
+      <td><button class="btn btn-sm" onclick="showOrderDetail('${o.id}')"><i class="ri-eye-line"></i></button></td>
     </tr>`;
   });
 
-  document.getElementById('dashTable').innerHTML=`<div class="card" style="padding:0;overflow-x:auto">
-    <table class="tbl" style="min-width:750px"><thead><tr>
-      <th style="padding-left:12px">Order</th><th>Ch.</th><th>Customer</th><th>Workers</th>
-      <th>Items</th><th>QTY</th><th>Pallets</th><th>Net time</th><th>Stage</th><th></th>
+  document.getElementById('dashTable').innerHTML=`<div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)">
+    <table class="dash-tbl" style="min-width:800px"><thead><tr>
+      <th>Order</th><th>Ch.</th><th>Customer</th><th>Workers</th>
+      <th>Items</th><th>QTY</th><th>Pallets</th><th>Net time</th><th>Stage progress</th><th></th>
     </tr></thead><tbody>${trs.join('')}</tbody></table></div>`;
 
   const pg=document.getElementById('dashPager');
@@ -1274,20 +1324,18 @@ function renderKPI(){
   const totPall =done.filter(w=>['INSP','PALL'].includes(w.stage)).reduce((s,w)=>s+(w.pallets||0),0);
   const totMin  =done.reduce((s,w)=>s+(w.netMin||0),0);
 
-  let html=`<div style="font-size:11px;color:var(--t3);margin-bottom:10px"><i class="ri-calendar-line"></i> ${label} — <strong style="color:var(--t2)">${done.length}</strong> completed sessions</div>
-  <div class="g4" style="margin-bottom:14px">
+  let html=`<div style="font-size:12px;color:var(--t3);margin-bottom:14px;font-weight:600"><i class="ri-calendar-line"></i> ${label} — <strong style="color:var(--t2)">${done.length}</strong> completed sessions</div>
+  <div class="g4" style="margin-bottom:18px">
     ${[{l:'Sessions done',v:done.length,c:'gr'},{l:'Items picked',v:totItems,c:'pu'},
        {l:'QTY picked',v:totQty,c:'tl'},{l:'Pallets (INSP+PALL)',v:fmtPallets(totPall),c:'am'}]
-    .map(m=>`<div class="mc ${m.c}"><div class="mc-l">${m.l}</div><div class="mc-v" style="font-size:18px;color:var(--${{gr:'green',pu:'purple',tl:'teal',am:'amber'}[m.c]})">${m.v}</div></div>`).join('')}</div>`;
-
-  // Net time summary card
-  html+=`<div class="mc bl" style="margin-bottom:14px;padding:14px 16px"><div class="mc-l">Total net work time (lunch excluded)</div><div class="mc-v" style="font-size:20px;color:var(--blue)">${fmtMin(totMin)}</div></div>`;
+    .map(m=>`<div class="kmc ${m.c}"><div class="kmc-l">${m.l}</div><div class="kmc-v" style="color:var(--${{gr:'green',pu:'purple',tl:'teal',am:'amber'}[m.c]})">${m.v}</div></div>`).join('')}</div>
+  <div class="kmc bl" style="margin-bottom:18px"><div class="kmc-l">Total net work time (lunch 12:00–13:00 excluded)</div><div class="kmc-v" style="color:var(--blue)">${fmtMin(totMin)}</div></div>`;
 
   // Worker × Stage breakdown
   html+=`<div class="section">Worker × Stage — detail</div>
-  <div class="card" style="padding:0;overflow-x:auto"><table class="tbl" style="min-width:680px">
+  <div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)"><table class="kpi-tbl" style="min-width:700px">
   <thead><tr>
-    <th style="padding-left:12px">Worker</th><th>Stage</th>
+    <th>Worker</th><th>Stage</th>
     <th>Sessions</th><th>Items</th><th>QTY</th><th>Pallets</th>
     <th>Net time</th><th>Avg/session</th><th>Speed</th>
   </tr></thead><tbody>`;
@@ -1306,18 +1354,18 @@ function renderKPI(){
       const avg=Math.round(st.min/st.n);
       const speed=stage==='PICK'&&st.min?Math.round(st.items/st.min*60):stage!=='PICK'&&st.min&&st.pallets?+(st.pallets/st.min*60).toFixed(1):null;
       const speedStr=speed?speed+(stage==='PICK'?' i/hr':' pall/hr'):'—';
-      html+=`<tr${wk===CW?' style="background:rgba(59,130,246,.03)"':''}>
-        <td style="padding-left:12px;font-weight:${first?700:400};${!first?'color:transparent':''}">
-          ${wk}${wk===CW?' <span style="color:var(--blue);font-size:9px">YOU</span>':''}
+      html+=`<tr${wk===CW?' style="background:rgba(59,130,246,.04)"':''}>
+        <td style="font-weight:${first?800:400};${!first?'color:transparent':''}">
+          ${wk}${wk===CW?' <span style="color:var(--blue);font-size:11px;font-weight:700"> YOU</span>':''}
         </td>
-        <td><span style="color:${SCOL[stage]};font-weight:700;font-size:11px">${stage}</span></td>
-        <td class="mono">${st.n}</td>
-        <td class="mono" style="color:var(--purple)">${st.items||'—'}</td>
-        <td class="mono" style="color:var(--teal)">${st.qty||'—'}</td>
-        <td class="mono" style="color:var(--amber)">${st.pallets?fmtPallets(st.pallets):'—'}</td>
-        <td class="mono" style="color:var(--blue)">${fmtMin(st.min)}</td>
-        <td class="mono">${avg?fmtMin(avg):'—'}</td>
-        <td class="mono" style="color:var(--green)">${speedStr}</td>
+        <td><span style="color:${SCOL[stage]};font-weight:800;font-size:13px;letter-spacing:.04em">${stage}</span></td>
+        <td style="font-family:var(--mono);font-size:15px;font-weight:700">${st.n}</td>
+        <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--purple)">${st.items||'—'}</td>
+        <td style="font-family:var(--mono);font-size:14px;color:var(--teal)">${st.qty||'—'}</td>
+        <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--amber)">${st.pallets?fmtPallets(st.pallets):'—'}</td>
+        <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--blue)">${fmtMin(st.min)}</td>
+        <td style="font-family:var(--mono);font-size:14px">${avg?fmtMin(avg):'—'}</td>
+        <td style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--green)">${speedStr}</td>
       </tr>`;
       first=false;
     });
@@ -1326,20 +1374,22 @@ function renderKPI(){
 
   // Worker totals summary
   html+=`<div class="section">Worker totals</div>
-  <div class="card" style="padding:0;overflow-x:auto"><table class="tbl" style="min-width:560px">
-  <thead><tr><th style="padding-left:12px">Worker</th><th>Sessions</th><th>Items picked</th><th>Pallets (INSP+PALL)</th><th>Net time</th><th>Bar</th></tr></thead><tbody>`;
+  <div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)"><table class="kpi-tbl" style="min-width:580px">
+  <thead><tr><th>Worker</th><th>Sessions</th><th>Items picked</th><th>Pallets (INSP+PALL)</th><th>Net time</th><th>Performance</th></tr></thead><tbody>`;
   const maxI=Math.max(...workerTotals.map(x=>x.tI),1);
   workerTotals.sort((a,b)=>b.tI-a.tI).forEach(({wk,totN,tI,tQ,tP,tM})=>{
     const bar=Math.round(tI/maxI*100);
-    html+=`<tr${wk===CW?' style="background:rgba(59,130,246,.03)"':''}>
-      <td style="padding-left:12px;font-weight:700">${wk}${wk===CW?' <span style="color:var(--blue);font-size:9px">YOU</span>':''}</td>
-      <td class="mono">${totN}</td>
-      <td class="mono" style="color:var(--purple);font-weight:600">${tI}</td>
-      <td class="mono" style="color:var(--amber)">${tP?fmtPallets(tP):'—'}</td>
-      <td class="mono" style="color:var(--blue)">${fmtMin(tM)}</td>
-      <td><div style="display:flex;align-items:center;gap:7px">
-        <div style="width:90px;height:5px;background:var(--bg3);border-radius:3px"><div style="height:100%;width:${bar}%;background:var(--green);border-radius:3px"></div></div>
-        <span style="font-size:10px;color:var(--t3)">${bar}%</span>
+    html+=`<tr${wk===CW?' style="background:rgba(59,130,246,.04)"':''}>
+      <td style="font-weight:800;font-size:15px">${wk}${wk===CW?' <span style="color:var(--blue);font-size:11px;font-weight:700"> YOU</span>':''}</td>
+      <td style="font-family:var(--mono);font-size:15px;font-weight:700">${totN}</td>
+      <td style="font-family:var(--mono);font-size:16px;font-weight:800;color:var(--purple)">${tI}</td>
+      <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--amber)">${tP?fmtPallets(tP):'—'}</td>
+      <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--blue)">${fmtMin(tM)}</td>
+      <td><div style="display:flex;align-items:center;gap:10px">
+        <div style="width:100px;height:7px;background:var(--bg3);border-radius:4px">
+          <div style="height:100%;width:${bar}%;background:var(--green);border-radius:4px"></div>
+        </div>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--t2);font-weight:600">${bar}%</span>
       </div></td>
     </tr>`;
   });
@@ -1358,8 +1408,8 @@ function renderKPI(){
       const v=r[metric];const bar=Math.round(v/maxV*100);
       html+=`<div style="margin-bottom:9px">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
-          <span>${['🥇','🥈','🥉'][i]||''} <span style="font-weight:${r.wk===CW?700:400}">${r.wk}</span></span>
-          <span class="mono" style="color:${col}">${stage==='PICK'?v:fmtPallets(v)} ${metric}</span>
+          <span style="font-size:14px">${['🥇','🥈','🥉'][i]||''} <span style="font-weight:${r.wk===CW?800:500}">${r.wk}</span></span>
+          <span style="font-family:var(--mono);font-size:15px;font-weight:700;color:${col}">${stage==='PICK'?v:fmtPallets(v)} ${metric}</span>
         </div>
         <div style="height:4px;background:var(--bg3);border-radius:3px"><div style="height:100%;width:${bar}%;background:${col};border-radius:3px"></div></div>
       </div>`;
@@ -1443,7 +1493,7 @@ window.renderEntries=function(){
   const q=(document.getElementById('entrySearch')?.value||'').toUpperCase();
   const ws=q?S.works.filter(w=>w.oid.toUpperCase().includes(q)||w.w.toUpperCase().includes(q)):S.works.slice(0,50);
   document.getElementById('entryTable').innerHTML=ws.length?
-    `<table class="tbl"><thead><tr><th>Order</th><th>Worker</th><th>Stage</th><th>Items</th><th>QTY</th><th>Pallets</th><th>Start</th><th>End</th><th>Net</th><th></th></tr></thead><tbody>${
+    `<table class="mgr-tbl"><thead><tr><th>Order</th><th>Worker</th><th>Stage</th><th>Items</th><th>QTY</th><th>Pallets</th><th>Start</th><th>End</th><th>Net</th><th></th></tr></thead><tbody>${
       ws.map(w=>`<tr>
         <td class="mono">${w.oid}</td><td>${w.w}</td>
         <td><span style="color:${SCOL[w.stage]||'var(--t)'};font-weight:700;font-size:11px">${w.stage}</span></td>
