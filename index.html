@@ -366,7 +366,20 @@ async function apiGet(op){
 
 async function loadData(){
   const r=await apiGet('listAll');
-  if(r.ok){S.orders=r.orders||[];S.works=r.works||[];S.workers=r.workers||[];S.pin=r.pin||'1234';}
+  if(r.ok){
+    S.orders=r.orders||[];
+    S.workers=r.workers||[];
+    S.pin=r.pin||'1234';
+    // Normalize works — handle legacy entries missing stage field
+    S.works=(r.works||[]).map(w=>({
+      ...w,
+      stage: w.stage&&['PICK','INSP','PALL'].includes(w.stage) ? w.stage : 'PICK',
+      items:  w.items  !== null && w.items  !== undefined ? w.items  : null,
+      qty:    w.qty    !== null && w.qty    !== undefined ? w.qty    : null,
+      pallets:w.pallets!== null && w.pallets!== undefined ? w.pallets: null,
+      netMin: w.netMin !== null && w.netMin !== undefined ? w.netMin : null,
+    }));
+  }
   return r.ok;
 }
 
@@ -646,9 +659,11 @@ function renderActFeed(){
   if(!ws.length){feed.innerHTML='<div style="font-size:12px;color:var(--t3);padding:4px 0">No entries for this order yet</div>';return;}
   feed.innerHTML=ws.map(w=>{
     const done=!!w.endT;
-    const detail=w.stage==='PICK'?`${w.items||0}i/${w.qty||0}q`:(w.pallets!==null&&done?`${fmtPallets(w.pallets)} pallets`:'');
+    const stage=w.stage&&['PICK','INSP','PALL'].includes(w.stage)?w.stage:'PICK';
+    const stageCol=SCOL[stage]||'var(--t)';
+    const detail=stage==='PICK'?`${w.items||0}i/${w.qty||0}q`:(w.pallets!==null&&done?`${fmtPallets(w.pallets)} pallets`:'');
     return`<div class="act-row">
-      <span class="act-stage" style="color:${SCOL[w.stage]||'var(--t)'}">${w.stage}</span>
+      <span class="act-stage" style="color:${stageCol}">${stage}</span>
       <span style="flex:1;font-weight:500">${w.w}</span>
       <span class="mono" style="color:var(--t3)">${detail}</span>
       <span class="mono" style="color:var(--t2)">${w.startT}${done?' → '+w.endT:' → now'}</span>
@@ -669,20 +684,25 @@ function renderMyActive(){
   document.getElementById('myActive').innerHTML=active.length?active.map(w=>{
     const o=S.orders.find(x=>x.id===w.oid);
     const inf=!!_pending[w.id];
-    return`<div class="we${inf?' pending':''}" style="border-color:${SBDCOL[w.stage]}">
+    // Safely handle missing/unknown stage (legacy data)
+    const stage=w.stage&&['PICK','INSP','PALL'].includes(w.stage)?w.stage:'PICK';
+    const stageCol  =SCOL[stage]    ||'var(--blue)';
+    const stageBdCol=SBDCOL[stage]  ||'var(--blue-bd)';
+    const endLabel  =SELABEL[stage] ||'End Work';
+    return`<div class="we${inf?' pending':''}" style="border-color:${stageBdCol}">
       <div class="we-header">
         <div>
-          <div class="we-title">${w.oid} <span style="color:${SCOL[w.stage]};font-size:11px;font-weight:700">${w.stage}</span></div>
-          <div class="we-sub">${o?.ch}·${o?.cu}</div>
+          <div class="we-title">${w.oid} <span style="color:${stageCol};font-size:11px;font-weight:700">${stage}</span></div>
+          <div class="we-sub">${o?.ch||''}·${o?.cu||''}</div>
         </div>
         ${inf?'<span class="badge b-saving">Saving...</span>':'<span class="badge b-live">Active</span>'}
       </div>
       <div class="we-meta">
-        ${w.stage==='PICK'?`<span><i class="ri-box-3-line"></i> ${w.items} items</span><span><i class="ri-stack-line"></i> ${w.qty} QTY</span>`:''}
-        <span><i class="ri-time-line"></i> Started ${w.startT}</span>
+        ${stage==='PICK'&&w.items?`<span><i class="ri-box-3-line"></i> ${w.items} items</span><span><i class="ri-stack-line"></i> ${w.qty} QTY</span>`:''}
+        <span><i class="ri-time-line"></i> Started ${w.startT||'—'}</span>
       </div>
-      <button class="btn btn-green btn-block btn-lg" style="margin-top:12px" onclick="endWork('${w.id}','${w.stage}')" ${inf?'disabled':''}>
-        <i class="ri-checkbox-circle-line"></i> ${SELABEL[w.stage]}
+      <button class="btn btn-green btn-block btn-lg" style="margin-top:12px" onclick="endWork('${w.id}','${stage}')" ${inf?'disabled':''}>
+        <i class="ri-checkbox-circle-line"></i> ${endLabel}
       </button>
     </div>`;
   }).join(''):'<div style="font-size:12px;color:var(--t3);padding:4px 0">No active sessions</div>';
