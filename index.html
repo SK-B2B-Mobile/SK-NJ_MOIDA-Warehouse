@@ -1120,20 +1120,6 @@ function doStartWork(oid, items, qty) {
     }
   );
 }
-      _startLock = false;
-      updateBadges();
-      renderStageContent();
-    },
-    () => {
-      S.works = S.works.filter(w => w.id !== tid);
-      delete _pending[tid];
-      _startLock = false;
-      toast('⚠ Save failed — try again', 'err');
-      updateBadges();
-      renderStageContent();
-    }
-  );
-}
 
 // Round to nearest 0.5 — rule: < 0.5 fraction → round down to .5, >= 0.5 fraction → round up to 1.0
 // e.g. 0.3→0.5, 0.7→1.0, 1.3→1.5, 3.2→3.5, 3.6→4.0
