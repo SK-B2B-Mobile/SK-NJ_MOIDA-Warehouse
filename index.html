@@ -225,8 +225,26 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .spinner{width:34px;height:34px;border:3px solid var(--bd2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* Elapsed timer */
-.elapsed-timer{color:var(--amber);font-weight:600;display:flex;align-items:center;gap:4px;font-size:13px}
+/* ── Custom select dropdown ── */
+.custom-select-wrap{position:relative;display:block}
+.custom-select{
+  appearance:none;-webkit-appearance:none;
+  padding-right:38px !important;
+  cursor:pointer;
+  background:var(--bg3);
+  transition:border-color .15s, box-shadow .15s;
+}
+.custom-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
+.custom-select-arrow{
+  position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  color:var(--t3);font-size:18px;pointer-events:none;
+  transition:transform .2s, color .2s;
+}
+.custom-select:focus ~ .custom-select-arrow{color:var(--blue);transform:translateY(-50%) rotate(180deg)}
+/* Option styling — limited browser support but improves Chromium */
+.custom-select option{background:var(--bg3);color:var(--t);padding:8px 12px}
+.custom-select option:checked{background:var(--blue);color:#fff}
+.custom-select option[value=""]{color:var(--t3)}
 .elapsed-timer i{animation:tick 2s infinite}
 @keyframes tick{0%,100%{opacity:1}50%{opacity:.4}}
 
@@ -337,8 +355,30 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
         <div class="card-t"><i class="ri-file-list-3-line" style="color:var(--blue)"></i> Orders</div>
         <div class="fg"><label class="fl">Order number</label><input class="fi" id="newOrderId" placeholder="e.g. IM003232"></div>
         <div class="frow">
-          <div class="fg"><label class="fl">Channel</label><input class="fi" id="newOrderCh" placeholder="e.g. NJ"></div>
-          <div class="fg"><label class="fl">Customer</label><input class="fi" id="newOrderCu" placeholder="e.g. MOIDA"></div>
+          <div class="fg">
+            <label class="fl">Channel</label>
+            <div class="custom-select-wrap">
+              <select class="fi custom-select" id="newOrderCh">
+                <option value="">— Select channel —</option>
+                <option value="NJ">NJ</option>
+                <option value="CA">CA</option>
+              </select>
+              <i class="ri-arrow-down-s-line custom-select-arrow"></i>
+            </div>
+          </div>
+          <div class="fg">
+            <label class="fl">Customer</label>
+            <div class="custom-select-wrap">
+              <select class="fi custom-select" id="newOrderCu">
+                <option value="">— Select customer —</option>
+                <option value="MOIDA">MOIDA</option>
+                <option value="NJ(PURCHASE)">NJ (PURCHASE)</option>
+                <option value="WHOLESALE">WHOLESALE</option>
+                <option value="OTHER">OTHER (기타)</option>
+              </select>
+              <i class="ri-arrow-down-s-line custom-select-arrow"></i>
+            </div>
+          </div>
         </div>
         <button class="btn btn-blue btn-sm" onclick="addOrder()"><i class="ri-add-line"></i> Add order</button>
         <div class="section" style="margin-top:12px">All orders</div>
@@ -1472,11 +1512,16 @@ window.delWorker=function(n){
 };
 window.addOrder=function(){
   const id=document.getElementById('newOrderId').value.trim();
-  const ch=document.getElementById('newOrderCh').value.trim()||'-';
-  const cu=document.getElementById('newOrderCu').value.trim()||'-';
-  if(!id){toast('Enter order #','err');return;}if(S.orders.find(o=>o.id===id)){toast('Already exists','err');return;}
+  const ch=document.getElementById('newOrderCh').value;
+  const cu=document.getElementById('newOrderCu').value;
+  if(!id){toast('Enter order number','err');return;}
+  if(!ch){toast('Select a channel','err');return;}
+  if(!cu){toast('Select a customer','err');return;}
+  if(S.orders.find(o=>o.id===id)){toast('Order already exists','err');return;}
   S.orders.push({id,ch,cu,at:''});toast(id+' added','ok');
-  document.getElementById('newOrderId').value='';document.getElementById('newOrderCh').value='';document.getElementById('newOrderCu').value='';
+  document.getElementById('newOrderId').value='';
+  document.getElementById('newOrderCh').value='';
+  document.getElementById('newOrderCu').value='';
   R.mgr();
   apiBg('upsertOrder',{id,ch,cu},()=>{},()=>{S.orders=S.orders.filter(o=>o.id!==id);toast('⚠ Save failed','err');R.mgr();});
 };
@@ -1489,9 +1534,36 @@ window.delOrder=function(id){
 };
 window.editOrder=function(oid){
   const o=S.orders.find(x=>x.id===oid);if(!o)return;
+  const chOpts=['NJ','CA'].map(v=>`<option value="${v}"${o.ch===v?' selected':''}>${v}</option>`).join('');
+  const cuOpts=[
+    {v:'MOIDA',l:'MOIDA'},
+    {v:'NJ(PURCHASE)',l:'NJ (PURCHASE)'},
+    {v:'WHOLESALE',l:'WHOLESALE'},
+    {v:'OTHER',l:'OTHER (기타)'}
+  ].map(({v,l})=>`<option value="${v}"${o.cu===v?' selected':''}>${l}</option>`).join('');
+
   openModal(`<div style="font-size:15px;font-weight:700;margin-bottom:14px"><i class="ri-edit-line" style="color:var(--amber)"></i> Edit order</div>
     <div class="fg"><label class="fl">Order number</label><input class="fi" id="eoId" value="${o.id}"></div>
-    <div class="frow"><div class="fg"><label class="fl">Channel</label><input class="fi" id="eoCh" value="${o.ch}"></div><div class="fg"><label class="fl">Customer</label><input class="fi" id="eoCu" value="${o.cu}"></div></div>
+    <div class="frow">
+      <div class="fg">
+        <label class="fl">Channel</label>
+        <div class="custom-select-wrap">
+          <select class="fi custom-select" id="eoCh">
+            <option value="">— Select —</option>${chOpts}
+          </select>
+          <i class="ri-arrow-down-s-line custom-select-arrow"></i>
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl">Customer</label>
+        <div class="custom-select-wrap">
+          <select class="fi custom-select" id="eoCu">
+            <option value="">— Select —</option>${cuOpts}
+          </select>
+          <i class="ri-arrow-down-s-line custom-select-arrow"></i>
+        </div>
+      </div>
+    </div>
     <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:12px">
       <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
       <button class="btn btn-blue btn-sm" onclick="saveOrder('${oid}')"><i class="ri-check-line"></i> Save</button>
