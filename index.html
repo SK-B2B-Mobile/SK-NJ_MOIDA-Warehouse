@@ -225,26 +225,51 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .spinner{width:34px;height:34px;border:3px solid var(--bd2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* ── Custom select dropdown ── */
+/* ── Custom select dropdown (edit modal) ── */
 .custom-select-wrap{position:relative;display:block}
-.custom-select{
-  appearance:none;-webkit-appearance:none;
-  padding-right:38px !important;
-  cursor:pointer;
-  background:var(--bg3);
-  transition:border-color .15s, box-shadow .15s;
-}
+.custom-select{appearance:none;-webkit-appearance:none;padding-right:38px !important;cursor:pointer;background:var(--bg3)}
 .custom-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
-.custom-select-arrow{
-  position:absolute;right:12px;top:50%;transform:translateY(-50%);
-  color:var(--t3);font-size:18px;pointer-events:none;
-  transition:transform .2s, color .2s;
-}
+.custom-select-arrow{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:18px;pointer-events:none;transition:transform .2s,color .2s}
 .custom-select:focus ~ .custom-select-arrow{color:var(--blue);transform:translateY(-50%) rotate(180deg)}
-/* Option styling — limited browser support but improves Chromium */
-.custom-select option{background:var(--bg3);color:var(--t);padding:8px 12px}
-.custom-select option:checked{background:var(--blue);color:#fff}
+.custom-select option{background:var(--bg3);color:var(--t)}
 .custom-select option[value=""]{color:var(--t3)}
+
+/* ── Chip group selector ── */
+.chip-group{
+  display:flex;gap:7px;flex-wrap:wrap;
+  padding:10px;
+  background:var(--bg3);
+  border:1px solid var(--bd2);
+  border-radius:var(--r2);
+  transition:border-color .15s;
+}
+.chip-group:focus-within{border-color:var(--blue-bd)}
+.chip-opt{
+  padding:9px 16px;
+  border-radius:var(--r);
+  border:1px solid var(--bd2);
+  background:var(--bg4);
+  color:var(--t3);
+  font-family:var(--font);
+  font-size:13px;font-weight:700;
+  cursor:pointer;
+  transition:all .13s;
+  display:flex;flex-direction:column;align-items:center;gap:1px;
+  line-height:1.2;
+  white-space:nowrap;
+}
+.chip-opt:hover{border-color:var(--t2);color:var(--t2);background:var(--bg2)}
+.chip-opt.selected{
+  background:var(--blue);
+  border-color:var(--blue);
+  color:#fff;
+  box-shadow:0 2px 8px rgba(59,130,246,.35);
+}
+.chip-sub{
+  font-size:10px;font-weight:600;
+  opacity:.75;letter-spacing:.04em;
+  text-transform:uppercase;
+}
 .elapsed-timer i{animation:tick 2s infinite}
 @keyframes tick{0%,100%{opacity:1}50%{opacity:.4}}
 
@@ -353,35 +378,54 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
       </div>
       <div class="card">
         <div class="card-t"><i class="ri-file-list-3-line" style="color:var(--blue)"></i> Orders</div>
-        <div class="fg"><label class="fl">Order number</label><input class="fi" id="newOrderId" placeholder="e.g. IM003232"></div>
-        <div class="frow">
-          <div class="fg">
-            <label class="fl">Channel</label>
-            <div class="custom-select-wrap">
-              <select class="fi custom-select" id="newOrderCh">
-                <option value="">— Select channel —</option>
-                <option value="NJ">NJ</option>
-                <option value="CA">CA</option>
-              </select>
-              <i class="ri-arrow-down-s-line custom-select-arrow"></i>
-            </div>
+
+        <!-- Order number -->
+        <div class="fg">
+          <label class="fl">Order number</label>
+          <input class="fi" id="newOrderId" placeholder="e.g. IM003232"
+            oninput="updateOrderPreview()"
+            style="font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.5px">
+        </div>
+
+        <!-- Channel picker -->
+        <div class="fg">
+          <label class="fl">Channel</label>
+          <div class="chip-group" id="chGroup">
+            <button type="button" class="chip-opt" data-val="NJ" onclick="pickChip('chGroup','NJ')">NJ</button>
+            <button type="button" class="chip-opt" data-val="CA" onclick="pickChip('chGroup','CA')">CA</button>
           </div>
-          <div class="fg">
-            <label class="fl">Customer</label>
-            <div class="custom-select-wrap">
-              <select class="fi custom-select" id="newOrderCu">
-                <option value="">— Select customer —</option>
-                <option value="MOIDA">MOIDA</option>
-                <option value="NJ(PURCHASE)">NJ (PURCHASE)</option>
-                <option value="WHOLESALE">WHOLESALE</option>
-                <option value="OTHER">OTHER (기타)</option>
-              </select>
-              <i class="ri-arrow-down-s-line custom-select-arrow"></i>
-            </div>
+          <input type="hidden" id="newOrderCh">
+        </div>
+
+        <!-- Customer picker -->
+        <div class="fg">
+          <label class="fl">Customer</label>
+          <div class="chip-group" id="cuGroup">
+            <button type="button" class="chip-opt" data-val="MOIDA(ORANGE)"   onclick="pickChip('cuGroup','MOIDA(ORANGE)')">MOIDA<span class="chip-sub">ORANGE</span></button>
+            <button type="button" class="chip-opt" data-val="MOIDA(ONTARIO)"  onclick="pickChip('cuGroup','MOIDA(ONTARIO)')">MOIDA<span class="chip-sub">ONTARIO</span></button>
+            <button type="button" class="chip-opt" data-val="NJ(PURCHASE)"    onclick="pickChip('cuGroup','NJ(PURCHASE)')">NJ<span class="chip-sub">PURCHASE</span></button>
+            <button type="button" class="chip-opt" data-val="WHOLESALE"       onclick="pickChip('cuGroup','WHOLESALE')">WHOLESALE</button>
+            <button type="button" class="chip-opt" data-val="OTHER"           onclick="pickChip('cuGroup','OTHER')">OTHER</button>
+          </div>
+          <input type="hidden" id="newOrderCu">
+        </div>
+
+        <!-- Preview + Add -->
+        <div id="orderPreview" style="display:none;background:var(--bg3);border:1px solid var(--blue-bd);border-radius:var(--r);padding:10px 14px;margin-bottom:12px;font-size:13px">
+          <span style="color:var(--t3);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Preview</span>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap">
+            <span class="preview-id" id="prevId" style="font-family:var(--mono);font-weight:800;font-size:15px;color:var(--t)"></span>
+            <span class="badge b-pick" id="prevCh" style="font-size:12px"></span>
+            <span style="color:var(--t2);font-weight:600" id="prevCu"></span>
           </div>
         </div>
-        <button class="btn btn-blue btn-sm" onclick="addOrder()"><i class="ri-add-line"></i> Add order</button>
-        <div class="section" style="margin-top:12px">All orders</div>
+
+        <button class="btn btn-blue btn-block" id="btnAddOrder" onclick="addOrder()" disabled
+          style="padding:13px;font-size:14px;font-weight:700;opacity:.35">
+          <i class="ri-add-circle-line"></i> Add Order
+        </button>
+
+        <div class="section" style="margin-top:16px">All orders</div>
         <div id="orderList" style="max-height:300px;overflow-y:auto"></div>
       </div>
     </div>
@@ -1510,20 +1554,76 @@ window.delWorker=function(n){
   S.workers=S.workers.filter(w=>w!==n);apiBg('setSettings',{workers:S.workers});
   popWorker();toast(n+' removed','ok');R.mgr();
 };
-window.addOrder=function(){
-  const id=document.getElementById('newOrderId').value.trim();
-  const ch=document.getElementById('newOrderCh').value;
-  const cu=document.getElementById('newOrderCu').value;
-  if(!id){toast('Enter order number','err');return;}
-  if(!ch){toast('Select a channel','err');return;}
-  if(!cu){toast('Select a customer','err');return;}
-  if(S.orders.find(o=>o.id===id)){toast('Order already exists','err');return;}
-  S.orders.push({id,ch,cu,at:''});toast(id+' added','ok');
-  document.getElementById('newOrderId').value='';
-  document.getElementById('newOrderCh').value='';
-  document.getElementById('newOrderCu').value='';
+function editChipPick(groupId, val) {
+  const group = document.getElementById(groupId); if (!group) return;
+  group.querySelectorAll('.chip-opt').forEach(b => b.classList.toggle('selected', b.dataset.val === val));
+  const hiddenId = groupId === 'editChGroup' ? 'eoCh' : 'eoCu';
+  const hidden = document.getElementById(hiddenId);
+  if (hidden) hidden.value = val;
+}
+
+// ── Chip group selector ──────────────────────────────
+function pickChip(groupId, val) {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  // Toggle selection
+  group.querySelectorAll('.chip-opt').forEach(btn => {
+    btn.classList.toggle('selected', btn.dataset.val === val);
+  });
+  // Write to hidden input
+  const hiddenId = groupId === 'chGroup' ? 'newOrderCh' : 'newOrderCu';
+  const hidden = document.getElementById(hiddenId);
+  if (hidden) hidden.value = val;
+  updateOrderPreview();
+}
+
+function updateOrderPreview() {
+  const id = document.getElementById('newOrderId')?.value.trim();
+  const ch = document.getElementById('newOrderCh')?.value;
+  const cu = document.getElementById('newOrderCu')?.value;
+  const preview = document.getElementById('orderPreview');
+  const btn     = document.getElementById('btnAddOrder');
+  if (!preview || !btn) return;
+
+  const ready = id && ch && cu;
+  btn.disabled  = !ready;
+  btn.style.opacity = ready ? '1' : '.35';
+
+  if (ready) {
+    preview.style.display = 'block';
+    document.getElementById('prevId').textContent = id;
+    document.getElementById('prevCh').textContent = ch;
+    document.getElementById('prevCu').textContent = cu;
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+window.addOrder = function() {
+  const id = document.getElementById('newOrderId')?.value.trim();
+  const ch = document.getElementById('newOrderCh')?.value;
+  const cu = document.getElementById('newOrderCu')?.value;
+  if (!id) { toast('Enter order number', 'err'); return; }
+  if (!ch) { toast('Select a channel', 'err'); return; }
+  if (!cu) { toast('Select a customer', 'err'); return; }
+  if (S.orders.find(o => o.id === id)) { toast('Order already exists', 'err'); return; }
+
+  S.orders.push({ id, ch, cu, at: '' });
+  toast(`${id} added ✓`, 'ok');
+
+  // Reset form
+  document.getElementById('newOrderId').value = '';
+  document.getElementById('newOrderCh').value = '';
+  document.getElementById('newOrderCu').value = '';
+  document.querySelectorAll('#chGroup .chip-opt, #cuGroup .chip-opt').forEach(b => b.classList.remove('selected'));
+  updateOrderPreview();
   R.mgr();
-  apiBg('upsertOrder',{id,ch,cu},()=>{},()=>{S.orders=S.orders.filter(o=>o.id!==id);toast('⚠ Save failed','err');R.mgr();});
+
+  apiBg('upsertOrder', { id, ch, cu }, () => {}, () => {
+    S.orders = S.orders.filter(o => o.id !== id);
+    toast('⚠ Save failed', 'err');
+    R.mgr();
+  });
 };
 window.delOrder=function(id){
   if(!confirm(`Delete "${id}" and all its entries?`))return;
@@ -1534,39 +1634,47 @@ window.delOrder=function(id){
 };
 window.editOrder=function(oid){
   const o=S.orders.find(x=>x.id===oid);if(!o)return;
-  const chOpts=['NJ','CA'].map(v=>`<option value="${v}"${o.ch===v?' selected':''}>${v}</option>`).join('');
-  const cuOpts=[
-    {v:'MOIDA',l:'MOIDA'},
-    {v:'NJ(PURCHASE)',l:'NJ (PURCHASE)'},
-    {v:'WHOLESALE',l:'WHOLESALE'},
-    {v:'OTHER',l:'OTHER (기타)'}
-  ].map(({v,l})=>`<option value="${v}"${o.cu===v?' selected':''}>${l}</option>`).join('');
 
-  openModal(`<div style="font-size:15px;font-weight:700;margin-bottom:14px"><i class="ri-edit-line" style="color:var(--amber)"></i> Edit order</div>
-    <div class="fg"><label class="fl">Order number</label><input class="fi" id="eoId" value="${o.id}"></div>
-    <div class="frow">
-      <div class="fg">
-        <label class="fl">Channel</label>
-        <div class="custom-select-wrap">
-          <select class="fi custom-select" id="eoCh">
-            <option value="">— Select —</option>${chOpts}
-          </select>
-          <i class="ri-arrow-down-s-line custom-select-arrow"></i>
-        </div>
-      </div>
-      <div class="fg">
-        <label class="fl">Customer</label>
-        <div class="custom-select-wrap">
-          <select class="fi custom-select" id="eoCu">
-            <option value="">— Select —</option>${cuOpts}
-          </select>
-          <i class="ri-arrow-down-s-line custom-select-arrow"></i>
-        </div>
-      </div>
+  const chips = (groupId, options, current) => options.map(({v,l,sub}) =>
+    `<button type="button" class="chip-opt${current===v?' selected':''}" data-val="${v}"
+       onclick="editChipPick('${groupId}','${v}')">${l}${sub?`<span class="chip-sub">${sub}</span>`:''}</button>`
+  ).join('');
+
+  const chOptions = [
+    {v:'NJ',l:'NJ'},{v:'CA',l:'CA'}
+  ];
+  const cuOptions = [
+    {v:'MOIDA(ORANGE)', l:'MOIDA', sub:'ORANGE'},
+    {v:'MOIDA(ONTARIO)',l:'MOIDA', sub:'ONTARIO'},
+    {v:'NJ(PURCHASE)',  l:'NJ',    sub:'PURCHASE'},
+    {v:'WHOLESALE',     l:'WHOLESALE'},
+    {v:'OTHER',         l:'OTHER'}
+  ];
+
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+      <i class="ri-edit-line" style="color:var(--amber)"></i> Edit order
     </div>
-    <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:12px">
+    <div class="fg">
+      <label class="fl">Order number</label>
+      <input class="fi" id="eoId" value="${o.id}"
+        style="font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.5px">
+    </div>
+    <div class="fg">
+      <label class="fl">Channel</label>
+      <div class="chip-group" id="editChGroup">${chips('editChGroup',chOptions,o.ch)}</div>
+      <input type="hidden" id="eoCh" value="${o.ch}">
+    </div>
+    <div class="fg">
+      <label class="fl">Customer</label>
+      <div class="chip-group" id="editCuGroup">${chips('editCuGroup',cuOptions,o.cu)}</div>
+      <input type="hidden" id="eoCu" value="${o.cu}">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-blue btn-sm" onclick="saveOrder('${oid}')"><i class="ri-check-line"></i> Save</button>
+      <button class="btn btn-blue" onclick="saveOrder('${oid}')" style="padding:10px 20px;font-weight:700">
+        <i class="ri-check-line"></i> Save
+      </button>
     </div>`);
 };
 window.saveOrder=function(orig){
