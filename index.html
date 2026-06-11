@@ -38,8 +38,16 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .sync{width:8px;height:8px;border-radius:50%;background:var(--green);transition:background .3s;flex-shrink:0}
 .sync.busy{background:var(--amber);animation:pp 1s infinite}.sync.fail{background:var(--red)}
 @keyframes pp{0%,100%{opacity:1}50%{opacity:.2}}
-.worker-sel{background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r);color:var(--t);padding:8px 13px;font-family:var(--font);font-size:14px;cursor:pointer;outline:none;max-width:170px}
-.worker-sel:focus{border-color:var(--blue)}
+
+/* Worker identity chip (replaces v7 dropdown) */
+.worker-chip{display:inline-flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r);color:var(--t);padding:7px 12px;font-size:13px;font-weight:700;cursor:pointer;transition:border-color .15s;max-width:200px;white-space:nowrap}
+.worker-chip:hover{border-color:var(--t3)}
+.worker-chip i.av{width:22px;height:22px;border-radius:50%;background:var(--blue-bg);border:1px solid var(--blue-bd);color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;font-style:normal}
+.worker-chip .lo{color:var(--t3);font-size:15px}
+
+/* Offline queue badge */
+.qbadge{display:inline-flex;align-items:center;gap:5px;background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber);font-size:11px;font-weight:700;border-radius:20px;padding:4px 10px;cursor:pointer}
+.qbadge i{animation:pp 1.4s infinite}
 
 /* Nav */
 .nav{display:flex;gap:3px;background:var(--bg2);border-radius:var(--r2);padding:4px;margin-bottom:20px;position:sticky;top:54px;z-index:99;border:1px solid var(--bd)}
@@ -57,17 +65,20 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 .g5{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
 .g6{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}
+.g7{display:grid;grid-template-columns:repeat(7,1fr);gap:12px}
+@media(max-width:1100px){.g7{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:1000px){.g5,.g6{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:600px){.g2,.g3{grid-template-columns:1fr}.g4,.g5,.g6{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.g2,.g3{grid-template-columns:1fr}.g4,.g5,.g6{grid-template-columns:repeat(2,1fr)}.g7{grid-template-columns:repeat(2,1fr)}}
 
 /* ── Metric cards (dashboard) ── */
-.mc{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r2);padding:20px 22px;position:relative;overflow:hidden;transition:border-color .2s}
+.mc{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r2);padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s}
 .mc:hover{border-color:var(--bd2)}
 .mc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:3px 3px 0 0}
 .mc.bl::before{background:var(--blue)}.mc.gr::before{background:var(--green)}.mc.am::before{background:var(--amber)}
 .mc.pu::before{background:var(--purple)}.mc.tl::before{background:var(--teal)}.mc.cy::before{background:var(--cyan)}.mc.rd::before{background:var(--red)}
 .mc-l{font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.09em;text-transform:uppercase;margin-bottom:10px}
-.mc-v{font-family:var(--mono);font-size:36px;font-weight:800;line-height:1;letter-spacing:-1px}
+.mc-v{font-family:var(--mono);font-size:32px;font-weight:800;line-height:1;letter-spacing:-1px}
+.mc.alert{border-color:var(--red-bd);background:linear-gradient(135deg,rgba(239,68,68,.06),var(--bg2))}
 
 /* ── KPI summary cards ── */
 .kmc{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r2);padding:20px 22px;position:relative;overflow:hidden}
@@ -92,6 +103,8 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .b-wait{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd)}
 .b-live{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd);animation:pulse 2s infinite}
 .b-saving{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd);animation:pulse 1s infinite}
+.b-queued{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd)}
+.b-sla{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* Stage pills */
@@ -104,6 +117,12 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .sp-done{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)}
 .sp-arr{color:var(--t3);font-size:12px}
 
+/* Order progress bar */
+.prog{display:flex;align-items:center;gap:8px;min-width:150px}
+.prog-segs{flex:1;display:flex;gap:3px;height:7px}
+.prog-seg{flex:1;border-radius:4px;background:var(--bg4)}
+.prog-pct{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--t2);width:34px;text-align:right;flex-shrink:0}
+
 /* Stage tabs */
 .stabs{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:16px}
 .stab{padding:14px 8px;border-radius:var(--r2);border:1px solid var(--bd2);background:var(--bg3);color:var(--t3);font-weight:700;cursor:pointer;text-align:center;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;position:relative;font-size:13px}
@@ -113,21 +132,15 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .stab.pall.on{background:var(--teal-bg);border-color:var(--teal-bd);color:var(--teal);box-shadow:0 0 0 1px var(--teal-bd)}
 .stab-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
 
-/* ── Dashboard table — professional ── */
+/* ── Dashboard table ── */
 .dash-tbl{width:100%;border-collapse:collapse}
 .dash-tbl thead{background:var(--bg3)}
-.dash-tbl th{
-  text-align:left;font-size:11px;color:var(--t3);
-  padding:12px 16px;border-bottom:2px solid var(--bd2);
-  font-weight:700;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap
-}
-.dash-tbl td{
-  padding:14px 16px;border-bottom:1px solid var(--bd);
-  font-size:14px;vertical-align:middle;white-space:nowrap
-}
+.dash-tbl th{text-align:left;font-size:11px;color:var(--t3);padding:12px 16px;border-bottom:2px solid var(--bd2);font-weight:700;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}
+.dash-tbl td{padding:14px 16px;border-bottom:1px solid var(--bd);font-size:14px;vertical-align:middle;white-space:nowrap}
 .dash-tbl tr:last-child td{border-bottom:none}
 .dash-tbl tbody tr{transition:background .1s}
 .dash-tbl tbody tr:hover td{background:rgba(255,255,255,.022)}
+.dash-tbl tr.sla-row td:first-child{box-shadow:inset 3px 0 0 var(--red)}
 .dash-tbl .oid{font-family:var(--mono);font-weight:800;font-size:15px;color:var(--t);letter-spacing:-.2px}
 .dash-tbl .num{font-family:var(--mono);font-size:14px;font-weight:600}
 .dash-tbl .dim{font-size:14px;color:var(--t2)}
@@ -135,11 +148,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 /* ── KPI table ── */
 .kpi-tbl{width:100%;border-collapse:collapse}
 .kpi-tbl thead{background:var(--bg3)}
-.kpi-tbl th{
-  text-align:left;font-size:11px;color:var(--t3);
-  padding:12px 16px;border-bottom:2px solid var(--bd2);
-  font-weight:700;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap
-}
+.kpi-tbl th{text-align:left;font-size:11px;color:var(--t3);padding:12px 16px;border-bottom:2px solid var(--bd2);font-weight:700;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}
 .kpi-tbl td{padding:13px 16px;border-bottom:1px solid var(--bd);font-size:14px;vertical-align:middle}
 .kpi-tbl tr:last-child td{border-bottom:none}
 .kpi-tbl tbody tr:hover td{background:rgba(255,255,255,.018)}
@@ -210,10 +219,17 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .kpi-bar label{font-size:13px;color:var(--t2);font-weight:600}
 .kpi-bar .fi{width:145px;padding:8px 11px;font-size:13px}
 
+/* Trend chart */
+.trend-card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r2);padding:18px 20px 10px;margin-bottom:18px;overflow-x:auto}
+.trend-legend{display:flex;gap:16px;font-size:11px;color:var(--t2);font-weight:600;margin-bottom:8px;flex-wrap:wrap}
+.trend-legend span{display:inline-flex;align-items:center;gap:5px}
+.trend-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+
 /* Modal */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;align-items:center;justify-content:center;padding:16px}
 .modal-bg.show{display:flex}
 .modal{background:var(--bg2);border:1px solid var(--bd2);border-radius:var(--r3);width:100%;max-width:420px;max-height:88vh;overflow-y:auto;padding:24px}
+.modal.wide{max-width:600px}
 
 /* Toast */
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--bd2);color:var(--t);padding:11px 24px;border-radius:var(--r2);font-size:14px;font-weight:600;opacity:0;transition:all .28s;pointer-events:none;z-index:999;white-space:nowrap}
@@ -225,7 +241,30 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .spinner{width:34px;height:34px;border:3px solid var(--bd2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* ── Custom select dropdown (edit modal) ── */
+/* ── Worker login screen ── */
+.login{position:fixed;inset:0;background:var(--bg);z-index:250;display:none;align-items:center;justify-content:center;padding:20px;overflow-y:auto}
+.login.show{display:flex}
+.login-box{width:100%;max-width:480px;padding:10px 0}
+.login-brand{font-family:var(--mono);font-size:18px;font-weight:800;text-align:center;letter-spacing:-.3px}
+.login-sub{font-size:13px;color:var(--t3);text-align:center;margin:6px 0 26px}
+.login-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:18px}
+.login-worker{padding:18px 10px;border-radius:var(--r2);border:1px solid var(--bd2);background:var(--bg2);color:var(--t2);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:all .14s;display:flex;flex-direction:column;align-items:center;gap:8px}
+.login-worker i.av{width:38px;height:38px;border-radius:50%;background:var(--bg4);color:var(--t2);display:flex;align-items:center;justify-content:center;font-size:16px;font-style:normal;font-weight:800}
+.login-worker:hover{border-color:var(--t3);color:var(--t)}
+.login-worker.sel{border-color:var(--blue);background:var(--blue-bg);color:var(--blue);box-shadow:0 0 0 1px var(--blue-bd)}
+.login-worker.sel i.av{background:var(--blue);color:#fff}
+.login-worker .lk{font-size:10px;color:var(--t3);display:inline-flex;align-items:center;gap:3px}
+.login-pin{display:none;text-align:center;margin-bottom:14px}
+.login-pin.show{display:block}
+
+/* Scanner */
+.scan-wrap{position:relative;border-radius:var(--r2);overflow:hidden;background:#000;margin-bottom:14px}
+.scan-video{width:100%;display:block;max-height:340px;object-fit:cover}
+.scan-frame{position:absolute;inset:14%;border:2px solid rgba(255,255,255,.65);border-radius:12px;pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,.25)}
+.scan-line{position:absolute;left:16%;right:16%;height:2px;background:var(--green);top:20%;animation:scanmv 1.8s ease-in-out infinite;pointer-events:none}
+@keyframes scanmv{0%,100%{top:18%}50%{top:78%}}
+
+/* ── Custom select / chip group (unchanged from v7) ── */
 .custom-select-wrap{position:relative;display:block}
 .custom-select{appearance:none;-webkit-appearance:none;padding-right:38px !important;cursor:pointer;background:var(--bg3)}
 .custom-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
@@ -234,47 +273,26 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .custom-select option{background:var(--bg3);color:var(--t)}
 .custom-select option[value=""]{color:var(--t3)}
 
-/* ── Chip group selector ── */
-.chip-group{
-  display:flex;gap:7px;flex-wrap:wrap;
-  padding:10px;
-  background:var(--bg3);
-  border:1px solid var(--bd2);
-  border-radius:var(--r2);
-  transition:border-color .15s;
-}
+.chip-group{display:flex;gap:7px;flex-wrap:wrap;padding:10px;background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r2);transition:border-color .15s}
 .chip-group:focus-within{border-color:var(--blue-bd)}
-.chip-opt{
-  padding:9px 16px;
-  border-radius:var(--r);
-  border:1px solid var(--bd2);
-  background:var(--bg4);
-  color:var(--t3);
-  font-family:var(--font);
-  font-size:13px;font-weight:700;
-  cursor:pointer;
-  transition:all .13s;
-  display:flex;flex-direction:column;align-items:center;gap:1px;
-  line-height:1.2;
-  white-space:nowrap;
-}
+.chip-opt{padding:9px 16px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg4);color:var(--t3);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;transition:all .13s;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2;white-space:nowrap}
 .chip-opt:hover{border-color:var(--t2);color:var(--t2);background:var(--bg2)}
-.chip-opt.selected{
-  background:var(--blue);
-  border-color:var(--blue);
-  color:#fff;
-  box-shadow:0 2px 8px rgba(59,130,246,.35);
-}
-.chip-sub{
-  font-size:10px;font-weight:600;
-  opacity:.75;letter-spacing:.04em;
-  text-transform:uppercase;
-}
+.chip-opt.selected{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 2px 8px rgba(59,130,246,.35)}
+.chip-sub{font-size:10px;font-weight:600;opacity:.75;letter-spacing:.04em;text-transform:uppercase}
 .elapsed-timer i{animation:tick 2s infinite}
 @keyframes tick{0%,100%{opacity:1}50%{opacity:.4}}
 
 .empty{text-align:center;padding:40px 20px;color:var(--t3);font-size:14px}
 .empty i{font-size:32px;display:block;margin-bottom:8px;opacity:.3}
+
+/* Daily report modal */
+.rep-h{font-family:var(--mono);font-weight:800;font-size:16px;display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.rep-sub{font-size:11px;color:var(--t3);margin-bottom:14px}
+.rep-sec{font-size:10px;font-weight:700;color:var(--t3);letter-spacing:.08em;text-transform:uppercase;margin:14px 0 4px}
+.rep-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:13px}
+.rep-row:last-child{border-bottom:none}
+
+@media print{body{background:#fff;color:#000}}
 </style>
 </head>
 <body>
@@ -284,14 +302,37 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <div style="font-size:12px;color:var(--t2)">Loading warehouse system...</div>
 </div>
 
+<!-- ── Worker sign-in (v8) ── -->
+<div class="login" id="loginScreen">
+  <div class="login-box">
+    <div class="login-brand">STYLEKOREAN_NJ / MOIDA</div>
+    <div class="login-sub">Select your name to sign in. Work is recorded under this name.</div>
+    <div class="login-grid" id="loginGrid"></div>
+    <div class="login-pin" id="loginPinSect">
+      <label class="fl" style="text-align:center">PIN for <strong id="loginPinWho" style="color:var(--blue)"></strong></label>
+      <input class="fi pallet-input" type="password" inputmode="numeric" id="loginPin" maxlength="8"
+        style="letter-spacing:6px;margin:6px auto 4px;display:block" placeholder="••••"
+        onkeydown="if(event.key==='Enter')doLogin()">
+      <div id="loginErr" style="font-size:11px;color:var(--red);min-height:15px"></div>
+    </div>
+    <button class="btn btn-blue btn-block btn-lg" id="btnLogin" onclick="doLogin()" disabled style="opacity:.35">
+      <i class="ri-login-circle-line"></i> Sign in
+    </button>
+    <div style="text-align:center;font-size:11px;color:var(--t3);margin-top:14px">
+      No PIN yet? Ask a manager to set one — names without <i class="ri-lock-line"></i> sign in directly.
+    </div>
+  </div>
+</div>
+
 <div class="shell" style="display:none" id="app">
   <!-- Header -->
   <header class="hdr">
     <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
+      <span class="qbadge" id="queueBadge" style="display:none" onclick="flushQueue()" title="Saves waiting to sync — tap to retry"></span>
       <span class="sync" id="syncDot"></span>
-      <select class="worker-sel" id="workerSel" onchange="onWorkerChange()"></select>
+      <div id="hdrWorker"></div>
       <button class="btn btn-sm" onclick="refreshData()" title="Refresh"><i class="ri-refresh-line"></i></button>
     </div>
   </header>
@@ -310,6 +351,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap">
       <div id="dashFilterTabs" style="display:flex;gap:4px;flex-wrap:wrap"></div>
       <div style="flex:1"></div>
+      <button class="btn btn-sm" onclick="openScan('dash')" title="Scan an order barcode"><i class="ri-qr-scan-2-line"></i> Scan</button>
       <div style="position:relative;min-width:180px">
         <i class="ri-search-line" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:13px"></i>
         <input class="fi" id="dashSearch" placeholder="Order / channel / customer" style="padding-left:30px;font-size:12px" oninput="_dp=0;renderDashTable()">
@@ -319,13 +361,9 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
     <div id="dashPager" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:7px"></div>
   </div>
 
-  <!-- WORK — completely redesigned: stage-focused -->
+  <!-- WORK -->
   <div class="pg" id="pg-work">
-
-    <!-- ① Stage status bar — 내 현재 상태 한눈에 -->
     <div id="stageStatusBar" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px"></div>
-
-    <!-- ② Stage tab selector -->
     <div class="stabs" id="stageTabs">
       <div class="stab pick on" onclick="selStage('PICK')">
         <div style="display:flex;flex-direction:column;align-items:center;gap:3px;width:100%">
@@ -346,10 +384,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
         </div>
       </div>
     </div>
-
-    <!-- ③ Stage content area — changes per tab -->
     <div id="stageContent"></div>
-
   </div>
 
   <!-- KPI -->
@@ -361,6 +396,8 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
       <button class="btn btn-sm" onclick="kpiToday()">Today</button>
       <button class="btn btn-sm" onclick="kpiWeek()">This week</button>
       <button class="btn btn-sm" onclick="kpiMonth()">This month</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-amber btn-sm" onclick="openDailyReport()"><i class="ri-file-text-line"></i> Daily report</button>
     </div>
     <div id="kpiContent"></div>
   </div>
@@ -374,12 +411,12 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
           <input class="fi" id="newWorker" placeholder="New worker name" style="flex:1">
           <button class="btn btn-blue btn-sm" onclick="addWorker()"><i class="ri-user-add-line"></i> Add</button>
         </div>
+        <div style="font-size:11px;color:var(--t3);margin-bottom:8px"><i class="ri-key-2-line"></i> Set a PIN so each worker signs in as themselves.</div>
         <div id="workerList"></div>
       </div>
       <div class="card">
         <div class="card-t"><i class="ri-file-list-3-line" style="color:var(--blue)"></i> Orders</div>
 
-        <!-- Order number -->
         <div class="fg">
           <label class="fl">Order number</label>
           <input class="fi" id="newOrderId" placeholder="e.g. IM003232"
@@ -387,7 +424,6 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
             style="font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.5px">
         </div>
 
-        <!-- Channel picker -->
         <div class="fg">
           <label class="fl">Channel</label>
           <div class="chip-group" id="chGroup">
@@ -397,7 +433,6 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
           <input type="hidden" id="newOrderCh">
         </div>
 
-        <!-- Customer picker -->
         <div class="fg">
           <label class="fl">Customer</label>
           <div class="chip-group" id="cuGroup">
@@ -410,7 +445,6 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
           <input type="hidden" id="newOrderCu">
         </div>
 
-        <!-- Preview + Add -->
         <div id="orderPreview" style="display:none;background:var(--bg3);border:1px solid var(--blue-bd);border-radius:var(--r);padding:10px 14px;margin-bottom:12px;font-size:13px">
           <span style="color:var(--t3);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Preview</span>
           <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap">
@@ -436,15 +470,15 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
     </div>
     <div class="g2" style="margin-top:10px">
       <div class="card" style="border-color:var(--amber-bd)">
-        <div class="card-t" style="color:var(--amber)"><i class="ri-lock-line"></i> Change password</div>
+        <div class="card-t" style="color:var(--amber)"><i class="ri-lock-line"></i> Change manager password</div>
         <div class="fg"><input class="fi" type="password" id="cpCur" placeholder="Current password"></div>
-        <div class="fg"><input class="fi" type="password" id="cpNew" placeholder="New password"></div>
+        <div class="fg"><input class="fi" type="password" id="cpNew" placeholder="New password (min 4)"></div>
         <div class="fg"><input class="fi" type="password" id="cpConf" placeholder="Confirm"></div>
         <button class="btn btn-blue btn-sm" onclick="changePin()"><i class="ri-lock-line"></i> Change</button>
       </div>
       <div class="card" style="border-color:var(--red-bd)">
         <div class="card-t" style="color:var(--red)"><i class="ri-error-warning-line"></i> Danger zone</div>
-        <p style="font-size:12px;color:var(--t2)">All data operations here are permanent and irreversible.</p>
+        <p style="font-size:12px;color:var(--t2)">Deleting an order archives it together with all its work entries. Data stays in the spreadsheet (soft delete) and a manager can restore it from the Sheets side.</p>
       </div>
     </div>
   </div>
@@ -458,164 +492,381 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 
 <script>
 // ═══════════════════════════════════════════════
-// CONFIG — update API_URL after redeploying Code.gs
+// CONFIG — update API_URL after redeploying Code.gs (v8)
 // ═══════════════════════════════════════════════
 const API_URL = 'https://script.google.com/macros/s/AKfycbw-rEUoQz5c38k0I7P6ykyhEFfZ5P4tGf0wF4zc96742O8KVlpB7-3Unh6W6S7RQctAjA/exec';
+const SLA_HOURS = 24;          // order older than this and not completed → SLA risk
+const TREND_MAX_DAYS = 21;     // max bars in the KPI trend chart
 
 // ═══════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════
-let S = { orders:[], works:[], workers:[], pin:'1234' };
-let CW = '';           // current worker
-let CS = 'PICK';       // current stage
+let S = { orders:[], works:[], workers:[], pinned:[] };
+let CW = '';                   // current worker (from sign-in)
+let CS = 'PICK';               // current stage
+let WS = null;                 // worker session {worker, wpin}
 let _mgrOK = false;
-let _pending = {};     // entryId → true (in-flight)
+let _mgrToken = sessionStorage.getItem('wms_mgr') || '';
+let _pending = {};             // entryId → true (in-flight)
 let _syncN = 0;
-let _dp = 0;           // dashboard page
+let _dp = 0;                   // dashboard page
+let _dFilter = 'all';
+let _startLock = false;
+let _loginSel = '';
+
+// ═══════════════════════════════════════════════
+// OFFLINE QUEUE — saves survive network loss
+// ═══════════════════════════════════════════════
+let _queue = [];
+let _flushing = false;
+try { _queue = JSON.parse(localStorage.getItem('wms_queue') || '[]') || []; } catch(_) { _queue = []; }
+
+function saveQueue(){ try { localStorage.setItem('wms_queue', JSON.stringify(_queue)); } catch(_){} }
+function enqueueOp(op, data, meta){ _queue.push({ op, data, meta: meta || null, ts: Date.now() }); saveQueue(); updateQueueBadge(); }
+function isTempQueued(id){ return _queue.some(q => q.meta && q.meta.tempId === id); }
+
+function updateQueueBadge(){
+  const b = document.getElementById('queueBadge'); if (!b) return;
+  if (_queue.length > 0) {
+    b.style.display = 'inline-flex';
+    b.innerHTML = '<i class="ri-cloud-off-line"></i> ' + _queue.length + ' pending';
+  } else b.style.display = 'none';
+}
+
+async function flushQueue(){
+  if (_flushing || !_queue.length) return;
+  _flushing = true;
+  let flushed = 0;
+  try {
+    while (_queue.length) {
+      const item = _queue[0];
+      let r;
+      try { r = await apiCall(buildUrl(item.op, item.data)); }
+      catch(e) { break; }                       // still offline → stop, keep queue
+      if (r && r.ok) {
+        if (item.op === 'startWork' && item.meta && item.meta.tempId && r.entryId) {
+          const w = S.works.find(x => x.id === item.meta.tempId);
+          if (w) { w.id = r.entryId; if (r.startTime) w.startT = r.startTime; if (r.startISO) w.startISO = r.startISO; }
+          _queue.forEach(q => { if (q.data && q.data.entryId === item.meta.tempId) q.data.entryId = r.entryId; });
+        }
+        _queue.shift(); saveQueue(); flushed++;
+      } else if (r && (r.error === 'duplicate_active' || r.error === 'already_ended')) {
+        _queue.shift(); saveQueue(); flushed++; // server already has it — treat as done
+      } else {
+        _queue.shift(); saveQueue();
+        toast('Queued save rejected: ' + ((r && r.error) || 'unknown'), 'err');
+      }
+    }
+  } finally {
+    _flushing = false;
+    updateQueueBadge();
+  }
+  if (flushed > 0 && _queue.length === 0) {
+    toast('✓ Offline saves synced', 'ok');
+    await loadData(); updateBadges(); rerenderCurrent();
+  }
+}
 
 // ═══════════════════════════════════════════════
 // JSONP / API
 // ═══════════════════════════════════════════════
 let _jc = 0;
+function buildUrl(op, data){
+  return API_URL + '?op=' + encodeURIComponent(op) +
+         (data ? '&data=' + encodeURIComponent(JSON.stringify(data)) : '');
+}
 function apiCall(url){
-  return new Promise((res,rej)=>{
-    const cb='_j'+(++_jc)+'_'+Date.now();
-    const sc=document.createElement('script');
-    const to=setTimeout(()=>{cleanup();rej(new Error('Timeout'));},30000);
-    function cleanup(){clearTimeout(to);delete window[cb];if(sc.parentNode)sc.parentNode.removeChild(sc);}
-    window[cb]=d=>{cleanup();res(d);};
-    sc.onerror=()=>{cleanup();rej(new Error('Network error'));};
-    sc.src=url+(url.includes('?')?'&':'?')+'callback='+cb;
+  return new Promise((res, rej) => {
+    const cb = '_j' + (++_jc) + '_' + Date.now();
+    const sc = document.createElement('script');
+    const to = setTimeout(() => { cleanup(); rej(new Error('Timeout')); }, 30000);
+    function cleanup(){ clearTimeout(to); delete window[cb]; if (sc.parentNode) sc.parentNode.removeChild(sc); }
+    window[cb] = d => { cleanup(); res(d); };
+    sc.onerror = () => { cleanup(); rej(new Error('Network error')); };
+    sc.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
     document.head.appendChild(sc);
   });
 }
 
 function setSyncing(on){
-  const d=document.getElementById('syncDot');if(!d)return;
-  d.className='sync'+(on?' busy':'');
+  const d = document.getElementById('syncDot'); if (!d) return;
+  d.className = 'sync' + (on ? ' busy' : '');
 }
 function setSyncFail(){
-  const d=document.getElementById('syncDot');if(!d)return;
-  d.className='sync fail';setTimeout(()=>d.className='sync',4000);
+  const d = document.getElementById('syncDot'); if (!d) return;
+  d.className = 'sync fail'; setTimeout(() => d.className = 'sync', 4000);
 }
 
-// background fire-and-forget
-async function apiBg(op,data,onOk,onErr){
-  _syncN++;setSyncing(true);
-  try{
-    const url=API_URL+'?op='+encodeURIComponent(op)+'&data='+encodeURIComponent(JSON.stringify(data||{}));
-    const r=await apiCall(url);
-    if(r&&r.ok){if(onOk)onOk(r);}
-    else{setSyncFail();if(onErr)onErr(r);}
-    return r;
-  }catch(e){setSyncFail();if(onErr)onErr({error:e.message});return{ok:false};}
-  finally{_syncN--;if(_syncN<=0){_syncN=0;setSyncing(false);}}
+/** apiOp — returns { net:Boolean, res:Object }. net=false means network failure. */
+async function apiOp(op, data){
+  _syncN++; setSyncing(true);
+  try {
+    const r = await apiCall(buildUrl(op, data));
+    return { net:true, res: r || { ok:false, error:'empty' } };
+  } catch(e) {
+    setSyncFail();
+    return { net:false, res:{ ok:false, error:'network' } };
+  } finally {
+    _syncN--; if (_syncN <= 0) { _syncN = 0; setSyncing(false); }
+  }
 }
 
-async function apiGet(op){
-  try{return await apiCall(API_URL+'?op='+op);}
-  catch(e){return{ok:false,error:e.message};}
+/** Manager op — attaches token; on 401 clears session and re-prompts PIN */
+function mgrData(d){ return Object.assign({}, d || {}, { token:_mgrToken }); }
+async function mgrOp(op, data){
+  const out = await apiOp(op, mgrData(data));
+  if (out.net && !out.res.ok && out.res.error === 'unauthorized') {
+    _mgrOK = false; _mgrToken = ''; sessionStorage.removeItem('wms_mgr');
+    toast('Manager session expired — enter password again', 'err');
+    showPin();
+  }
+  return out;
 }
 
 async function loadData(){
-  const r=await apiGet('listAll');
-  if(r.ok){
-    S.orders=r.orders||[];
-    S.workers=r.workers||[];
-    S.pin=r.pin||'1234';
-    // Normalize works — handle legacy entries missing stage field
-    S.works=(r.works||[]).map(w=>({
+  const out = await apiOp('listAll');
+  const r = out.res;
+  if (out.net && r.ok) {
+    S.orders  = r.orders  || [];
+    S.workers = r.workers || [];
+    S.pinned  = r.pinned  || [];
+    S.works = (r.works || []).map(w => ({
       ...w,
-      stage: w.stage&&['PICK','INSP','PALL'].includes(w.stage) ? w.stage : 'PICK',
-      items:  w.items  !== null && w.items  !== undefined ? w.items  : null,
-      qty:    w.qty    !== null && w.qty    !== undefined ? w.qty    : null,
-      pallets:w.pallets!== null && w.pallets!== undefined ? w.pallets: null,
-      netMin: w.netMin !== null && w.netMin !== undefined ? w.netMin : null,
+      stage: w.stage && ['PICK','INSP','PALL'].includes(w.stage) ? w.stage : 'PICK',
+      items:   w.items   !== null && w.items   !== undefined ? w.items   : null,
+      qty:     w.qty     !== null && w.qty     !== undefined ? w.qty     : null,
+      pallets: w.pallets !== null && w.pallets !== undefined ? w.pallets : null,
+      netMin:  w.netMin  !== null && w.netMin  !== undefined ? w.netMin  : null,
     }));
+    // Keep optimistic entries that are still queued offline (server doesn't know them yet)
+    _queue.forEach(q => {
+      if (q.op === 'startWork' && q.meta && q.meta.tempId && !S.works.find(w => w.id === q.meta.tempId) && q.meta.local) {
+        S.works.push(q.meta.local);
+      }
+    });
+    return true;
   }
-  return r.ok;
+  return false;
 }
 
 async function refreshData(){
-  toast('Refreshing...','');
-  const ok=await loadData();
-  popWorker();go(curPage());updateBadges();
-  toast(ok?'Refreshed ✓':'Refresh failed','ok');
+  toast('Refreshing...', '');
+  const ok = await loadData();
+  renderWorkerChip(); rerenderCurrent(); updateBadges();
+  toast(ok ? 'Refreshed ✓' : 'Refresh failed', ok ? 'ok' : 'err');
+}
+
+function rerenderCurrent(){
+  const p = curPage();
+  if (R[p]) R[p]();
 }
 
 // ═══════════════════════════════════════════════
 // UTILS
 // ═══════════════════════════════════════════════
-function toast(m,c){
-  const t=document.getElementById('toast');t.textContent=m;
-  t.className='toast show'+(c?' '+c:'');
-  clearTimeout(t._t);t._t=setTimeout(()=>t.className='toast',2800);
+function toast(m, c){
+  const t = document.getElementById('toast'); t.textContent = m;
+  t.className = 'toast show' + (c ? ' ' + c : '');
+  clearTimeout(t._t); t._t = setTimeout(() => t.className = 'toast', 2800);
 }
-function closeModal(){document.getElementById('modalBg').classList.remove('show');}
-function openModal(html){document.getElementById('modalBody').innerHTML=html;document.getElementById('modalBg').classList.add('show');}
+function closeModal(){
+  stopScanHardware();
+  document.getElementById('modalBg').classList.remove('show');
+  document.getElementById('modalBody').className = 'modal';
+}
+function openModal(html, opts){
+  const body = document.getElementById('modalBody');
+  body.className = 'modal' + (opts && opts.wide ? ' wide' : '');
+  body.innerHTML = html;
+  document.getElementById('modalBg').classList.add('show');
+}
 
 function updateClock(){
-  const d=new Date();
-  const D=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  document.getElementById('clock').textContent=D[d.getDay()]+' '+M[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear()+' · '+
-    String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+  const d = new Date();
+  const D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('clock').textContent = D[d.getDay()] + ' ' + M[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear() + ' · ' +
+    String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
 }
 
 function nowHHmm(){
-  try{return new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Los_Angeles'});}
-  catch(e){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
 }
 function todayStr(){
-  try{return new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});}
-  catch(e){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
-function genId(){return'W'+Date.now()+Math.floor(Math.random()*999);}
+function genId(){ return 'L' + Date.now() + Math.floor(Math.random()*999); }  // L = local temp id
 
-// net minutes client-side (for immediate display)
-function clientNet(sHHmm,eHHmm){
-  if(!sHHmm||!eHHmm)return null;
-  const[sh,sm]=sHHmm.split(':').map(Number),[eh,em]=eHHmm.split(':').map(Number);
-  const s=sh*60+sm,e=eh*60+em;
-  if(e<=s)return null;
-  const gross=e-s;
-  const overlap=Math.max(0,Math.min(e,13*60)-Math.max(s,12*60));
-  return Math.max(0,gross-overlap);
+// ── Business-hours net minutes (mirrors server calcNetMinutes_) ──
+// Excludes before 08:30 / after 17:30 / lunch 12:00–13:00 / weekends.
+function bizNet(s, e){
+  if (!(s instanceof Date) || isNaN(s) || !(e instanceof Date) || isNaN(e) || e <= s) return null;
+  let total = 0, guard = 0;
+  const cur = new Date(s);
+  while (cur < e && guard++ < 400) {
+    const day = cur.getDay();
+    if (day !== 0 && day !== 6) {
+      const dayS = new Date(cur); dayS.setHours(8,30,0,0);
+      const dayE = new Date(cur); dayE.setHours(17,30,0,0);
+      const a = cur > dayS ? cur : dayS;
+      const b = e < dayE ? e : dayE;
+      if (b > a) {
+        let m = (b - a) / 60000;
+        const ls = new Date(cur); ls.setHours(12,0,0,0);
+        const le = new Date(cur); le.setHours(13,0,0,0);
+        const lo = Math.max(0, Math.min(b, le) - Math.max(a, ls)) / 60000;
+        total += Math.max(0, m - lo);
+      }
+    }
+    cur.setDate(cur.getDate() + 1); cur.setHours(0,0,0,0);
+  }
+  return Math.max(0, Math.round(total));
 }
+function entryStartDate(w){
+  if (w.startISO) { const d = new Date(w.startISO); if (!isNaN(d)) return d; }
+  const day = w.date || todayStr();
+  const t   = w.startT || '00:00';
+  const d = new Date(day + 'T' + t + ':00');
+  return isNaN(d) ? new Date() : d;
+}
+function clientNet(w, endDate){ return bizNet(entryStartDate(w), endDate || new Date()); }
+
 function fmtMin(m){
-  if(m===null||m===undefined||m==='')return'—';
-  const n=Number(m);if(isNaN(n))return'—';
-  if(n<60)return n+'m';return Math.floor(n/60)+'h '+(n%60)+'m';
+  if (m === null || m === undefined || m === '') return '—';
+  const n = Number(m); if (isNaN(n)) return '—';
+  if (n < 60) return n + 'm';
+  return Math.floor(n/60) + 'h ' + (n%60) + 'm';
 }
 
-function popWorker(){
-  const sel=document.getElementById('workerSel'),cur=sel.value;
-  sel.innerHTML=S.workers.map(w=>`<option${w===cur?' selected':''}>${w}</option>`).join('');
-  if(!cur&&S.workers.length)sel.value=S.workers[0];
-  CW=sel.value;
+function initials(name){
+  return String(name||'').split(/\s+/).map(p => p[0] || '').join('').slice(0,2).toUpperCase() || '?';
 }
-function onWorkerChange(){CW=document.getElementById('workerSel').value;_mgrOK=false;go(curPage());}
+
+// ═══════════════════════════════════════════════
+// WORKER SIGN-IN (v8) — identity persists per device
+// ═══════════════════════════════════════════════
+function getSession(){ try { return JSON.parse(localStorage.getItem('wms_session')) || null; } catch(_) { return null; } }
+function saveSession(s){ try { localStorage.setItem('wms_session', JSON.stringify(s)); } catch(_){} }
+function clearSession(){ try { localStorage.removeItem('wms_session'); } catch(_){} }
+
+function showLogin(){
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginScreen').classList.add('show');
+  _loginSel = '';
+  renderLoginGrid();
+  document.getElementById('loginPinSect').classList.remove('show');
+  const b = document.getElementById('btnLogin'); b.disabled = true; b.style.opacity = '.35';
+}
+
+function renderLoginGrid(){
+  const g = document.getElementById('loginGrid');
+  if (!S.workers.length) {
+    g.innerHTML = '<div class="empty" style="grid-column:1/-1"><i class="ri-user-line"></i>No workers configured.<br>A manager must add workers in Settings.</div>';
+    return;
+  }
+  g.innerHTML = S.workers.map(w => {
+    const locked = S.pinned.includes(w);
+    return `<button class="login-worker${w===_loginSel?' sel':''}" onclick="pickLoginWorker('${w.replace(/'/g,"\\'")}')">
+      <i class="av">${initials(w)}</i>
+      <span>${w}</span>
+      ${locked ? '<span class="lk"><i class="ri-lock-line"></i> PIN</span>' : '<span class="lk" style="opacity:.5">no PIN</span>'}
+    </button>`;
+  }).join('');
+}
+
+window.pickLoginWorker = function(name){
+  _loginSel = name;
+  renderLoginGrid();
+  const needPin = S.pinned.includes(name);
+  const sect = document.getElementById('loginPinSect');
+  document.getElementById('loginErr').textContent = '';
+  document.getElementById('loginPin').value = '';
+  if (needPin) {
+    sect.classList.add('show');
+    document.getElementById('loginPinWho').textContent = name;
+    setTimeout(() => document.getElementById('loginPin')?.focus(), 60);
+  } else sect.classList.remove('show');
+  const b = document.getElementById('btnLogin'); b.disabled = false; b.style.opacity = '1';
+};
+
+window.doLogin = async function(){
+  if (!_loginSel) { toast('Select your name', 'err'); return; }
+  const wpin = document.getElementById('loginPin')?.value || '';
+  const btn = document.getElementById('btnLogin');
+  btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line"></i> Signing in...';
+  const out = await apiOp('verifyWorker', { worker:_loginSel, wpin });
+  btn.disabled = false; btn.innerHTML = '<i class="ri-login-circle-line"></i> Sign in';
+
+  if (!out.net) {
+    // Offline: only allow if this device's last session was the same worker
+    const prev = getSession();
+    if (prev && prev.worker === _loginSel) {
+      WS = prev; enterApp(); toast('Offline — signed in from saved session', '');
+    } else {
+      document.getElementById('loginErr').textContent = 'No connection — cannot verify sign-in';
+    }
+    return;
+  }
+  if (!out.res.ok) {
+    document.getElementById('loginErr').textContent =
+      out.res.error === 'wrong_pin' ? 'Incorrect PIN' :
+      out.res.error === 'unknown_worker' ? 'Name not registered — ask a manager' : 'Sign-in failed';
+    const i = document.getElementById('loginPin'); if (i) { i.value = ''; i.focus(); }
+    return;
+  }
+  WS = { worker:_loginSel, wpin };
+  saveSession(WS);
+  enterApp();
+  toast('Welcome, ' + _loginSel + ' ✓', 'ok');
+};
+
+window.logout = function(){
+  if (!confirm('Sign out ' + CW + '?')) return;
+  clearSession(); WS = null; CW = ''; _mgrOK = false;
+  showLogin();
+};
+
+function enterApp(){
+  CW = WS.worker;
+  document.getElementById('loginScreen').classList.remove('show');
+  document.getElementById('app').style.display = 'block';
+  renderWorkerChip();
+  updateBadges(); updateQueueBadge();
+  go('dash');
+}
+
+function renderWorkerChip(){
+  const el = document.getElementById('hdrWorker'); if (!el) return;
+  el.innerHTML = CW
+    ? `<button class="worker-chip" onclick="logout()" title="Signed in as ${CW} — tap to sign out">
+         <i class="av">${initials(CW)}</i>${CW}<i class="ri-logout-box-r-line lo"></i>
+       </button>`
+    : '';
+}
 
 function updateBadges(){
-  const n=S.works.filter(w=>w.w===CW&&!w.endT).length;
-  const btn=document.querySelector('[data-p="work"]');if(!btn)return;
-  let b=btn.querySelector('.nb-badge');
-  if(n>0){if(!b){b=document.createElement('span');b.className='nb-badge';btn.appendChild(b);}b.textContent=n;}
-  else if(b)b.remove();
+  const n = S.works.filter(w => w.w === CW && !w.endT).length;
+  const btn = document.querySelector('[data-p="work"]'); if (!btn) return;
+  let b = btn.querySelector('.nb-badge');
+  if (n > 0) { if (!b) { b = document.createElement('span'); b.className = 'nb-badge'; btn.appendChild(b); } b.textContent = n; }
+  else if (b) b.remove();
 }
 
 // ═══════════════════════════════════════════════
 // NAV
 // ═══════════════════════════════════════════════
 function go(id){
-  if(id==='mgr'&&!_mgrOK){showPin();return;}
-  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
-  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
-  const pg=document.getElementById('pg-'+id);if(pg)pg.classList.add('on');
-  const nb=document.querySelector(`[data-p="${id}"]`);if(nb)nb.classList.add('on');
+  if (id === 'mgr' && !_mgrOK) { showPin(); return; }
+  document.querySelectorAll('.pg').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.nb').forEach(b => b.classList.remove('on'));
+  const pg = document.getElementById('pg-' + id); if (pg) pg.classList.add('on');
+  const nb = document.querySelector(`[data-p="${id}"]`); if (nb) nb.classList.add('on');
   R[id]?.();
 }
-function curPage(){const a=document.querySelector('.nb.on');return a?a.dataset.p:'dash';}
+function curPage(){ const a = document.querySelector('.nb.on'); return a ? a.dataset.p : 'dash'; }
 
+// ── Manager PIN — verified SERVER-SIDE (v8) ──
 function showPin(){
   openModal(`<div style="text-align:center;padding:6px 0">
     <i class="ri-shield-keyhole-line" style="font-size:30px;color:var(--amber);display:block;margin-bottom:8px"></i>
@@ -625,22 +876,35 @@ function showPin(){
     <div id="pinErr" style="font-size:11px;color:var(--red);min-height:15px;margin-bottom:10px"></div>
     <div style="display:flex;gap:7px;justify-content:center">
       <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-blue btn-sm" onclick="checkPin()"><i class="ri-lock-unlock-line"></i> Unlock</button>
+      <button class="btn btn-blue btn-sm" id="btnPinGo" onclick="checkPin()"><i class="ri-lock-unlock-line"></i> Unlock</button>
     </div></div>`);
-  setTimeout(()=>document.getElementById('pinIn')?.focus(),80);
+  setTimeout(() => document.getElementById('pinIn')?.focus(), 80);
 }
-function checkPin(){
-  const v=document.getElementById('pinIn')?.value||'';
-  if(v===S.pin){_mgrOK=true;closeModal();toast('Manager unlocked','ok');go('mgr');}
-  else{document.getElementById('pinErr').textContent='Incorrect password';const i=document.getElementById('pinIn');if(i){i.value='';i.focus();}}
-}
+
+window.checkPin = async function(){
+  const v = document.getElementById('pinIn')?.value || '';
+  if (!v) return;
+  const btn = document.getElementById('btnPinGo');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line"></i> Checking...'; }
+  const out = await apiOp('verifyPin', { pin:v });
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ri-lock-unlock-line"></i> Unlock'; }
+  const errEl = document.getElementById('pinErr');
+  if (!out.net) { if (errEl) errEl.textContent = 'No connection — try again'; return; }
+  if (out.res.ok && out.res.token) {
+    _mgrOK = true; _mgrToken = out.res.token;
+    sessionStorage.setItem('wms_mgr', _mgrToken);
+    closeModal(); toast('Manager unlocked', 'ok'); go('mgr');
+  } else {
+    if (errEl) errEl.textContent = 'Incorrect password';
+    const i = document.getElementById('pinIn'); if (i) { i.value = ''; i.focus(); }
+  }
+};
 
 // ═══════════════════════════════════════════════
 // RENDERERS
 // ═══════════════════════════════════════════════
-const R={};
+const R = {};
 
-// stage color/label helpers
 const SCOL   = {PICK:'var(--blue)',  INSP:'var(--purple)',  PALL:'var(--teal)'};
 const SBDCOL = {PICK:'var(--blue-bd)',INSP:'var(--purple-bd)',PALL:'var(--teal-bd)'};
 const SBTN   = {PICK:'btn-blue',     INSP:'btn-purple',     PALL:'btn-teal'};
@@ -649,117 +913,179 @@ const SELABEL= {PICK:'End Picking',  INSP:'End Inspection',  PALL:'End Palletizi
 const SICON  = {PICK:'ri-route-line',INSP:'ri-search-eye-line',PALL:'ri-stack-line'};
 const SBGCLS = {PICK:'pick',         INSP:'insp',            PALL:'pall'};
 
-// ── helpers ──
 function orderStageSummary(oid){
-  const ws=S.works.filter(w=>w.oid===oid);
-  const byStage=s=>ws.filter(w=>w.stage===s);
-  return{PICK:byStage('PICK'),INSP:byStage('INSP'),PALL:byStage('PALL')};
+  const ws = S.works.filter(w => w.oid === oid);
+  const byStage = s => ws.filter(w => w.stage === s);
+  return { PICK:byStage('PICK'), INSP:byStage('INSP'), PALL:byStage('PALL') };
 }
 
 function stagePills(oid){
-  const a=orderStageSummary(oid);
-  return`<div class="srow">${['PICK','INSP','PALL'].map((s,i)=>{
-    const ws=a[s];
-    const active=ws.filter(w=>!w.endT).length;
-    const done=ws.filter(w=>w.endT).length;
-    let cls='sp-wait';
-    if(active>0)cls=`sp-${s.toLowerCase()}`;
-    else if(done>0)cls='sp-done';
-    const cnt=ws.length?` (${done}/${ws.length})`:'';
-    return(i>0?'<span class="sp-arr">→</span>':'')+`<div class="sp ${cls}">${s}${cnt}</div>`;
+  const a = orderStageSummary(oid);
+  return `<div class="srow">${['PICK','INSP','PALL'].map((s,i)=>{
+    const ws = a[s];
+    const active = ws.filter(w=>!w.endT).length;
+    const done = ws.filter(w=>w.endT).length;
+    let cls = 'sp-wait';
+    if (active > 0) cls = `sp-${s.toLowerCase()}`;
+    else if (done > 0) cls = 'sp-done';
+    const cnt = ws.length ? ` (${done}/${ws.length})` : '';
+    return (i>0?'<span class="sp-arr">→</span>':'') + `<div class="sp ${cls}">${s}${cnt}</div>`;
   }).join('')}</div>`;
 }
 
-// ── DASHBOARD ──
-const D_PER=20;
-let _dFilter='all';
+// ── v8: order state / SLA / progress ──
+function orderState(oid){
+  const a = orderStageSummary(oid);
+  const any = a.PICK.length || a.INSP.length || a.PALL.length;
+  if (!any) return 'wait';
+  const allEnded = Object.values(a).every(ws => ws.every(w => w.endT));
+  if (allEnded && a.PALL.filter(w => w.endT).length > 0) return 'done';
+  return 'active';
+}
+function orderAgeH(o){
+  if (!o.at) return null;
+  const d = new Date(String(o.at).replace(' ', 'T'));
+  if (isNaN(d)) return null;
+  return (Date.now() - d.getTime()) / 3600000;
+}
+function fmtAge(h){
+  if (h === null) return '—';
+  if (h < 1)  return '<1h';
+  if (h < 24) return Math.floor(h) + 'h';
+  return (h/24).toFixed(1) + 'd';
+}
+function isSLA(o){
+  if (orderState(o.id) === 'done') return false;
+  const h = orderAgeH(o);
+  return h !== null && h >= SLA_HOURS;
+}
+function orderProgressBar(oid){
+  const a = orderStageSummary(oid);
+  let score = 0;
+  const segs = ['PICK','INSP','PALL'].map(s => {
+    const ws = a[s];
+    if (!ws.length) return `<div class="prog-seg" title="${s}: not started"></div>`;
+    if (ws.some(w => !w.endT)) { score += .5; return `<div class="prog-seg" title="${s}: in progress" style="background:${SCOL[s]};opacity:.45"></div>`; }
+    score += 1; return `<div class="prog-seg" title="${s}: done" style="background:${SCOL[s]}"></div>`;
+  }).join('');
+  const pct = Math.round(score / 3 * 100);
+  return `<div class="prog"><div class="prog-segs">${segs}</div><span class="prog-pct">${pct}%</span></div>`;
+}
 
-R.dash=function(){
-  // Count by status
-  let wait=0,pickA=0,inspA=0,pallA=0,done=0,mixed=0;
-  S.orders.forEach(o=>{
-    const a=orderStageSummary(o.id);
-    const anyWork=a.PICK.length||a.INSP.length||a.PALL.length;
-    if(!anyWork){wait++;return;}
-    const anyActive=Object.values(a).some(ws=>ws.some(w=>!w.endT));
-    const allEnded=Object.values(a).every(ws=>ws.every(w=>w.endT));
-    if(allEnded&&a.PALL.filter(w=>w.endT).length>0){done++;return;}
-    if(a.PALL.some(w=>!w.endT))pallA++;
-    else if(a.INSP.some(w=>!w.endT))inspA++;
-    else if(a.PICK.some(w=>!w.endT))pickA++;
-    else mixed++;
+// ── DASHBOARD ──
+const D_PER = 20;
+
+R.dash = function(){
+  let wait=0, pickA=0, inspA=0, pallA=0, done=0, slaN=0;
+  S.orders.forEach(o => {
+    const a = orderStageSummary(o.id);
+    if (isSLA(o)) slaN++;
+    const anyWork = a.PICK.length || a.INSP.length || a.PALL.length;
+    if (!anyWork) { wait++; return; }
+    const allEnded = Object.values(a).every(ws => ws.every(w => w.endT));
+    if (allEnded && a.PALL.filter(w => w.endT).length > 0) { done++; return; }
+    if (a.PALL.some(w => !w.endT)) pallA++;
+    else if (a.INSP.some(w => !w.endT)) inspA++;
+    else if (a.PICK.some(w => !w.endT)) pickA++;
   });
 
-  document.getElementById('dashMetrics').innerHTML=`<div class="g6">
+  document.getElementById('dashMetrics').innerHTML = `<div class="g7">
     ${[{l:'Waiting',v:wait,c:'am'},{l:'Picking',v:pickA,c:'bl'},{l:'Inspection',v:inspA,c:'pu'},
-       {l:'Palletizing',v:pallA,c:'tl'},{l:'Completed',v:done,c:'gr'},{l:'Total',v:S.orders.length,c:'cy'}]
-    .map(m=>`<div class="mc ${m.c}"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${{am:'amber',bl:'blue',pu:'purple',tl:'teal',gr:'green',cy:'cyan'}[m.c]})">${m.v}</div></div>`).join('')}</div>`;
+       {l:'Palletizing',v:pallA,c:'tl'},{l:'Completed',v:done,c:'gr'},
+       {l:'SLA risk',v:slaN,c:'rd',alert:slaN>0},{l:'Total',v:S.orders.length,c:'cy'}]
+    .map(m => `<div class="mc ${m.c}${m.alert?' alert':''}"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${{am:'amber',bl:'blue',pu:'purple',tl:'teal',gr:'green',cy:'cyan',rd:'red'}[m.c]})">${m.v}</div></div>`).join('')}</div>`;
   renderDashTable();
 };
 
 function renderDashTable(){
-  const tabs=[{k:'all',l:'All'},{k:'active',l:'Active'},{k:'done',l:'Done'},{k:'waiting',l:'Waiting'}];
-  document.getElementById('dashFilterTabs').innerHTML=tabs.map(t=>
-    `<button class="btn btn-sm" style="${_dFilter===t.k?'background:var(--bg4);border-color:var(--t3)':'color:var(--t3)'}" onclick="_dFilter='${t.k}';_dp=0;renderDashTable()">${t.l}</button>`).join('');
+  const tabs = [{k:'all',l:'All'},{k:'active',l:'Active'},{k:'sla',l:'⚠ SLA'},{k:'done',l:'Done'},{k:'waiting',l:'Waiting'}];
+  document.getElementById('dashFilterTabs').innerHTML = tabs.map(t =>
+    `<button class="btn btn-sm" style="${_dFilter===t.k?'background:var(--bg4);border-color:var(--t3)':'color:var(--t3)'}${t.k==='sla'&&_dFilter==='sla'?';color:var(--red)':''}" onclick="_dFilter='${t.k}';_dp=0;renderDashTable()">${t.l}</button>`).join('');
 
-  let rows=S.orders;
-  if(_dFilter==='active')rows=rows.filter(o=>Object.values(orderStageSummary(o.id)).some(ws=>ws.some(w=>!w.endT)));
-  else if(_dFilter==='done')rows=rows.filter(o=>{const a=orderStageSummary(o.id);const any=a.PICK.length||a.INSP.length||a.PALL.length;return any&&Object.values(a).every(ws=>ws.every(w=>w.endT))&&a.PALL.some(w=>w.endT);});
-  else if(_dFilter==='waiting')rows=rows.filter(o=>{const a=orderStageSummary(o.id);return!a.PICK.length&&!a.INSP.length&&!a.PALL.length;});
+  let rows = S.orders;
+  if (_dFilter === 'active')  rows = rows.filter(o => orderState(o.id) === 'active' || Object.values(orderStageSummary(o.id)).some(ws => ws.some(w => !w.endT)));
+  else if (_dFilter === 'sla')    rows = rows.filter(o => isSLA(o));
+  else if (_dFilter === 'done')   rows = rows.filter(o => orderState(o.id) === 'done');
+  else if (_dFilter === 'waiting')rows = rows.filter(o => orderState(o.id) === 'wait');
 
-  const sq=(document.getElementById('dashSearch')?.value||'').toUpperCase();
-  if(sq)rows=rows.filter(o=>{const ws=S.works.filter(w=>w.oid===o.id);return o.id.toUpperCase().includes(sq)||o.ch.toUpperCase().includes(sq)||o.cu.toUpperCase().includes(sq)||ws.some(w=>w.w.toUpperCase().includes(sq));});
+  const sq = (document.getElementById('dashSearch')?.value || '').toUpperCase();
+  if (sq) rows = rows.filter(o => {
+    const ws = S.works.filter(w => w.oid === o.id);
+    return o.id.toUpperCase().includes(sq) || o.ch.toUpperCase().includes(sq) ||
+           o.cu.toUpperCase().includes(sq) || ws.some(w => w.w.toUpperCase().includes(sq));
+  });
 
-  const total=rows.length,pages=Math.max(1,Math.ceil(total/D_PER));
-  if(_dp>=pages)_dp=pages-1;if(_dp<0)_dp=0;
-  const slice=rows.slice(_dp*D_PER,_dp*D_PER+D_PER);
+  // SLA-risk orders float to the top so they can't be missed
+  rows = [...rows].sort((a,b) => (isSLA(b)?1:0) - (isSLA(a)?1:0));
 
-  if(!slice.length){document.getElementById('dashTable').innerHTML='<div class="empty"><i class="ri-inbox-line"></i>No orders found</div>';document.getElementById('dashPager').innerHTML='';return;}
+  const total = rows.length, pages = Math.max(1, Math.ceil(total / D_PER));
+  if (_dp >= pages) _dp = pages - 1; if (_dp < 0) _dp = 0;
+  const slice = rows.slice(_dp*D_PER, _dp*D_PER + D_PER);
 
-  const trs=slice.map(o=>{
-    const ws=S.works.filter(w=>w.oid===o.id);
-    const workers=[...new Set(ws.map(w=>w.w))];
-    const totalItems=ws.filter(w=>w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
-    const totalQty  =ws.filter(w=>w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
-    const totalPallets=ws.filter(w=>w.stage==='PALL'&&w.endT&&w.pallets!==null).reduce((s,w)=>s+(w.pallets||0),0);
-    const totalNet  =ws.filter(w=>w.endT&&w.netMin!==null).reduce((s,w)=>s+(w.netMin||0),0);
-    const isMe=ws.some(w=>w.w===CW);
-    return`<tr${isMe?' style="background:rgba(59,130,246,.04)"':''}>
-      <td><span class="oid">${o.id}</span></td>
+  if (!slice.length) {
+    document.getElementById('dashTable').innerHTML = '<div class="empty"><i class="ri-inbox-line"></i>No orders found</div>';
+    document.getElementById('dashPager').innerHTML = '';
+    return;
+  }
+
+  const trs = slice.map(o => {
+    const ws = S.works.filter(w => w.oid === o.id);
+    const workers = [...new Set(ws.map(w => w.w))];
+    const totalItems   = ws.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
+    const totalQty     = ws.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
+    const totalPallets = ws.filter(w => w.stage==='PALL'&&w.endT&&w.pallets!==null).reduce((s,w)=>s+(w.pallets||0),0);
+    const totalNet     = ws.filter(w => w.endT&&w.netMin!==null).reduce((s,w)=>s+(w.netMin||0),0);
+    const isMe  = ws.some(w => w.w === CW);
+    const sla   = isSLA(o);
+    const ageH  = orderAgeH(o);
+    return `<tr class="${sla?'sla-row':''}"${isMe?' style="background:rgba(59,130,246,.04)"':''}>
+      <td><span class="oid">${o.id}</span>${sla?' <span class="badge b-sla" style="font-size:10px;padding:2px 8px">SLA</span>':''}</td>
       <td><span class="dim">${o.ch}</span></td>
       <td><span class="dim">${o.cu}</span></td>
+      <td><span class="num" style="${sla?'color:var(--red);font-weight:800':'color:var(--t2)'}">${fmtAge(ageH)}</span></td>
       <td style="font-size:13px;color:var(--t2)">${workers.join(', ')||'<span style="color:var(--t3)">—</span>'}</td>
       <td><span class="num">${totalItems||'—'}</span></td>
       <td><span class="num">${totalQty||'—'}</span></td>
       <td><span class="num" style="color:var(--teal)">${totalPallets?fmtPallets(totalPallets):'—'}</span></td>
       <td><span class="num" style="color:var(--blue)">${totalNet?fmtMin(totalNet):'—'}</span></td>
-      <td>${stagePills(o.id)}</td>
+      <td>${orderProgressBar(o.id)}</td>
       <td><button class="btn btn-sm" onclick="showOrderDetail('${o.id}')"><i class="ri-eye-line"></i></button></td>
     </tr>`;
   });
 
-  document.getElementById('dashTable').innerHTML=`<div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)">
-    <table class="dash-tbl" style="min-width:800px"><thead><tr>
-      <th>Order</th><th>Ch.</th><th>Customer</th><th>Workers</th>
-      <th>Items</th><th>QTY</th><th>Pallets</th><th>Net time</th><th>Stage progress</th><th></th>
+  document.getElementById('dashTable').innerHTML = `<div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)">
+    <table class="dash-tbl" style="min-width:920px"><thead><tr>
+      <th>Order</th><th>Ch.</th><th>Customer</th><th>Age</th><th>Workers</th>
+      <th>Items</th><th>QTY</th><th>Pallets</th><th>Net time</th><th>Progress</th><th></th>
     </tr></thead><tbody>${trs.join('')}</tbody></table></div>`;
 
-  const pg=document.getElementById('dashPager');
-  pg.innerHTML=pages>1?`<button class="btn btn-sm" onclick="_dp--;renderDashTable()" ${_dp===0?'disabled':''}><i class="ri-arrow-left-s-line"></i></button><span style="font-size:11px;color:var(--t2)">${_dp+1}/${pages} (${total})</span><button class="btn btn-sm" onclick="_dp++;renderDashTable()" ${_dp>=pages-1?'disabled':''}><i class="ri-arrow-right-s-line"></i></button>`:`<span style="font-size:11px;color:var(--t3)">${total} order${total>1?'s':''}</span>`;
+  const pg = document.getElementById('dashPager');
+  pg.innerHTML = pages > 1
+    ? `<button class="btn btn-sm" onclick="_dp--;renderDashTable()" ${_dp===0?'disabled':''}><i class="ri-arrow-left-s-line"></i></button><span style="font-size:11px;color:var(--t2)">${_dp+1}/${pages} (${total})</span><button class="btn btn-sm" onclick="_dp++;renderDashTable()" ${_dp>=pages-1?'disabled':''}><i class="ri-arrow-right-s-line"></i></button>`
+    : `<span style="font-size:11px;color:var(--t3)">${total} order${total>1?'s':''}</span>`;
 }
 
-window.showOrderDetail=function(oid){
-  const o=S.orders.find(x=>x.id===oid);if(!o)return;
-  const ws=S.works.filter(w=>w.oid===oid);
-  let html=`<div style="margin-bottom:14px"><div style="font-size:15px;font-weight:700">${oid}</div><div style="font-size:12px;color:var(--t2)">${o.ch} · ${o.cu}</div></div>`;
-  ['PICK','INSP','PALL'].forEach(stage=>{
-    const sw=ws.filter(w=>w.stage===stage);if(!sw.length)return;
-    const col=SCOL[stage];
-    html+=`<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:${col};letter-spacing:.06em;margin-bottom:5px">${stage}</div>`;
-    sw.forEach((w,i)=>{
-      const done=!!w.endT;
-      const detail=stage==='PICK'?`${w.items} items · ${w.qty} QTY`:(w.pallets!==null&&done?`${fmtPallets(w.pallets)} pallets`:'');
-      html+=`<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 11px;margin-bottom:4px;font-size:12px">
+window.showOrderDetail = function(oid){
+  const o = S.orders.find(x => x.id === oid); if (!o) return;
+  const ws = S.works.filter(w => w.oid === oid);
+  const sla = isSLA(o);
+  let html = `<div style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <div style="font-size:15px;font-weight:700">${oid}</div>
+      ${sla?'<span class="badge b-sla" style="font-size:10px">SLA risk</span>':''}
+    </div>
+    <div style="font-size:12px;color:var(--t2)">${o.ch} · ${o.cu} · created ${o.at||'—'} (${fmtAge(orderAgeH(o))} ago)</div>
+    <div style="margin-top:10px">${stagePills(oid)}</div>
+    <div style="margin-top:8px">${orderProgressBar(oid)}</div>
+  </div>`;
+  ['PICK','INSP','PALL'].forEach(stage => {
+    const sw = ws.filter(w => w.stage === stage); if (!sw.length) return;
+    const col = SCOL[stage];
+    html += `<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:${col};letter-spacing:.06em;margin-bottom:5px">${stage}</div>`;
+    sw.forEach(w => {
+      const done = !!w.endT;
+      const detail = stage==='PICK' ? `${w.items} items · ${w.qty} QTY` : (w.pallets!==null&&done?`${fmtPallets(w.pallets)} pallets`:'');
+      html += `<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 11px;margin-bottom:4px;font-size:12px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">${w.w}</span>
           ${done?`<span class="badge b-done">Done · ${fmtMin(w.netMin)}</span>`:`<span class="badge b-live">Active</span>`}
@@ -767,40 +1093,39 @@ window.showOrderDetail=function(oid){
         <div style="color:var(--t3);margin-top:2px">${w.startT}${done?' → '+w.endT:' → now'} · ${detail}</div>
       </div>`;
     });
-    html+='</div>';
+    html += '</div>';
   });
-  if(!ws.length)html+='<div class="empty"><i class="ri-inbox-line"></i>No work entries</div>';
-  html+=`<div style="text-align:right;margin-top:12px"><button class="btn btn-sm" onclick="closeModal()">Close</button></div>`;
+  if (!ws.length) html += '<div class="empty"><i class="ri-inbox-line"></i>No work entries</div>';
+  html += `<div style="text-align:right;margin-top:12px"><button class="btn btn-sm" onclick="closeModal()">Close</button></div>`;
   openModal(html);
 };
 
 // ══════════════════════════════════════════════════════
-// WORK PAGE — each tab shows ONLY that stage's content
+// WORK PAGE
 // ══════════════════════════════════════════════════════
 
-function selStage(s) {
+function selStage(s){
   CS = s;
   document.querySelectorAll('.stab').forEach(t => t.classList.remove('on'));
   document.querySelector(`.stab.${s.toLowerCase()}`)?.classList.add('on');
   renderStageContent();
 }
 
-R.work = function() {
+R.work = function(){
   updateTabStatus();
   renderStageContent();
 };
 
-function updateTabStatus() {
+function updateTabStatus(){
   ['PICK','INSP','PALL'].forEach(s => {
-    const el  = document.getElementById('stabStatus_' + s); if (!el) return;
+    const el = document.getElementById('stabStatus_' + s); if (!el) return;
     const mine = S.works.filter(w => w.w === CW && w.stage === s && !w.endT);
-    const tab  = document.querySelector(`.stab.${s.toLowerCase()}`); if (!tab) return;
-    const dot  = tab.querySelector('.stab-dot');
+    const tab = document.querySelector(`.stab.${s.toLowerCase()}`); if (!tab) return;
+    const dot = tab.querySelector('.stab-dot');
     if (mine.length > 0) {
       el.textContent = mine.length + ' active';
-      el.style.color   = SCOL[s];
-      el.style.opacity = '1';
-      if (!dot) { const d=document.createElement('div'); d.className='stab-dot'; tab.appendChild(d); }
+      el.style.color = SCOL[s]; el.style.opacity = '1';
+      if (!dot) { const d = document.createElement('div'); d.className = 'stab-dot'; tab.appendChild(d); }
     } else {
       el.textContent = '';
       if (dot) dot.remove();
@@ -808,24 +1133,20 @@ function updateTabStatus() {
   });
 }
 
-function renderStageContent() {
+function renderStageContent(){
   const container = document.getElementById('stageContent'); if (!container) return;
   updateTabStatus();
-  const s    = CS;
-  const col  = SCOL[s];
-  const bdcl = SBGCLS[s];
-  const icon = SICON[s];
+  const s = CS, col = SCOL[s], bdcl = SBGCLS[s], icon = SICON[s];
 
-  // My active sessions for THIS stage only
-  const mySessions = S.works.filter(w => w.w===CW && w.stage===s && !w.endT);
+  const mySessions = S.works.filter(w => w.w === CW && w.stage === s && !w.endT);
 
-  // ── Active sessions section ──
   let activeSect = '';
   if (mySessions.length > 0) {
     activeSect += mySessions.map(w => {
-      const o   = S.orders.find(x=>x.id===w.oid);
+      const o = S.orders.find(x => x.id === w.oid);
       const inf = !!_pending[w.id];
-      const elapsed = w.startT ? liveElapsed(w.startT) : '';
+      const queued = isTempQueued(w.id);
+      const elapsed = liveElapsed(w);
       return `
       <div class="session-card ${bdcl}" id="sc_${w.id}" style="margin-bottom:10px">
         <div class="session-top">
@@ -833,8 +1154,9 @@ function renderStageContent() {
             <div class="session-title">${w.oid}</div>
             <div class="session-sub">${o?.ch||''} · ${o?.cu||''}</div>
           </div>
-          ${inf ? '<span class="badge b-saving"><i class="ri-loader-4-line"></i> Saving...</span>'
-                : `<span class="badge b-live"><i class="ri-record-circle-line"></i> ${s} Active</span>`}
+          ${queued ? '<span class="badge b-queued"><i class="ri-cloud-off-line"></i> Queued (offline)</span>'
+            : inf ? '<span class="badge b-saving"><i class="ri-loader-4-line"></i> Saving...</span>'
+                  : `<span class="badge b-live"><i class="ri-record-circle-line"></i> ${s} Active</span>`}
         </div>
         <div class="session-chips">
           ${s==='PICK'&&w.items ? `<span class="chip"><i class="ri-box-3-line"></i> ${w.items} items</span><span class="chip"><i class="ri-stack-line"></i> ${w.qty} QTY</span>` : ''}
@@ -852,12 +1174,9 @@ function renderStageContent() {
     </div>`;
   }
 
-  // ── Start new session ──
-  const orders = S.orders;
-  const curOid = ''; // fresh each render
-  const orderOpts = orders.map(o => {
-    const myHere = S.works.filter(w=>w.oid===o.id&&w.w===CW&&w.stage===s&&!w.endT).length;
-    return `<option value="${o.id}">${o.id} (${o.ch}·${o.cu})${myHere?' ⚡ Active':''}  </option>`;
+  const orderOpts = S.orders.map(o => {
+    const myHere = S.works.filter(w => w.oid===o.id && w.w===CW && w.stage===s && !w.endT).length;
+    return `<option value="${o.id}">${o.id} (${o.ch}·${o.cu})${myHere?' ⚡ Active':''}${isSLA(o)?' ⚠ SLA':''}</option>`;
   }).join('');
 
   const instrMap = {
@@ -866,7 +1185,7 @@ function renderStageContent() {
     PALL: 'Select order and start. Enter pallet count when done.'
   };
 
-  const pickFields = s==='PICK' ? `
+  const pickFields = s === 'PICK' ? `
     <div class="frow" style="margin-bottom:12px">
       <div class="fg" style="margin-bottom:0">
         <label class="fl"><i class="ri-box-3-line"></i> Items (SKU types)</label>
@@ -884,10 +1203,13 @@ function renderStageContent() {
         <div style="width:36px;height:36px;border-radius:50%;background:${col}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <i class="${icon}" style="color:${col};font-size:18px"></i>
         </div>
-        <div>
+        <div style="flex:1">
           <div style="font-weight:700;font-size:15px">${SLABEL[s]}</div>
           <div style="font-size:11px;color:var(--t3);margin-top:1px">${instrMap[s]}</div>
         </div>
+        <button class="btn btn-sm" onclick="openScan('work')" title="Scan order barcode / QR">
+          <i class="ri-qr-scan-2-line"></i> Scan
+        </button>
       </div>
       <div class="fg">
         <label class="fl">Order</label>
@@ -904,50 +1226,44 @@ function renderStageContent() {
 
   container.innerHTML = activeSect + startSect;
   startSessionTimer();
-
-  // Re-attach order change handler
-  const sel = document.getElementById('workOrder');
-  if (sel) sel.addEventListener('change', onOrderChange);
 }
 
 // Live timer
 let _timerInterval = null;
-function startSessionTimer() {
+function startSessionTimer(){
   if (_timerInterval) return;
   _timerInterval = setInterval(() => {
     if (curPage() !== 'work') return;
     S.works.filter(w => w.w===CW && !w.endT && w.startT).forEach(w => {
       const el = document.getElementById('elapsed_' + w.id); if (!el) return;
-      const t = liveElapsed(w.startT);
+      const t = liveElapsed(w);
       if (t) el.innerHTML = `<i class="ri-timer-line"></i> ${t}`;
     });
   }, 60000);
 }
 
-function liveElapsed(startHHmm) {
-  if (!startHHmm) return '';
+function liveElapsed(w){
   try {
-    const nm = clientNet(startHHmm, nowHHmm());
+    const nm = clientNet(w);
     return nm !== null ? fmtMin(nm) + ' elapsed' : '';
   } catch(_) { return ''; }
 }
 
-function onOrderChange() {
+function onOrderChange(){
   const oid = document.getElementById('workOrder')?.value;
-  const el  = document.getElementById('workOrderInfo'); if (!el) return;
+  const el = document.getElementById('workOrderInfo'); if (!el) return;
   if (!oid) { el.innerHTML = ''; return; }
-  const o      = S.orders.find(x=>x.id===oid);
-  const ws     = S.works.filter(w=>w.oid===oid && w.stage===CS);
-  const active = ws.filter(w=>!w.endT).length;
-  const done   = ws.filter(w=> w.endT).length;
-  const myHere = ws.filter(w=>w.w===CW && !w.endT).length;
-  const col    = SCOL[CS];
+  const o = S.orders.find(x => x.id === oid);
+  const ws = S.works.filter(w => w.oid===oid && w.stage===CS);
+  const active = ws.filter(w => !w.endT).length;
+  const done = ws.filter(w => w.endT).length;
+  const myHere = ws.filter(w => w.w===CW && !w.endT).length;
+  const col = SCOL[CS];
 
-  // Activity feed for this stage only
   const feedRows = ws.map(w => {
-    const isDone  = !!w.endT;
-    const isMe    = w.w === CW;
-    const detail  = CS==='PICK'
+    const isDone = !!w.endT;
+    const isMe = w.w === CW;
+    const detail = CS==='PICK'
       ? `${w.items||0} items · ${w.qty||0} QTY`
       : (w.pallets!==null && isDone ? `${fmtPallets(w.pallets)} pallets` : '');
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)">
@@ -969,6 +1285,7 @@ function onOrderChange() {
       <span style="font-weight:700">${o.ch} · ${o.cu}</span>
       <span style="color:${col};margin-left:4px">${CS}: ${active} active · ${done} done</span>
       ${myHere ? `<span style="color:var(--amber);font-weight:600;margin-left:4px">⚡ You have ${myHere} active here</span>` : ''}
+      ${isSLA(o) ? `<span class="badge b-sla" style="font-size:10px;margin-left:4px">SLA ${fmtAge(orderAgeH(o))}</span>` : ''}
     </div>
     ${feedRows ? `<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:10px 14px;margin-bottom:12px">
       <div style="font-size:10px;font-weight:700;color:${col};letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px"><i class="${SICON[CS]}"></i> ${CS} — ${oid}</div>
@@ -976,16 +1293,14 @@ function onOrderChange() {
     </div>` : ''}`;
 }
 
-// stubs so nothing breaks
-function updateWorkOrderInfo() { onOrderChange(); }
-function onWorkOrderChange()   { onOrderChange(); }
-function renderActFeed()       {}
-function renderMyActive()      { renderStageContent(); }
+function renderMyActive(){ renderStageContent(); }
+function renderActFeed(){}
 
-// ── Global start lock — prevents double-tap race condition ──
-let _startLock = false;
+// ══════════════════════════════════════════════════════
+// START WORK — optimistic + offline queue + dupe guards
+// ══════════════════════════════════════════════════════
 
-window.startWork = function() {
+window.startWork = function(){
   const oid = document.getElementById('workOrder')?.value;
   if (!oid) { toast('Select an order', 'err'); return; }
 
@@ -997,30 +1312,17 @@ window.startWork = function() {
     if (!qty   || qty   < 1) { toast('Enter total QTY', 'err'); return; }
   }
 
-  // ── Hard block: active dupe ──────────────────────────
-  const activeDupe = S.works.filter(w =>
-    w.w === CW && w.oid === oid && w.stage === CS && !w.endT
-  );
-  if (activeDupe.length > 0) {
-    showDupeBlockModal(oid, activeDupe[0]);
-    return;
-  }
+  const activeDupe = S.works.filter(w => w.w===CW && w.oid===oid && w.stage===CS && !w.endT);
+  if (activeDupe.length > 0) { showDupeBlockModal(oid, activeDupe[0]); return; }
 
-  // ── Warn: previously completed same order+stage ──────
-  const completedHere = S.works.filter(w =>
-    w.w === CW && w.oid === oid && w.stage === CS && w.endT
-  );
-  if (completedHere.length > 0) {
-    showDupeWarnModal(oid, completedHere, items, qty);
-    return;
-  }
+  const completedHere = S.works.filter(w => w.w===CW && w.oid===oid && w.stage===CS && w.endT);
+  if (completedHere.length > 0) { showDupeWarnModal(oid, completedHere, items, qty); return; }
 
-  // ── Normal start ─────────────────────────────────────
   doStartWork(oid, items, qty);
 };
 
-function showDupeBlockModal(oid, existing) {
-  const o   = S.orders.find(x => x.id === oid);
+function showDupeBlockModal(oid, existing){
+  const o = S.orders.find(x => x.id === oid);
   const col = SCOL[CS];
   openModal(`
     <div style="text-align:center;padding:8px 0">
@@ -1033,15 +1335,13 @@ function showDupeBlockModal(oid, existing) {
         You have an active <strong style="color:${col}">${CS}</strong> session<br>
         for <strong>${oid}</strong> (${o?.ch}·${o?.cu})
       </div>
-      <div style="background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r2);
-           padding:14px 16px;margin-bottom:18px">
-        <div style="font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.07em;
-             text-transform:uppercase;margin-bottom:8px">Active session</div>
+      <div style="background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r2);padding:14px 16px;margin-bottom:18px">
+        <div style="font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:8px">Active session</div>
         <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:${col};margin-bottom:4px">
           ${existing.startT} → now
         </div>
         <div style="color:var(--amber);font-size:12px;font-weight:600">
-          ⏱ ${liveElapsed(existing.startT) || 'Just started'}
+          ⏱ ${liveElapsed(existing) || 'Just started'}
         </div>
       </div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:16px;line-height:1.6">
@@ -1053,11 +1353,10 @@ function showDupeBlockModal(oid, existing) {
     </div>`);
 }
 
-function showDupeWarnModal(oid, completedSessions, items, qty) {
-  const o      = S.orders.find(x => x.id === oid);
-  const col    = SCOL[CS];
-  const isMultiOK = CS === 'PALL'; // PALL explicitly allows multi-session (multi-day)
-  // Safe JSON for callback — avoids null in inline JS string
+function showDupeWarnModal(oid, completedSessions, items, qty){
+  const o = S.orders.find(x => x.id === oid);
+  const col = SCOL[CS];
+  const isMultiOK = CS === 'PALL';
   const itemsJson = items !== null ? items : 'null';
   const qtyJson   = qty   !== null ? qty   : 'null';
 
@@ -1075,41 +1374,30 @@ function showDupeWarnModal(oid, completedSessions, items, qty) {
           </div>
         </div>
       </div>
-
       <div style="font-size:12px;color:var(--t2);margin-bottom:12px">
         You already completed <strong>${completedSessions.length}</strong>
-        ${CS} session${completedSessions.length > 1 ? 's' : ''} for this order:
+        ${CS} session${completedSessions.length>1?'s':''} for this order:
       </div>
-
-      <div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);
-           padding:10px 12px;margin-bottom:12px;max-height:160px;overflow-y:auto">
-        ${completedSessions.map((w, i) => `
-          <div style="display:flex;justify-content:space-between;align-items:center;
-               padding:6px 0;border-bottom:1px solid var(--bd)${i===completedSessions.length-1?';border-bottom:none':''}">
+      <div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;max-height:160px;overflow-y:auto">
+        ${completedSessions.map((w,i) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)${i===completedSessions.length-1?';border-bottom:none':''}">
             <div>
               <div style="font-family:var(--mono);font-size:12px;color:var(--t2)">${w.startT} → ${w.endT}</div>
               <div style="font-size:10px;color:var(--t3);margin-top:1px">${w.date||''}</div>
             </div>
             <div style="text-align:right">
               <div style="color:var(--teal);font-size:12px;font-weight:600">${fmtMin(w.netMin)}</div>
-              ${w.pallets !== null ? `<div style="color:var(--amber);font-size:10px">${fmtPallets(w.pallets)} pallets</div>` : ''}
+              ${w.pallets!==null?`<div style="color:var(--amber);font-size:10px">${fmtPallets(w.pallets)} pallets</div>`:''}
             </div>
           </div>`).join('')}
       </div>
-
       ${isMultiOK
-        ? `<div style="background:var(--teal-bg);border:1px solid var(--teal-bd);border-radius:var(--r);
-               padding:8px 12px;margin-bottom:14px;font-size:11px;color:var(--teal)">
-             <i class="ri-information-line"></i>
-             Multi-session palletizing is normal — work can resume across days.
+        ? `<div style="background:var(--teal-bg);border:1px solid var(--teal-bd);border-radius:var(--r);padding:8px 12px;margin-bottom:14px;font-size:11px;color:var(--teal)">
+             <i class="ri-information-line"></i> Multi-session palletizing is normal — work can resume across days.
            </div>`
-        : `<div style="background:var(--amber-bg);border:1px solid var(--amber-bd);border-radius:var(--r);
-               padding:8px 12px;margin-bottom:14px;font-size:11px;color:var(--amber)">
-             <i class="ri-alert-line"></i>
-             Are you sure? This will add another ${CS} session to the same order.
-           </div>`
-      }
-
+        : `<div style="background:var(--amber-bg);border:1px solid var(--amber-bd);border-radius:var(--r);padding:8px 12px;margin-bottom:14px;font-size:11px;color:var(--amber)">
+             <i class="ri-alert-line"></i> Are you sure? This will add another ${CS} session to the same order.
+           </div>`}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <button class="btn" onclick="closeModal()" style="justify-content:center;padding:12px">
           <i class="ri-close-line"></i> Cancel
@@ -1122,125 +1410,119 @@ function showDupeWarnModal(oid, completedSessions, items, qty) {
     </div>`);
 }
 
-// Called only after user explicitly confirms
-window._confirmedStart = function(oid, items, qty) {
+window._confirmedStart = function(oid, items, qty){
   doStartWork(oid, items === 'null' ? null : items, qty === 'null' ? null : qty);
 };
 
-function doStartWork(oid, items, qty) {
-  // ── Click lock — holds until server responds ──────────
+function doStartWork(oid, items, qty){
   if (_startLock) { toast('Starting... please wait', ''); return; }
   _startLock = true;
-
-  // Safety auto-release after 10s (in case of network failure)
   const lockTimer = setTimeout(() => { _startLock = false; }, 10000);
 
-  // Final guard — check again right before pushing
-  const activeDupe = S.works.filter(w =>
-    w.w === CW && w.oid === oid && w.stage === CS && !w.endT
-  );
+  const activeDupe = S.works.filter(w => w.w===CW && w.oid===oid && w.stage===CS && !w.endT);
   if (activeDupe.length > 0) {
-    _startLock = false;
-    clearTimeout(lockTimer);
-    showDupeBlockModal(oid, activeDupe[0]);
-    return;
+    _startLock = false; clearTimeout(lockTimer);
+    showDupeBlockModal(oid, activeDupe[0]); return;
   }
 
-  const tid  = genId();
+  const tid = genId();
   const hhmm = nowHHmm();
+  const localISO = todayStr() + 'T' + hhmm + ':00';
 
-  // ── Immediately disable ALL start buttons ─────────────
   document.querySelectorAll('[id="btnStartWork"]').forEach(btn => {
     btn.disabled = true;
     btn.innerHTML = '<i class="ri-loader-4-line"></i> Starting...';
   });
-  // Also disable the start card entirely
   const startCard = document.querySelector('.start-card');
   if (startCard) startCard.style.opacity = '.5';
 
   const entry = {
-    id: tid, oid, w: CW, stage: CS,
-    items, qty, pallets: null,
-    startT: hhmm, endT: '', startISO: '', endISO: '',
-    netMin: null, grossMin: null, date: todayStr()
+    id:tid, oid, w:CW, stage:CS, items, qty, pallets:null,
+    startT:hhmm, endT:'', startISO:localISO, endISO:'',
+    netMin:null, grossMin:null, date:todayStr()
   };
   S.works.push(entry);
+  const reqData = { orderId:oid, worker:CW, wpin:(WS&&WS.wpin)||'', stage:CS, items, qty };
+
+  const finish = () => {
+    clearTimeout(lockTimer); _startLock = false;
+    updateBadges(); renderStageContent();
+  };
+
+  // Known-offline → queue immediately
+  if (!navigator.onLine) {
+    enqueueOp('startWork', reqData, { tempId:tid, local:entry });
+    toast('Offline — ' + CS + ' start saved to queue', '');
+    finish(); return;
+  }
+
   _pending[tid] = true;
   toast(`✓ ${CS} started!`, 'ok');
-  updateBadges();
-  renderStageContent();
+  updateBadges(); renderStageContent();
 
-  apiBg('startWork', { orderId: oid, worker: CW, stage: CS, items, qty },
-    res => {
-      clearTimeout(lockTimer);
-      _startLock = false;
-
-      // Server rejected as duplicate active session
-      if (!res.ok && res.error === 'duplicate_active') {
-        S.works = S.works.filter(w => w.id !== tid);
-        delete _pending[tid];
-        toast('⚠ Already active on server — refreshing...', 'err');
-        loadData().then(() => { updateBadges(); renderStageContent(); });
-        return;
-      }
-
-      const idx = S.works.findIndex(w => w.id === tid);
-      if (idx >= 0 && res.entryId) {
-        S.works[idx].id     = res.entryId;
-        S.works[idx].startT = res.startTime || hhmm;
-      }
-      delete _pending[tid];
-      updateBadges();
-      renderStageContent();
-    },
-    () => {
-      clearTimeout(lockTimer);
-      _startLock = false;
-      S.works = S.works.filter(w => w.id !== tid);
-      delete _pending[tid];
-      toast('⚠ Save failed — try again', 'err');
-      updateBadges();
-      renderStageContent();
+  apiOp('startWork', reqData).then(out => {
+    delete _pending[tid];
+    if (!out.net) {
+      // Network failure → keep optimistic entry, queue for later sync
+      enqueueOp('startWork', reqData, { tempId:tid, local:entry });
+      toast('Connection lost — start saved to queue', '');
+      finish(); return;
     }
-  );
+    const res = out.res;
+    if (!res.ok && res.error === 'duplicate_active') {
+      S.works = S.works.filter(w => w.id !== tid);
+      toast('⚠ Already active on server — refreshing...', 'err');
+      loadData().then(() => { updateBadges(); renderStageContent(); });
+      finish(); return;
+    }
+    if (!res.ok) {
+      S.works = S.works.filter(w => w.id !== tid);
+      toast('⚠ Start rejected: ' + (res.error || 'unknown'), 'err');
+      finish(); return;
+    }
+    const idx = S.works.findIndex(w => w.id === tid);
+    if (idx >= 0) {
+      if (res.entryId)  S.works[idx].id = res.entryId;
+      if (res.startTime) S.works[idx].startT = res.startTime;
+      if (res.startISO)  S.works[idx].startISO = res.startISO;
+    }
+    finish();
+  });
 }
 
-// Round to nearest 0.5 — rule: < 0.5 fraction → round down to .5, >= 0.5 fraction → round up to 1.0
-// e.g. 0.3→0.5, 0.7→1.0, 1.3→1.5, 3.2→3.5, 3.6→4.0
+// ══════════════════════════════════════════════════════
+// END WORK — pallet modal + optimistic + offline queue
+// ══════════════════════════════════════════════════════
+
 function roundPallets(v){
-  if(isNaN(v)||v<=0)return 0;
-  const floor=Math.floor(v);
-  const frac=v-floor;
-  if(frac===0)   return floor;          // exact integer
-  if(frac<0.5)   return floor+0.5;      // < half → round to .5
-  return floor+1;                        // >= half → round up
+  if (isNaN(v) || v <= 0) return 0;
+  const floor = Math.floor(v);
+  const frac = v - floor;
+  if (frac === 0) return floor;
+  if (frac < 0.5) return floor + 0.5;
+  return floor + 1;
 }
 function fmtPallets(v){
-  if(v===null||v===undefined||v==='')return'—';
-  const n=Number(v);
-  return Number.isInteger(n)?n.toString():n.toFixed(1);
+  if (v === null || v === undefined || v === '') return '—';
+  const n = Number(v);
+  return Number.isInteger(n) ? n.toString() : n.toFixed(1);
 }
 
-// endWork — for INSP/PALL show pallet-count modal; for PICK immediate
-window.endWork=function(wid,stage){
-  const w=S.works.find(x=>x.id===wid);if(!w||_pending[wid])return;
-  if(stage==='PICK'){
-    doEndWork(wid,null);
-  }else{
-    const col=SCOL[stage];
-    // Quick-select buttons: 0, 0.5, 1, 1.5 … up to 8
-    const quickVals=[0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,6,7,8];
-    const qBtns=quickVals.map(v=>`<button class="btn btn-sm" style="min-width:46px;font-weight:700"
+window.endWork = function(wid, stage){
+  const w = S.works.find(x => x.id === wid); if (!w || _pending[wid]) return;
+  if (stage === 'PICK') {
+    doEndWork(wid, null);
+  } else {
+    const col = SCOL[stage];
+    const quickVals = [0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,6,7,8];
+    const qBtns = quickVals.map(v => `<button class="btn btn-sm" style="min-width:46px;font-weight:700"
       onclick="setPalletVal(${v})">${v===0?'0':fmtPallets(v)}</button>`).join('');
 
     openModal(`<div class="end-modal-inner">
       <i class="${SICON[stage]}" style="font-size:28px;color:${col};display:block;margin-bottom:8px"></i>
       <div style="font-size:15px;font-weight:700;margin-bottom:2px">End ${stage}</div>
       <div style="font-size:12px;color:var(--t2);margin-bottom:16px">${w.oid} · ${w.startT} → now</div>
-
       <label class="fl" style="text-align:center;margin-bottom:8px">How many pallets completed?</label>
-
-      <!-- Manual input -->
       <div style="display:flex;align-items:center;gap:6px;justify-content:center;margin-bottom:6px">
         <button class="btn btn-sm" style="font-size:16px;padding:4px 10px;font-weight:700" onclick="adjPallet(-0.5)">−</button>
         <input class="fi" type="number" id="palletCount" min="0" step="0.5" placeholder="0"
@@ -1249,14 +1531,9 @@ window.endWork=function(wid,stage){
           onkeydown="if(event.key==='Enter')confirmEnd('${wid}','${stage}')">
         <button class="btn btn-sm" style="font-size:16px;padding:4px 10px;font-weight:700" onclick="adjPallet(0.5)">+</button>
       </div>
-
-      <!-- Preview of rounded value -->
       <div id="palletPreview" style="font-size:12px;color:var(--t3);margin-bottom:12px;min-height:18px;text-align:center"></div>
-
-      <!-- Quick-select -->
       <div style="font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;text-align:center">Quick select</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-bottom:18px">${qBtns}</div>
-
       <div style="display:flex;gap:8px;justify-content:center">
         <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
         <button class="btn ${SBTN[stage]}" style="padding:10px 22px;font-weight:700" onclick="confirmEnd('${wid}','${stage}')">
@@ -1264,74 +1541,93 @@ window.endWork=function(wid,stage){
         </button>
       </div>
     </div>`);
-    setTimeout(()=>{document.getElementById('palletCount')?.focus();},80);
+    setTimeout(() => { document.getElementById('palletCount')?.focus(); }, 80);
   }
 };
 
-// helpers called by modal buttons
-window.setPalletVal=function(v){
-  const el=document.getElementById('palletCount');if(!el)return;
-  el.value=v;updatePalletPreview();
+window.setPalletVal = function(v){
+  const el = document.getElementById('palletCount'); if (!el) return;
+  el.value = v; updatePalletPreview();
 };
-window.adjPallet=function(delta){
-  const el=document.getElementById('palletCount');if(!el)return;
-  const cur=parseFloat(el.value)||0;
-  el.value=Math.max(0,+(cur+delta).toFixed(1));
+window.adjPallet = function(delta){
+  const el = document.getElementById('palletCount'); if (!el) return;
+  const cur = parseFloat(el.value) || 0;
+  el.value = Math.max(0, +(cur+delta).toFixed(1));
   updatePalletPreview();
 };
-window.updatePalletPreview=function(){
-  const el=document.getElementById('palletCount');
-  const prev=document.getElementById('palletPreview');
-  if(!el||!prev)return;
-  const raw=parseFloat(el.value);
-  if(isNaN(raw)||raw<0){prev.textContent='';return;}
-  const rounded=roundPallets(raw);
-  if(rounded===raw){prev.innerHTML=`<span style="color:var(--green)">✓ Saved as <strong>${fmtPallets(rounded)}</strong> pallet${rounded!==1?'s':''}</span>`;}
-  else{prev.innerHTML=`<span style="color:var(--amber)">→ Rounded to <strong>${fmtPallets(rounded)}</strong> pallet${rounded!==1?'s':''}</span>`;}
+window.updatePalletPreview = function(){
+  const el = document.getElementById('palletCount');
+  const prev = document.getElementById('palletPreview');
+  if (!el || !prev) return;
+  const raw = parseFloat(el.value);
+  if (isNaN(raw) || raw < 0) { prev.textContent = ''; return; }
+  const rounded = roundPallets(raw);
+  if (rounded === raw) prev.innerHTML = `<span style="color:var(--green)">✓ Saved as <strong>${fmtPallets(rounded)}</strong> pallet${rounded!==1?'s':''}</span>`;
+  else prev.innerHTML = `<span style="color:var(--amber)">→ Rounded to <strong>${fmtPallets(rounded)}</strong> pallet${rounded!==1?'s':''}</span>`;
 };
 
-window.confirmEnd=function(wid,stage){
-  const raw=parseFloat(document.getElementById('palletCount')?.value);
-  const pallVal=isNaN(raw)||raw<0?0:roundPallets(raw);
+window.confirmEnd = function(wid, stage){
+  const raw = parseFloat(document.getElementById('palletCount')?.value);
+  const pallVal = isNaN(raw) || raw < 0 ? 0 : roundPallets(raw);
   closeModal();
-  doEndWork(wid,pallVal);
+  doEndWork(wid, pallVal);
 };
 
-function doEndWork(wid,pallets){
-  const w=S.works.find(x=>x.id===wid);if(!w||_pending[wid])return;
-  const hhmm=nowHHmm();
-  const orig={endT:w.endT,netMin:w.netMin,pallets:w.pallets};
-  const nm=clientNet(w.startT,hhmm);
-  w.endT=hhmm;w.netMin=nm;if(pallets!==null)w.pallets=pallets;
-  _pending[wid]=true;
+function doEndWork(wid, pallets){
+  const w = S.works.find(x => x.id === wid); if (!w || _pending[wid]) return;
+  const now = new Date();
+  const hhmm = nowHHmm();
+  const orig = { endT:w.endT, netMin:w.netMin, pallets:w.pallets, endISO:w.endISO };
+  const nm = clientNet(w, now);
+  w.endT = hhmm; w.netMin = nm;
+  w.endISO = todayStr() + 'T' + hhmm + ':00';
+  if (pallets !== null) w.pallets = pallets;
 
   showCompletionCard(wid, w, nm, pallets, hhmm);
   updateBadges(); renderStageContent();
-  if(curPage()==='dash') R.dash();
+  if (curPage() === 'dash') R.dash();
 
-  apiBg('endWork',{entryId:wid,pallets:pallets!==null?pallets:undefined},
-    res=>{
-      if(res.endTime)    w.endT   = res.endTime;
-      if(res.netMinutes !== undefined && res.netMinutes !== null) w.netMin = res.netMinutes;
-      if(res.pallets    !== null && res.pallets !== undefined)    w.pallets = res.pallets;
-      delete _pending[wid];
-      renderStageContent();
-      if(curPage()==='dash') R.dash();
-    },
-    ()=>{ Object.assign(w,orig); delete _pending[wid]; toast('⚠ Save failed — try again','err'); renderStageContent(); }
-  );
+  const reqData = { entryId:wid, pallets:pallets!==null?pallets:undefined, wpin:(WS&&WS.wpin)||'' };
+
+  // Entry's start is still waiting in the offline queue → queue the end too (order preserved)
+  if (isTempQueued(wid) || !navigator.onLine) {
+    enqueueOp('endWork', reqData, null);
+    toast('Offline — end saved to queue', '');
+    return;
+  }
+
+  _pending[wid] = true;
+  apiOp('endWork', reqData).then(out => {
+    delete _pending[wid];
+    if (!out.net) {
+      enqueueOp('endWork', reqData, null);   // keep optimistic values; sync later
+      toast('Connection lost — end saved to queue', '');
+      renderStageContent(); return;
+    }
+    const res = out.res;
+    if (!res.ok) {
+      if (res.error === 'already_ended') { loadData().then(() => { updateBadges(); rerenderCurrent(); }); return; }
+      Object.assign(w, orig);
+      toast('⚠ Save failed — try again (' + (res.error||'') + ')', 'err');
+      renderStageContent(); return;
+    }
+    if (res.endTime) w.endT = res.endTime;
+    if (res.netMinutes !== undefined && res.netMinutes !== null) w.netMin = res.netMinutes;
+    if (res.pallets !== null && res.pallets !== undefined) w.pallets = res.pallets;
+    renderStageContent();
+    if (curPage() === 'dash') R.dash();
+  });
 }
 
-// Completion summary — shows a prominent card for 6 seconds then fades
-function showCompletionCard(wid, w, netMin, pallets, endTime) {
+// Completion summary card
+function showCompletionCard(wid, w, netMin, pallets, endTime){
   const stage = w.stage || 'PICK';
-  const col   = SCOL[stage] || 'var(--green)';
+  const col = SCOL[stage] || 'var(--green)';
   const bdCol = SBDCOL[stage] || 'var(--green-bd)';
-  const o     = S.orders.find(x=>x.id===w.oid);
+  const o = S.orders.find(x => x.id === w.oid);
 
-  // Build detail line
   let details = [];
-  if (stage==='PICK') {
+  if (stage === 'PICK') {
     if (w.items) details.push(`<span><i class="ri-box-3-line"></i> ${w.items} items</span>`);
     if (w.qty)   details.push(`<span><i class="ri-stack-line"></i> ${w.qty} QTY</span>`);
   } else if (pallets !== null) {
@@ -1346,9 +1642,7 @@ function showCompletionCard(wid, w, netMin, pallets, endTime) {
     position:fixed;bottom:70px;left:50%;transform:translateX(-50%);
     background:var(--bg2);border:2px solid ${bdCol};border-radius:14px;
     padding:16px 22px;z-index:998;min-width:280px;max-width:380px;
-    box-shadow:0 8px 32px rgba(0,0,0,.4);
-    animation:slideUp .25s ease;
-  `;
+    box-shadow:0 8px 32px rgba(0,0,0,.4);animation:slideUp .25s ease;`;
   card.innerHTML = `
     <style>@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -1370,10 +1664,8 @@ function showCompletionCard(wid, w, netMin, pallets, endTime) {
         <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--amber)">${stage==='PICK'?(w.items||'—'):fmtPallets(pallets)}</div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;font-size:11px;color:var(--t3);flex-wrap:wrap;margin-top:6px">${details.join('')}</div>
-  `;
+    <div style="display:flex;gap:8px;font-size:11px;color:var(--t3);flex-wrap:wrap;margin-top:6px">${details.join('')}</div>`;
   document.body.appendChild(card);
-  // Auto-remove after 6 seconds with fade
   setTimeout(() => {
     card.style.transition = 'opacity .5s';
     card.style.opacity = '0';
@@ -1381,60 +1673,142 @@ function showCompletionCard(wid, w, netMin, pallets, endTime) {
   }, 6000);
 }
 
-// ── KPI ──
-function kpiToday(){const t=todayStr();document.getElementById('kpiFrom').value=t;document.getElementById('kpiTo').value=t;renderKPI();}
-function kpiWeek(){
-  const d=new Date(),day=d.getDay();const m=new Date(d);m.setDate(d.getDate()-(day===0?6:day-1));
-  const f=x=>x.toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
-  document.getElementById('kpiFrom').value=f(m);document.getElementById('kpiTo').value=f(d);renderKPI();
+// ══════════════════════════════════════════════════════
+// BARCODE / QR SCANNER (BarcodeDetector API)
+// ══════════════════════════════════════════════════════
+let _scanStream = null, _scanTimer = null, _scanMode = '';
+
+window.openScan = async function(mode){
+  if (!('BarcodeDetector' in window)) {
+    toast('Camera scanning not supported on this browser — type the order number', 'err');
+    return;
+  }
+  _scanMode = mode;
+  openModal(`<div style="text-align:center">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px"><i class="ri-qr-scan-2-line"></i> Scan order barcode</div>
+    <div style="font-size:11px;color:var(--t3);margin-bottom:12px">Point the camera at the order's barcode or QR label</div>
+    <div class="scan-wrap">
+      <video class="scan-video" id="scanVideo" autoplay playsinline muted></video>
+      <div class="scan-frame"></div><div class="scan-line"></div>
+    </div>
+    <div id="scanStatus" style="font-size:11px;color:var(--t3);min-height:16px;margin-bottom:10px">Starting camera...</div>
+    <button class="btn btn-block" onclick="closeModal()"><i class="ri-close-line"></i> Cancel</button>
+  </div>`, { wide:true });
+
+  try {
+    _scanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode:'environment', width:{ideal:1280}, height:{ideal:720} }, audio:false
+    });
+    const video = document.getElementById('scanVideo');
+    if (!video) { stopScanHardware(); return; }
+    video.srcObject = _scanStream;
+    const detector = new BarcodeDetector({
+      formats: ['qr_code','code_128','code_39','code_93','ean_13','ean_8','upc_a','upc_e','itf']
+    });
+    const st = document.getElementById('scanStatus');
+    if (st) st.textContent = 'Scanning...';
+    _scanTimer = setInterval(async () => {
+      const v = document.getElementById('scanVideo');
+      if (!v || v.readyState < 2) return;
+      try {
+        const codes = await detector.detect(v);
+        if (codes && codes.length && codes[0].rawValue) handleScanResult(codes[0].rawValue);
+      } catch(_) {}
+    }, 250);
+  } catch(e) {
+    stopScanHardware();
+    const st = document.getElementById('scanStatus');
+    if (st) { st.textContent = 'Camera unavailable — check permissions'; st.style.color = 'var(--red)'; }
+  }
+};
+
+function stopScanHardware(){
+  if (_scanTimer) { clearInterval(_scanTimer); _scanTimer = null; }
+  if (_scanStream) { _scanStream.getTracks().forEach(t => t.stop()); _scanStream = null; }
 }
-function kpiMonth(){const t=todayStr(),p=t.split('-');document.getElementById('kpiFrom').value=`${p[0]}-${p[1]}-01`;document.getElementById('kpiTo').value=t;renderKPI();}
-R.kpi=function(){if(!document.getElementById('kpiFrom').value)kpiToday();else renderKPI();};
+
+function handleScanResult(raw){
+  const v = String(raw || '').trim();
+  if (!v) return;
+  stopScanHardware();
+  closeModal();
+  if (navigator.vibrate) try { navigator.vibrate(60); } catch(_){}
+  if (_scanMode === 'dash') {
+    const inp = document.getElementById('dashSearch');
+    if (inp) { inp.value = v; _dp = 0; renderDashTable(); }
+    toast('Scanned: ' + v, 'ok');
+    return;
+  }
+  // work mode → match an order
+  const V = v.toUpperCase();
+  const o = S.orders.find(x => x.id.toUpperCase() === V)
+         || S.orders.find(x => V.includes(x.id.toUpperCase()) || x.id.toUpperCase().includes(V));
+  if (o) {
+    const sel = document.getElementById('workOrder');
+    if (sel) { sel.value = o.id; onOrderChange(); }
+    toast('Order ' + o.id + ' selected ✓', 'ok');
+  } else {
+    toast('No matching order: ' + v, 'err');
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// KPI — date filters, summary, trend chart, leaderboards
+// ══════════════════════════════════════════════════════
+function kpiToday(){ const t = todayStr(); document.getElementById('kpiFrom').value = t; document.getElementById('kpiTo').value = t; renderKPI(); }
+function kpiWeek(){
+  const d = new Date(), day = d.getDay(); const m = new Date(d); m.setDate(d.getDate() - (day===0?6:day-1));
+  const f = x => x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
+  document.getElementById('kpiFrom').value = f(m); document.getElementById('kpiTo').value = f(d); renderKPI();
+}
+function kpiMonth(){ const t = todayStr(), p = t.split('-'); document.getElementById('kpiFrom').value = `${p[0]}-${p[1]}-01`; document.getElementById('kpiTo').value = t; renderKPI(); }
+R.kpi = function(){ if (!document.getElementById('kpiFrom').value) kpiToday(); else renderKPI(); };
+
+function doneInRange(from, to){
+  return S.works.filter(w => {
+    if (!w.endT) return false;
+    const d = w.startISO ? w.startISO.slice(0,10) : (w.date || '');
+    if (!d) return true;
+    return d >= from && d <= to;
+  });
+}
 
 function renderKPI(){
-  const from=document.getElementById('kpiFrom').value;
-  const to  =document.getElementById('kpiTo').value;
-  if(!from||!to){document.getElementById('kpiContent').innerHTML='<div class="empty">Select date range</div>';return;}
+  const from = document.getElementById('kpiFrom').value;
+  const to   = document.getElementById('kpiTo').value;
+  if (!from || !to) { document.getElementById('kpiContent').innerHTML = '<div class="empty">Select date range</div>'; return; }
 
-  // filter completed entries in range using startISO date
-  const done=S.works.filter(w=>{
-    if(!w.endT)return false;
-    const d=w.startISO?w.startISO.slice(0,10):(w.date||'');
-    if(!d)return true;
-    return d>=from&&d<=to;
+  const done = doneInRange(from, to);
+  const label = from === to ? from : `${from} ~ ${to}`;
+  if (!done.length) { document.getElementById('kpiContent').innerHTML = `<div class="empty"><i class="ri-bar-chart-2-line"></i>No completed entries for ${label}</div>`; return; }
+
+  // worker → stage → {n, items, qty, pallets, min}
+  const blank = () => ({ PICK:{n:0,items:0,qty:0,pallets:0,min:0}, INSP:{n:0,items:0,qty:0,pallets:0,min:0}, PALL:{n:0,items:0,qty:0,pallets:0,min:0} });
+  const stats = {};
+  S.workers.forEach(wk => { stats[wk] = blank(); });
+  done.forEach(w => {
+    if (!stats[w.w]) stats[w.w] = blank();
+    const st = stats[w.w][w.stage]; if (!st) return;
+    st.n++; st.items += (w.items||0); st.qty += (w.qty||0); st.pallets += (w.pallets||0); st.min += (w.netMin||0);
   });
 
-  const label=from===to?from:`${from} ~ ${to}`;
-  if(!done.length){document.getElementById('kpiContent').innerHTML=`<div class="empty"><i class="ri-bar-chart-2-line"></i>No completed entries for ${label}</div>`;return;}
+  const totItems = done.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
+  const totQty   = done.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
+  const totPall  = done.filter(w => ['INSP','PALL'].includes(w.stage)).reduce((s,w)=>s+(w.pallets||0),0);
+  const totMin   = done.reduce((s,w)=>s+(w.netMin||0),0);
 
-  // Build stats: worker → stage → {sessions,items,qty,pallets,netMin}
-  const stats={};
-  S.workers.forEach(wk=>{stats[wk]={PICK:{n:0,items:0,qty:0,pallets:0,min:0},INSP:{n:0,items:0,qty:0,pallets:0,min:0},PALL:{n:0,items:0,qty:0,pallets:0,min:0}};});
-
-  done.forEach(w=>{
-    if(!stats[w.w])stats[w.w]={PICK:{n:0,items:0,qty:0,pallets:0,min:0},INSP:{n:0,items:0,qty:0,pallets:0,min:0},PALL:{n:0,items:0,qty:0,pallets:0,min:0}};
-    const st=stats[w.w][w.stage];if(!st)return;
-    st.n++;
-    st.items  +=(w.items||0);
-    st.qty    +=(w.qty||0);
-    st.pallets+=(w.pallets||0);
-    st.min    +=(w.netMin||0);
-  });
-
-  const totItems=done.filter(w=>w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
-  const totQty  =done.filter(w=>w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
-  const totPall =done.filter(w=>['INSP','PALL'].includes(w.stage)).reduce((s,w)=>s+(w.pallets||0),0);
-  const totMin  =done.reduce((s,w)=>s+(w.netMin||0),0);
-
-  let html=`<div style="font-size:12px;color:var(--t3);margin-bottom:14px;font-weight:600"><i class="ri-calendar-line"></i> ${label} — <strong style="color:var(--t2)">${done.length}</strong> completed sessions</div>
+  let html = `<div style="font-size:12px;color:var(--t3);margin-bottom:14px;font-weight:600"><i class="ri-calendar-line"></i> ${label} — <strong style="color:var(--t2)">${done.length}</strong> completed sessions</div>
   <div class="g4" style="margin-bottom:18px">
     ${[{l:'Sessions done',v:done.length,c:'gr'},{l:'Items picked',v:totItems,c:'pu'},
        {l:'QTY picked',v:totQty,c:'tl'},{l:'Pallets (INSP+PALL)',v:fmtPallets(totPall),c:'am'}]
     .map(m=>`<div class="kmc ${m.c}"><div class="kmc-l">${m.l}</div><div class="kmc-v" style="color:var(--${{gr:'green',pu:'purple',tl:'teal',am:'amber'}[m.c]})">${m.v}</div></div>`).join('')}</div>
-  <div class="kmc bl" style="margin-bottom:18px"><div class="kmc-l">Total net work time (lunch 12:00–13:00 excluded)</div><div class="kmc-v" style="color:var(--blue)">${fmtMin(totMin)}</div></div>`;
+  <div class="kmc bl" style="margin-bottom:18px"><div class="kmc-l">Total net work time (08:30–17:30, lunch 12:00–13:00 excluded)</div><div class="kmc-v" style="color:var(--blue)">${fmtMin(totMin)}</div></div>`;
+
+  // ── v8: daily productivity trend ──
+  html += renderTrendChartHTML(done);
 
   // Worker × Stage breakdown
-  html+=`<div class="section">Worker × Stage — detail</div>
+  html += `<div class="section">Worker × Stage — detail</div>
   <div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)"><table class="kpi-tbl" style="min-width:700px">
   <thead><tr>
     <th>Worker</th><th>Stage</th>
@@ -1442,21 +1816,22 @@ function renderKPI(){
     <th>Net time</th><th>Avg/session</th><th>Speed</th>
   </tr></thead><tbody>`;
 
-  const workerTotals=[];
-  Object.entries(stats).forEach(([wk,stages])=>{
-    const totN=Object.values(stages).reduce((s,v)=>s+v.n,0);if(!totN)return;
-    const tI=Object.values(stages).reduce((s,v)=>s+v.items,0);
-    const tQ=Object.values(stages).reduce((s,v)=>s+v.qty,0);
-    const tP=Object.values(stages).reduce((s,v)=>s+v.pallets,0);
-    const tM=Object.values(stages).reduce((s,v)=>s+v.min,0);
-    workerTotals.push({wk,totN,tI,tQ,tP,tM});
-    let first=true;
-    ['PICK','INSP','PALL'].forEach(stage=>{
-      const st=stages[stage];if(!st.n)return;
-      const avg=Math.round(st.min/st.n);
-      const speed=stage==='PICK'&&st.min?Math.round(st.items/st.min*60):stage!=='PICK'&&st.min&&st.pallets?+(st.pallets/st.min*60).toFixed(1):null;
-      const speedStr=speed?speed+(stage==='PICK'?' i/hr':' pall/hr'):'—';
-      html+=`<tr${wk===CW?' style="background:rgba(59,130,246,.04)"':''}>
+  const workerTotals = [];
+  Object.entries(stats).forEach(([wk, stages]) => {
+    const totN = Object.values(stages).reduce((s,v)=>s+v.n,0); if (!totN) return;
+    const tI = Object.values(stages).reduce((s,v)=>s+v.items,0);
+    const tQ = Object.values(stages).reduce((s,v)=>s+v.qty,0);
+    const tP = Object.values(stages).reduce((s,v)=>s+v.pallets,0);
+    const tM = Object.values(stages).reduce((s,v)=>s+v.min,0);
+    workerTotals.push({ wk, totN, tI, tQ, tP, tM });
+    let first = true;
+    ['PICK','INSP','PALL'].forEach(stage => {
+      const st = stages[stage]; if (!st.n) return;
+      const avg = Math.round(st.min/st.n);
+      const speed = stage==='PICK' && st.min ? Math.round(st.items/st.min*60)
+                  : stage!=='PICK' && st.min && st.pallets ? +(st.pallets/st.min*60).toFixed(1) : null;
+      const speedStr = speed ? speed + (stage==='PICK' ? ' i/hr' : ' pall/hr') : '—';
+      html += `<tr${wk===CW?' style="background:rgba(59,130,246,.04)"':''}>
         <td style="font-weight:${first?800:400};${!first?'color:transparent':''}">
           ${wk}${wk===CW?' <span style="color:var(--blue);font-size:11px;font-weight:700"> YOU</span>':''}
         </td>
@@ -1469,19 +1844,19 @@ function renderKPI(){
         <td style="font-family:var(--mono);font-size:14px">${avg?fmtMin(avg):'—'}</td>
         <td style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--green)">${speedStr}</td>
       </tr>`;
-      first=false;
+      first = false;
     });
   });
-  html+=`</tbody></table></div>`;
+  html += `</tbody></table></div>`;
 
-  // Worker totals summary
-  html+=`<div class="section">Worker totals</div>
+  // Worker totals
+  html += `<div class="section">Worker totals</div>
   <div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)"><table class="kpi-tbl" style="min-width:580px">
   <thead><tr><th>Worker</th><th>Sessions</th><th>Items picked</th><th>Pallets (INSP+PALL)</th><th>Net time</th><th>Performance</th></tr></thead><tbody>`;
-  const maxI=Math.max(...workerTotals.map(x=>x.tI),1);
-  workerTotals.sort((a,b)=>b.tI-a.tI).forEach(({wk,totN,tI,tQ,tP,tM})=>{
-    const bar=Math.round(tI/maxI*100);
-    html+=`<tr${wk===CW?' style="background:rgba(59,130,246,.04)"':''}>
+  const maxI = Math.max(...workerTotals.map(x => x.tI), 1);
+  workerTotals.sort((a,b)=>b.tI-a.tI).forEach(({wk,totN,tI,tQ,tP,tM}) => {
+    const bar = Math.round(tI/maxI*100);
+    html += `<tr${wk===CW?' style="background:rgba(59,130,246,.04)"':''}>
       <td style="font-weight:800;font-size:15px">${wk}${wk===CW?' <span style="color:var(--blue);font-size:11px;font-weight:700"> YOU</span>':''}</td>
       <td style="font-family:var(--mono);font-size:15px;font-weight:700">${totN}</td>
       <td style="font-family:var(--mono);font-size:16px;font-weight:800;color:var(--purple)">${tI}</td>
@@ -1495,20 +1870,20 @@ function renderKPI(){
       </div></td>
     </tr>`;
   });
-  html+=`</tbody></table></div>`;
+  html += `</tbody></table></div>`;
 
   // Stage leaderboard
-  html+=`<div class="section">Stage leaderboard</div><div class="g3">`;
-  ['PICK','INSP','PALL'].forEach(stage=>{
-    const col=SCOL[stage];
-    const metric=stage==='PICK'?'items':'pallets';
-    const rows=S.workers.map(wk=>{const st=stats[wk]?.[stage]||{n:0,items:0,qty:0,pallets:0,min:0};return{wk,...st};})
-      .filter(x=>x.n>0).sort((a,b)=>b[metric]-a[metric]);
-    const maxV=rows[0]?.[metric]||1;
-    html+=`<div class="card" style="padding:14px"><div style="font-size:11px;font-weight:700;color:${col};letter-spacing:.06em;margin-bottom:10px">${stage} — ${stage==='PICK'?'by items':'by pallets'}</div>`;
-    rows.forEach((r,i)=>{
-      const v=r[metric];const bar=Math.round(v/maxV*100);
-      html+=`<div style="margin-bottom:9px">
+  html += `<div class="section">Stage leaderboard</div><div class="g3">`;
+  ['PICK','INSP','PALL'].forEach(stage => {
+    const col = SCOL[stage];
+    const metric = stage==='PICK' ? 'items' : 'pallets';
+    const rows = S.workers.map(wk => { const st = stats[wk]?.[stage] || {n:0,items:0,qty:0,pallets:0,min:0}; return { wk, ...st }; })
+      .filter(x => x.n > 0).sort((a,b)=>b[metric]-a[metric]);
+    const maxV = rows[0]?.[metric] || 1;
+    html += `<div class="card" style="padding:14px"><div style="font-size:11px;font-weight:700;color:${col};letter-spacing:.06em;margin-bottom:10px">${stage} — ${stage==='PICK'?'by items':'by pallets'}</div>`;
+    rows.forEach((r,i) => {
+      const v = r[metric]; const bar = Math.round(v/maxV*100);
+      html += `<div style="margin-bottom:9px">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
           <span style="font-size:14px">${['🥇','🥈','🥉'][i]||''} <span style="font-weight:${r.wk===CW?800:500}">${r.wk}</span></span>
           <span style="font-family:var(--mono);font-size:15px;font-weight:700;color:${col}">${stage==='PICK'?v:fmtPallets(v)} ${metric}</span>
@@ -1516,90 +1891,328 @@ function renderKPI(){
         <div style="height:4px;background:var(--bg3);border-radius:3px"><div style="height:100%;width:${bar}%;background:${col};border-radius:3px"></div></div>
       </div>`;
     });
-    if(!rows.length)html+=`<div style="font-size:11px;color:var(--t3)">No data</div>`;
-    html+=`</div>`;
+    if (!rows.length) html += `<div style="font-size:11px;color:var(--t3)">No data</div>`;
+    html += `</div>`;
   });
-  html+=`</div>`;
+  html += `</div>`;
 
-  document.getElementById('kpiContent').innerHTML=html;
+  document.getElementById('kpiContent').innerHTML = html;
 }
 
-// ── MANAGER ──
-R.mgr=function(){
-  document.getElementById('workerList').innerHTML=S.workers.map(w=>
-    `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd);font-size:12px">
-      <span>${w}${w===CW?' <span style="color:var(--blue);font-size:10px">(you)</span>':''}</span>
-      <button class="btn btn-sm" style="color:var(--red);border-color:var(--red-bd);padding:2px 6px" onclick="delWorker('${w}')"><i class="ri-delete-bin-line"></i></button></div>`).join('');
+// ── v8: SVG productivity trend (items bars + net-hours line) ──
+function renderTrendChartHTML(done){
+  const byDate = {};
+  done.forEach(w => {
+    const d = w.startISO ? w.startISO.slice(0,10) : (w.date || '');
+    if (!d) return;
+    if (!byDate[d]) byDate[d] = { items:0, pallets:0, min:0, n:0 };
+    byDate[d].items   += (w.stage==='PICK' ? (w.items||0) : 0);
+    byDate[d].pallets += (w.stage!=='PICK' ? (w.pallets||0) : 0);
+    byDate[d].min     += (w.netMin||0);
+    byDate[d].n++;
+  });
+  let dates = Object.keys(byDate).sort();
+  if (dates.length < 2) return '';                       // a single day has no trend
+  if (dates.length > TREND_MAX_DAYS) dates = dates.slice(-TREND_MAX_DAYS);
 
-  document.getElementById('orderList').innerHTML=S.orders.map(o=>{
-    const ws=S.works.filter(w=>w.oid===o.id),act=ws.filter(w=>!w.endT).length;
-    return`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd);font-size:12px">
-      <div><span class="mono" style="font-weight:700">${o.id}</span> <span style="color:var(--t3)">${o.ch}·${o.cu}</span>${act?` <span class="badge b-live" style="font-size:9px;margin-left:4px">${act} live</span>`:''}</div>
-      <div style="display:flex;gap:4px">
+  const W = Math.max(560, dates.length * 56), H = 210;
+  const padL = 8, padR = 8, padT = 26, padB = 34;
+  const cw = (W - padL - padR) / dates.length;
+  const maxItems = Math.max(...dates.map(d => byDate[d].items), 1);
+  const maxPall  = Math.max(...dates.map(d => byDate[d].pallets), 1);
+  const maxMin   = Math.max(...dates.map(d => byDate[d].min), 1);
+  const plotH = H - padT - padB;
+
+  let bars = '', line = '', dots = '', labels = '';
+  const pts = [];
+  dates.forEach((d, i) => {
+    const x0 = padL + i * cw;
+    const g = byDate[d];
+    const bw = Math.min(20, cw * 0.28);
+    // items bar (purple)
+    const hI = g.items / maxItems * plotH;
+    bars += `<rect x="${(x0 + cw/2 - bw - 2).toFixed(1)}" y="${(H - padB - hI).toFixed(1)}" width="${bw}" height="${Math.max(hI,1).toFixed(1)}" rx="3" fill="var(--purple)" opacity=".85"/>`;
+    if (g.items) bars += `<text x="${(x0 + cw/2 - 2 - bw/2).toFixed(1)}" y="${(H - padB - hI - 5).toFixed(1)}" font-size="9" fill="var(--purple)" text-anchor="middle" font-family="JetBrains Mono,monospace">${g.items}</text>`;
+    // pallets bar (amber)
+    const hP = g.pallets / maxPall * plotH;
+    bars += `<rect x="${(x0 + cw/2 + 2).toFixed(1)}" y="${(H - padB - hP).toFixed(1)}" width="${bw}" height="${Math.max(hP,1).toFixed(1)}" rx="3" fill="var(--amber)" opacity=".8"/>`;
+    if (g.pallets) bars += `<text x="${(x0 + cw/2 + 2 + bw/2).toFixed(1)}" y="${(H - padB - hP - 5).toFixed(1)}" font-size="9" fill="var(--amber)" text-anchor="middle" font-family="JetBrains Mono,monospace">${fmtPallets(g.pallets)}</text>`;
+    // net-hours point
+    const cx = x0 + cw/2, cy = H - padB - (g.min / maxMin * plotH);
+    pts.push([cx, cy, g.min]);
+    // date label MM/DD
+    labels += `<text x="${cx.toFixed(1)}" y="${H - padB + 15}" font-size="9.5" fill="var(--t3)" text-anchor="middle" font-family="JetBrains Mono,monospace">${d.slice(5).replace('-','/')}</text>`;
+  });
+  line = `<polyline points="${pts.map(p => p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" opacity=".9"/>`;
+  pts.forEach(p => { dots += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="var(--blue)"/>`; });
+
+  return `<div class="section">Daily productivity trend</div>
+  <div class="trend-card">
+    <div class="trend-legend">
+      <span><i style="background:var(--purple)"></i> Items picked</span>
+      <span><i style="background:var(--amber)"></i> Pallets</span>
+      <span><i style="background:var(--blue);border-radius:50%"></i> Net hours (line)</span>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block">
+      <line x1="${padL}" y1="${H-padB}" x2="${W-padR}" y2="${H-padB}" stroke="var(--bd2)" stroke-width="1"/>
+      ${bars}${line}${dots}${labels}
+    </svg>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════
+// DAILY CLOSING REPORT — view / copy / print
+// ══════════════════════════════════════════════════════
+let _lastReportText = '';
+
+window.openDailyReport = function(){
+  const d = document.getElementById('kpiTo')?.value || todayStr();
+  const done = doneInRange(d, d);
+  const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let wdName = '';
+  try { wdName = WD[new Date(d + 'T12:00:00').getDay()]; } catch(_){}
+
+  const totItems = done.filter(w=>w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
+  const totQty   = done.filter(w=>w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
+  const totPall  = done.filter(w=>['INSP','PALL'].includes(w.stage)).reduce((s,w)=>s+(w.pallets||0),0);
+  const totMin   = done.reduce((s,w)=>s+(w.netMin||0),0);
+
+  // by worker
+  const byW = {};
+  done.forEach(w => {
+    if (!byW[w.w]) byW[w.w] = { n:0, items:0, pallets:0, min:0 };
+    byW[w.w].n++; byW[w.w].items += (w.stage==='PICK'?(w.items||0):0);
+    byW[w.w].pallets += (w.stage!=='PICK'?(w.pallets||0):0); byW[w.w].min += (w.netMin||0);
+  });
+  // by stage
+  const byS = { PICK:{n:0,v:0,min:0}, INSP:{n:0,v:0,min:0}, PALL:{n:0,v:0,min:0} };
+  done.forEach(w => {
+    const s = byS[w.stage]; if (!s) return;
+    s.n++; s.v += w.stage==='PICK' ? (w.items||0) : (w.pallets||0); s.min += (w.netMin||0);
+  });
+  // orders fully completed today (a PALL session ended on this date)
+  const doneOrders = [...new Set(done.filter(w => w.stage==='PALL').map(w => w.oid))]
+    .filter(oid => orderState(oid) === 'done')
+    .map(oid => {
+      const o = S.orders.find(x => x.id === oid) || { ch:'', cu:'' };
+      const pall = S.works.filter(w => w.oid===oid && w.stage==='PALL' && w.endT).reduce((s,w)=>s+(w.pallets||0),0);
+      return { oid, ch:o.ch, cu:o.cu, pall };
+    });
+
+  // plain-text version (for copy)
+  let txt = `══ DAILY CLOSING REPORT ══\n`;
+  txt += `Date: ${d} (${wdName})\nGenerated: ${todayStr()} ${nowHHmm()} · STYLEKOREAN_NJ / MOIDA\n\n`;
+  txt += `SUMMARY\n- Completed sessions: ${done.length}\n- Items picked: ${totItems} (QTY ${totQty})\n- Pallets (INSP+PALL): ${fmtPallets(totPall)}\n- Net work time: ${fmtMin(totMin)}\n\n`;
+  txt += `BY WORKER\n` + (Object.keys(byW).length
+    ? Object.entries(byW).sort((a,b)=>b[1].min-a[1].min).map(([wk,v]) =>
+        `- ${wk}: ${v.n} sessions · ${v.items} items · ${fmtPallets(v.pallets)} pallets · ${fmtMin(v.min)}`).join('\n')
+    : '- (none)') + '\n\n';
+  txt += `BY STAGE\n` + ['PICK','INSP','PALL'].map(s => {
+    const v = byS[s];
+    return `- ${s}: ${v.n} sessions · ${s==='PICK'?v.v+' items':fmtPallets(v.v)+' pallets'} · ${fmtMin(v.min)}`;
+  }).join('\n') + '\n\n';
+  txt += `ORDERS COMPLETED (palletizing finished)\n` + (doneOrders.length
+    ? doneOrders.map(o => `- ${o.oid} (${o.ch}·${o.cu}) — ${fmtPallets(o.pall)} pallets`).join('\n')
+    : '- (none)');
+  _lastReportText = txt;
+
+  // HTML version (modal)
+  const wRows = Object.entries(byW).sort((a,b)=>b[1].min-a[1].min).map(([wk,v]) =>
+    `<div class="rep-row"><span style="font-weight:700">${wk}</span>
+      <span class="mono" style="color:var(--t2);font-size:12px">${v.n}s · ${v.items}i · ${fmtPallets(v.pallets)}p · <span style="color:var(--blue)">${fmtMin(v.min)}</span></span></div>`).join('')
+    || '<div class="rep-row" style="color:var(--t3)">No completed sessions</div>';
+  const sRows = ['PICK','INSP','PALL'].map(s => {
+    const v = byS[s];
+    return `<div class="rep-row"><span style="color:${SCOL[s]};font-weight:800;font-size:12px">${s}</span>
+      <span class="mono" style="color:var(--t2);font-size:12px">${v.n}s · ${s==='PICK'?v.v+' items':fmtPallets(v.v)+' pallets'} · <span style="color:var(--blue)">${fmtMin(v.min)}</span></span></div>`;
+  }).join('');
+  const oRows = doneOrders.length
+    ? doneOrders.map(o => `<div class="rep-row"><span class="mono" style="font-weight:800">${o.oid}</span>
+        <span style="color:var(--t2);font-size:12px">${o.ch}·${o.cu} — <span style="color:var(--amber)" class="mono">${fmtPallets(o.pall)} pallets</span></span></div>`).join('')
+    : '<div class="rep-row" style="color:var(--t3)">No orders fully completed</div>';
+
+  openModal(`
+    <div class="rep-h"><i class="ri-file-text-line" style="color:var(--amber)"></i> Daily closing report</div>
+    <div class="rep-sub">${d} (${wdName}) · generated ${nowHHmm()}</div>
+    <div class="g4" style="gap:8px;margin-bottom:4px">
+      ${[{l:'Sessions',v:done.length,c:'green'},{l:'Items',v:totItems,c:'purple'},
+         {l:'Pallets',v:fmtPallets(totPall),c:'amber'},{l:'Net time',v:fmtMin(totMin),c:'blue'}]
+        .map(m => `<div style="background:var(--bg3);border-radius:var(--r);padding:9px 10px;text-align:center">
+          <div style="font-size:9px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px">${m.l}</div>
+          <div class="mono" style="font-size:16px;font-weight:800;color:var(--${m.c})">${m.v}</div></div>`).join('')}
+    </div>
+    <div class="rep-sec">By worker</div>${wRows}
+    <div class="rep-sec">By stage</div>${sRows}
+    <div class="rep-sec">Orders completed</div>${oRows}
+    <div style="display:flex;gap:8px;margin-top:18px">
+      <button class="btn" style="flex:1;justify-content:center" onclick="copyReport()"><i class="ri-clipboard-line"></i> Copy text</button>
+      <button class="btn btn-blue" style="flex:1;justify-content:center" onclick="printReport()"><i class="ri-printer-line"></i> Print</button>
+    </div>
+    <div style="text-align:right;margin-top:10px"><button class="btn btn-sm" onclick="closeModal()">Close</button></div>
+  `, { wide:true });
+};
+
+window.copyReport = function(){
+  const t = _lastReportText; if (!t) return;
+  const fin = ok => toast(ok ? 'Report copied ✓' : 'Copy failed — select and copy manually', ok ? 'ok' : 'err');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(t).then(() => fin(true)).catch(() => legacyCopy(t, fin));
+  } else legacyCopy(t, fin);
+};
+function legacyCopy(t, fin){
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = t; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta); fin(ok);
+  } catch(_) { fin(false); }
+}
+
+window.printReport = function(){
+  const t = _lastReportText; if (!t) return;
+  const w = window.open('', '_blank', 'width=640,height=800');
+  if (!w) { toast('Pop-up blocked — allow pop-ups to print', 'err'); return; }
+  w.document.write(`<html><head><title>Daily Report</title>
+    <style>body{font-family:'Courier New',monospace;font-size:13px;color:#111;padding:28px;white-space:pre-wrap;line-height:1.5}</style>
+    </head><body>${t.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</body></html>`);
+  w.document.close();
+  setTimeout(() => { try { w.print(); } catch(_){} }, 300);
+};
+
+// ══════════════════════════════════════════════════════
+// MANAGER — workers, worker PINs, orders, entries
+// All write ops go through mgrOp() with a server token.
+// ══════════════════════════════════════════════════════
+R.mgr = function(){
+  // Workers + PIN status
+  document.getElementById('workerList').innerHTML = S.workers.map(w => {
+    const hasPin = S.pinned.includes(w);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12px;gap:8px">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        ${w}${w===CW?' <span style="color:var(--blue);font-size:10px">(you)</span>':''}
+        ${hasPin ? '<span style="color:var(--green);font-size:10px;margin-left:5px"><i class="ri-lock-line"></i> PIN</span>'
+                 : '<span style="color:var(--t3);font-size:10px;margin-left:5px"><i class="ri-lock-unlock-line"></i> no PIN</span>'}
+      </span>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="btn btn-sm" style="padding:2px 7px" title="Set / remove PIN" onclick="askWorkerPin('${w.replace(/'/g,"\\'")}')"><i class="ri-key-2-line"></i></button>
+        <button class="btn btn-sm" style="color:var(--red);border-color:var(--red-bd);padding:2px 7px" onclick="delWorker('${w.replace(/'/g,"\\'")}')"><i class="ri-delete-bin-line"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Orders
+  document.getElementById('orderList').innerHTML = S.orders.map(o => {
+    const ws = S.works.filter(w => w.oid === o.id), act = ws.filter(w => !w.endT).length;
+    const sla = isSLA(o);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd);font-size:12px">
+      <div style="min-width:0"><span class="mono" style="font-weight:700">${o.id}</span> <span style="color:var(--t3)">${o.ch}·${o.cu}</span>
+        ${act ? ` <span class="badge b-live" style="font-size:9px;margin-left:4px">${act} live</span>` : ''}
+        ${sla ? ` <span class="badge b-sla" style="font-size:9px;margin-left:4px">SLA</span>` : ''}</div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
         <button class="btn btn-sm" style="padding:2px 6px" onclick="editOrder('${o.id}')"><i class="ri-edit-line"></i></button>
         <button class="btn btn-sm" style="color:var(--red);border-color:var(--red-bd);padding:2px 6px" onclick="delOrder('${o.id}')"><i class="ri-delete-bin-line"></i></button>
       </div></div>`;
-  }).join('')||'<div style="font-size:12px;color:var(--t3)">No orders</div>';
+  }).join('') || '<div style="font-size:12px;color:var(--t3)">No orders</div>';
   renderEntries();
 };
 
-window.addWorker=function(){
-  const n=document.getElementById('newWorker').value.trim();
-  if(!n){toast('Enter name','err');return;}if(S.workers.includes(n)){toast('Already exists','err');return;}
-  S.workers.push(n);apiBg('setSettings',{workers:S.workers});
-  popWorker();toast(n+' added','ok');document.getElementById('newWorker').value='';R.mgr();
+// ── Workers ──
+window.addWorker = function(){
+  const n = document.getElementById('newWorker').value.trim();
+  if (!n) { toast('Enter name', 'err'); return; }
+  if (S.workers.includes(n)) { toast('Already exists', 'err'); return; }
+  const bk = [...S.workers];
+  S.workers.push(n);
+  document.getElementById('newWorker').value = '';
+  toast(n + ' added', 'ok'); R.mgr();
+  mgrOp('setSettings', { workers:S.workers }).then(out => {
+    if (!out.net || !out.res.ok) { S.workers = bk; toast('⚠ Save failed', 'err'); R.mgr(); }
+  });
 };
-window.delWorker=function(n){
-  if(!confirm(`Remove "${n}"?`))return;
-  S.workers=S.workers.filter(w=>w!==n);apiBg('setSettings',{workers:S.workers});
-  popWorker();toast(n+' removed','ok');R.mgr();
+window.delWorker = function(n){
+  if (!confirm(`Remove "${n}"?\nTheir past work records stay in the data.`)) return;
+  const bk = [...S.workers];
+  S.workers = S.workers.filter(w => w !== n);
+  toast(n + ' removed', 'ok'); R.mgr();
+  mgrOp('setSettings', { workers:S.workers }).then(out => {
+    if (!out.net || !out.res.ok) { S.workers = bk; toast('⚠ Save failed', 'err'); R.mgr(); }
+  });
 };
-function editChipPick(groupId, val) {
+
+// ── Worker PIN ──
+window.askWorkerPin = function(name){
+  const hasPin = S.pinned.includes(name);
+  openModal(`<div style="text-align:center;padding:4px 0">
+    <i class="ri-key-2-line" style="font-size:28px;color:var(--amber);display:block;margin-bottom:8px"></i>
+    <div style="font-size:15px;font-weight:700;margin-bottom:2px">${name}</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:14px">${hasPin ? 'This worker has a sign-in PIN. Enter a new one to change it, or remove it.' : 'Set a 4–8 digit PIN this worker will use to sign in.'}</div>
+    <input class="fi pallet-input" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="8" id="wpinIn"
+      style="letter-spacing:6px;margin:0 auto 12px;display:block" placeholder="••••"
+      onkeydown="if(event.key==='Enter')saveWorkerPin('${name.replace(/'/g,"\\'")}')">
+    <div style="display:flex;gap:7px;justify-content:center;flex-wrap:wrap">
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+      ${hasPin ? `<button class="btn btn-sm" style="color:var(--red);border-color:var(--red-bd)" onclick="removeWorkerPin('${name.replace(/'/g,"\\'")}')"><i class="ri-delete-bin-line"></i> Remove PIN</button>` : ''}
+      <button class="btn btn-blue btn-sm" onclick="saveWorkerPin('${name.replace(/'/g,"\\'")}')"><i class="ri-check-line"></i> Save PIN</button>
+    </div></div>`);
+  setTimeout(() => document.getElementById('wpinIn')?.focus(), 80);
+};
+window.saveWorkerPin = async function(name){
+  const v = (document.getElementById('wpinIn')?.value || '').trim();
+  if (!/^\d{4,8}$/.test(v)) { toast('PIN must be 4–8 digits', 'err'); return; }
+  const out = await mgrOp('setWorkerPin', { worker:name, wpin:v });
+  if (out.net && out.res.ok) {
+    if (!S.pinned.includes(name)) S.pinned.push(name);
+    if (WS && WS.worker === name) { WS.wpin = v; saveSession(WS); }   // keep own session valid
+    closeModal(); toast('PIN saved for ' + name, 'ok'); R.mgr();
+  } else if (out.net && out.res.error !== 'unauthorized') {
+    toast('⚠ ' + (out.res.error || 'Save failed'), 'err');
+  } else if (!out.net) toast('No connection — try again', 'err');
+};
+window.removeWorkerPin = async function(name){
+  const out = await mgrOp('setWorkerPin', { worker:name, wpin:'' });
+  if (out.net && out.res.ok) {
+    S.pinned = S.pinned.filter(x => x !== name);
+    if (WS && WS.worker === name) { WS.wpin = ''; saveSession(WS); }
+    closeModal(); toast('PIN removed', 'ok'); R.mgr();
+  } else if (!out.net) toast('No connection — try again', 'err');
+};
+
+// ── Order form (chips) ──
+function pickChip(groupId, val){
+  const group = document.getElementById(groupId); if (!group) return;
+  group.querySelectorAll('.chip-opt').forEach(btn => btn.classList.toggle('selected', btn.dataset.val === val));
+  const hiddenId = groupId === 'chGroup' ? 'newOrderCh' : 'newOrderCu';
+  const hidden = document.getElementById(hiddenId);
+  if (hidden) hidden.value = val;
+  updateOrderPreview();
+}
+function editChipPick(groupId, val){
   const group = document.getElementById(groupId); if (!group) return;
   group.querySelectorAll('.chip-opt').forEach(b => b.classList.toggle('selected', b.dataset.val === val));
   const hiddenId = groupId === 'editChGroup' ? 'eoCh' : 'eoCu';
   const hidden = document.getElementById(hiddenId);
   if (hidden) hidden.value = val;
 }
-
-// ── Chip group selector ──────────────────────────────
-function pickChip(groupId, val) {
-  const group = document.getElementById(groupId);
-  if (!group) return;
-  // Toggle selection
-  group.querySelectorAll('.chip-opt').forEach(btn => {
-    btn.classList.toggle('selected', btn.dataset.val === val);
-  });
-  // Write to hidden input
-  const hiddenId = groupId === 'chGroup' ? 'newOrderCh' : 'newOrderCu';
-  const hidden = document.getElementById(hiddenId);
-  if (hidden) hidden.value = val;
-  updateOrderPreview();
-}
-
-function updateOrderPreview() {
+function updateOrderPreview(){
   const id = document.getElementById('newOrderId')?.value.trim();
   const ch = document.getElementById('newOrderCh')?.value;
   const cu = document.getElementById('newOrderCu')?.value;
   const preview = document.getElementById('orderPreview');
-  const btn     = document.getElementById('btnAddOrder');
+  const btn = document.getElementById('btnAddOrder');
   if (!preview || !btn) return;
-
   const ready = id && ch && cu;
-  btn.disabled  = !ready;
+  btn.disabled = !ready;
   btn.style.opacity = ready ? '1' : '.35';
-
   if (ready) {
     preview.style.display = 'block';
     document.getElementById('prevId').textContent = id;
     document.getElementById('prevCh').textContent = ch;
     document.getElementById('prevCu').textContent = cu;
-  } else {
-    preview.style.display = 'none';
-  }
+  } else preview.style.display = 'none';
 }
 
-window.addOrder = function() {
+window.addOrder = function(){
   const id = document.getElementById('newOrderId')?.value.trim();
   const ch = document.getElementById('newOrderCh')?.value;
   const cu = document.getElementById('newOrderCu')?.value;
@@ -1608,49 +2221,44 @@ window.addOrder = function() {
   if (!cu) { toast('Select a customer', 'err'); return; }
   if (S.orders.find(o => o.id === id)) { toast('Order already exists', 'err'); return; }
 
-  S.orders.push({ id, ch, cu, at: '' });
+  S.orders.push({ id, ch, cu, at: todayStr() + ' ' + nowHHmm() + ':00' });
   toast(`${id} added ✓`, 'ok');
-
-  // Reset form
   document.getElementById('newOrderId').value = '';
   document.getElementById('newOrderCh').value = '';
   document.getElementById('newOrderCu').value = '';
   document.querySelectorAll('#chGroup .chip-opt, #cuGroup .chip-opt').forEach(b => b.classList.remove('selected'));
-  updateOrderPreview();
-  R.mgr();
+  updateOrderPreview(); R.mgr();
 
-  apiBg('upsertOrder', { id, ch, cu }, () => {}, () => {
-    S.orders = S.orders.filter(o => o.id !== id);
-    toast('⚠ Save failed', 'err');
-    R.mgr();
+  mgrOp('upsertOrder', { id, ch, cu }).then(out => {
+    if (!out.net || !out.res.ok) {
+      S.orders = S.orders.filter(o => o.id !== id);
+      toast('⚠ Save failed', 'err'); R.mgr();
+    }
   });
 };
-window.delOrder=function(id){
-  if(!confirm(`Delete "${id}" and all its entries?`))return;
-  const bkO=[...S.orders],bkW=[...S.works];
-  S.orders=S.orders.filter(o=>o.id!==id);S.works=S.works.filter(w=>w.oid!==id);
-  toast(id+' deleted','ok');R.mgr();
-  apiBg('deleteOrder',{id},()=>{},()=>{S.orders=bkO;S.works=bkW;toast('⚠ Delete failed','err');R.mgr();});
+window.delOrder = function(id){
+  if (!confirm(`Delete "${id}" and all its entries?\n(Data is archived, not erased — recoverable from Sheets.)`)) return;
+  const bkO = [...S.orders], bkW = [...S.works];
+  S.orders = S.orders.filter(o => o.id !== id);
+  S.works  = S.works.filter(w => w.oid !== id);
+  toast(id + ' deleted', 'ok'); R.mgr();
+  mgrOp('deleteOrder', { id }).then(out => {
+    if (!out.net || !out.res.ok) { S.orders = bkO; S.works = bkW; toast('⚠ Delete failed', 'err'); R.mgr(); }
+  });
 };
-window.editOrder=function(oid){
-  const o=S.orders.find(x=>x.id===oid);if(!o)return;
-
+window.editOrder = function(oid){
+  const o = S.orders.find(x => x.id === oid); if (!o) return;
   const chips = (groupId, options, current) => options.map(({v,l,sub}) =>
     `<button type="button" class="chip-opt${current===v?' selected':''}" data-val="${v}"
-       onclick="editChipPick('${groupId}','${v}')">${l}${sub?`<span class="chip-sub">${sub}</span>`:''}</button>`
-  ).join('');
-
-  const chOptions = [
-    {v:'NJ',l:'NJ'},{v:'CA',l:'CA'}
-  ];
+       onclick="editChipPick('${groupId}','${v}')">${l}${sub?`<span class="chip-sub">${sub}</span>`:''}</button>`).join('');
+  const chOptions = [{v:'NJ',l:'NJ'},{v:'CA',l:'CA'}];
   const cuOptions = [
-    {v:'MOIDA(ORANGE)', l:'MOIDA', sub:'ORANGE'},
-    {v:'MOIDA(ONTARIO)',l:'MOIDA', sub:'ONTARIO'},
-    {v:'NJ(PURCHASE)',  l:'NJ',    sub:'PURCHASE'},
-    {v:'WHOLESALE',     l:'WHOLESALE'},
-    {v:'OTHER',         l:'OTHER'}
+    {v:'MOIDA(ORANGE)',  l:'MOIDA', sub:'ORANGE'},
+    {v:'MOIDA(ONTARIO)', l:'MOIDA', sub:'ONTARIO'},
+    {v:'NJ(PURCHASE)',   l:'NJ',    sub:'PURCHASE'},
+    {v:'WHOLESALE',      l:'WHOLESALE'},
+    {v:'OTHER',          l:'OTHER'}
   ];
-
   openModal(`
     <div style="font-size:15px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px">
       <i class="ri-edit-line" style="color:var(--amber)"></i> Edit order
@@ -1677,22 +2285,27 @@ window.editOrder=function(oid){
       </button>
     </div>`);
 };
-window.saveOrder=function(orig){
-  const newId=document.getElementById('eoId').value.trim();
-  const ch=document.getElementById('eoCh').value.trim();
-  const cu=document.getElementById('eoCu').value.trim();
-  if(!newId){toast('Order # required','err');return;}
-  const o=S.orders.find(x=>x.id===orig);if(o){o.id=newId;o.ch=ch;o.cu=cu;}
-  S.works.filter(w=>w.oid===orig).forEach(w=>w.oid=newId);
-  toast('Updated','ok');closeModal();R.mgr();
-  apiBg('upsertOrder',{id:orig,newId:newId!==orig?newId:undefined,ch,cu});
+window.saveOrder = function(orig){
+  const newId = document.getElementById('eoId').value.trim();
+  const ch = document.getElementById('eoCh').value.trim();
+  const cu = document.getElementById('eoCu').value.trim();
+  if (!newId) { toast('Order # required', 'err'); return; }
+  const bkO = JSON.parse(JSON.stringify(S.orders)), bkW = JSON.parse(JSON.stringify(S.works));
+  const o = S.orders.find(x => x.id === orig); if (o) { o.id = newId; o.ch = ch; o.cu = cu; }
+  S.works.filter(w => w.oid === orig).forEach(w => w.oid = newId);
+  toast('Updated', 'ok'); closeModal(); R.mgr();
+  mgrOp('upsertOrder', { id:orig, newId:newId!==orig?newId:undefined, ch, cu }).then(out => {
+    if (!out.net || !out.res.ok) { S.orders = bkO; S.works = bkW; toast('⚠ Save failed', 'err'); R.mgr(); }
+  });
 };
-window.renderEntries=function(){
-  const q=(document.getElementById('entrySearch')?.value||'').toUpperCase();
-  const ws=q?S.works.filter(w=>w.oid.toUpperCase().includes(q)||w.w.toUpperCase().includes(q)):S.works.slice(0,50);
-  document.getElementById('entryTable').innerHTML=ws.length?
+
+// ── Work entries (edit / delete) ──
+window.renderEntries = function(){
+  const q = (document.getElementById('entrySearch')?.value || '').toUpperCase();
+  const ws = q ? S.works.filter(w => w.oid.toUpperCase().includes(q) || w.w.toUpperCase().includes(q)) : S.works.slice(0, 50);
+  document.getElementById('entryTable').innerHTML = ws.length ?
     `<table class="mgr-tbl"><thead><tr><th>Order</th><th>Worker</th><th>Stage</th><th>Items</th><th>QTY</th><th>Pallets</th><th>Start</th><th>End</th><th>Net</th><th></th></tr></thead><tbody>${
-      ws.map(w=>`<tr>
+      ws.map(w => `<tr>
         <td class="mono">${w.oid}</td><td>${w.w}</td>
         <td><span style="color:${SCOL[w.stage]||'var(--t)'};font-weight:700;font-size:11px">${w.stage}</span></td>
         <td class="mono">${w.items!==null?w.items:'—'}</td>
@@ -1700,50 +2313,127 @@ window.renderEntries=function(){
         <td class="mono" style="color:var(--amber)">${w.pallets!==null?fmtPallets(w.pallets):'—'}</td>
         <td class="mono">${w.startT||'—'}</td><td class="mono">${w.endT||'—'}</td>
         <td class="mono" style="color:var(--teal)">${fmtMin(w.netMin)}</td>
-        <td><button class="btn btn-sm" style="color:var(--red);padding:2px 5px" onclick="delEntry('${w.id}')"><i class="ri-delete-bin-line"></i></button></td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-sm" style="padding:2px 5px" title="Edit" onclick="editEntryModal('${w.id}')"><i class="ri-edit-line"></i></button>
+          <button class="btn btn-sm" style="color:var(--red);padding:2px 5px" title="Delete" onclick="delEntry('${w.id}')"><i class="ri-delete-bin-line"></i></button>
+        </td>
       </tr>`).join('')}</tbody></table>`
-    :'<div style="font-size:12px;color:var(--t3);padding:8px 0">No entries</div>';
+    : '<div style="font-size:12px;color:var(--t3);padding:8px 0">No entries</div>';
 };
-window.delEntry=function(wid){
-  if(!confirm('Delete this entry?'))return;
-  const bk=S.works.find(w=>w.id===wid);
-  S.works=S.works.filter(w=>w.id!==wid);toast('Deleted','ok');renderEntries();
-  apiBg('deleteEntry',{entryId:wid},()=>{},()=>{if(bk)S.works.push(bk);toast('⚠ Delete failed','err');renderEntries();});
+
+window.editEntryModal = function(wid){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const workerOpts = S.workers.map(n => `<option${n===w.w?' selected':''}>${n}</option>`).join('');
+  const stageOpts  = ['PICK','INSP','PALL'].map(s => `<option${s===w.stage?' selected':''}>${s}</option>`).join('');
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px">
+      <i class="ri-edit-line" style="color:var(--purple)"></i> Edit work entry
+    </div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:14px" class="mono">${w.oid} · ${w.startT||''}${w.endT?' → '+w.endT:''}</div>
+    <div class="frow">
+      <div class="fg"><label class="fl">Worker</label><select class="fi" id="eeWorker">${workerOpts}</select></div>
+      <div class="fg"><label class="fl">Stage</label><select class="fi" id="eeStage">${stageOpts}</select></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="fl">Items</label><input class="fi" type="number" id="eeItems" min="0" value="${w.items!==null?w.items:''}"></div>
+      <div class="fg"><label class="fl">QTY</label><input class="fi" type="number" id="eeQty" min="0" value="${w.qty!==null?w.qty:''}"></div>
+    </div>
+    <div class="fg"><label class="fl">Pallets</label><input class="fi" type="number" id="eePallets" min="0" step="0.5" value="${w.pallets!==null?w.pallets:''}"></div>
+    <div style="font-size:11px;color:var(--t3);margin-bottom:14px"><i class="ri-information-line"></i> Times are not editable here — they stay as recorded. KPI_Daily reflects edits after the next rebuild.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-blue" style="padding:10px 20px;font-weight:700" onclick="saveEntryEdit('${wid}')"><i class="ri-check-line"></i> Save</button>
+    </div>`);
 };
-window.changePin=function(){
-  const c=document.getElementById('cpCur').value,n=document.getElementById('cpNew').value,cf=document.getElementById('cpConf').value;
-  if(!c||!n||!cf){toast('Fill all fields','err');return;}
-  if(c!==S.pin){toast('Wrong current password','err');return;}
-  if(n.length<4){toast('Min 4 chars','err');return;}
-  if(n!==cf){toast("Passwords don't match",'err');return;}
-  S.pin=n;toast('Password changed','ok');
-  ['cpCur','cpNew','cpConf'].forEach(id=>document.getElementById(id).value='');
-  apiBg('setSettings',{managerPin:n});
+window.saveEntryEdit = function(wid){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const worker = document.getElementById('eeWorker').value;
+  const stage  = document.getElementById('eeStage').value;
+  const items  = document.getElementById('eeItems').value;
+  const qty    = document.getElementById('eeQty').value;
+  const pall   = document.getElementById('eePallets').value;
+  const bk = { w:w.w, stage:w.stage, items:w.items, qty:w.qty, pallets:w.pallets };
+  w.w = worker; w.stage = stage;
+  w.items   = items !== '' ? Number(items) : null;
+  w.qty     = qty   !== '' ? Number(qty)   : null;
+  w.pallets = pall  !== '' ? Number(pall)  : null;
+  closeModal(); toast('Entry updated', 'ok'); renderEntries();
+  mgrOp('editEntry', { entryId:wid, worker, stage, items, qty, pallets:pall }).then(out => {
+    if (!out.net || !out.res.ok) {
+      Object.assign(w, { w:bk.w, stage:bk.stage, items:bk.items, qty:bk.qty, pallets:bk.pallets });
+      toast('⚠ Save failed', 'err'); renderEntries();
+    }
+  });
+};
+window.delEntry = function(wid){
+  if (!confirm('Delete this entry?\n(Archived, not erased — recoverable from Sheets.)')) return;
+  const bk = S.works.find(w => w.id === wid);
+  S.works = S.works.filter(w => w.id !== wid);
+  toast('Deleted', 'ok'); renderEntries();
+  mgrOp('deleteEntry', { entryId:wid }).then(out => {
+    if (!out.net || !out.res.ok) { if (bk) S.works.push(bk); toast('⚠ Delete failed', 'err'); renderEntries(); }
+  });
+};
+
+// ── Manager password — verified server-side ──
+window.changePin = async function(){
+  const c = document.getElementById('cpCur').value, n = document.getElementById('cpNew').value, cf = document.getElementById('cpConf').value;
+  if (!c || !n || !cf) { toast('Fill all fields', 'err'); return; }
+  if (n.length < 4) { toast('Min 4 chars', 'err'); return; }
+  if (n !== cf) { toast("Passwords don't match", 'err'); return; }
+  const out = await mgrOp('changePin', { current:c, next:n });
+  if (out.net && out.res.ok) {
+    toast('Password changed ✓', 'ok');
+    ['cpCur','cpNew','cpConf'].forEach(id => document.getElementById(id).value = '');
+  } else if (out.net && out.res.error === 'wrong_current') {
+    toast('Wrong current password', 'err');
+  } else if (out.net && out.res.error !== 'unauthorized') {
+    toast('⚠ ' + (out.res.error || 'Failed'), 'err');
+  } else if (!out.net) toast('No connection — try again', 'err');
 };
 
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
 (async function init(){
-  updateClock();setInterval(updateClock,1000);
-  const ok=await loadData();
-  document.getElementById('loadingScreen').style.display='none';
-  document.getElementById('app').style.display='block';
-  if(!ok)toast('Failed to connect — check API URL','err');
-  popWorker();
-  document.querySelectorAll('.nb').forEach(b=>b.addEventListener('click',()=>go(b.dataset.p)));
-  go('dash');
-  updateBadges();
-  // Auto-refresh every 30s — skips if saves in-flight
-  setInterval(async()=>{
-    if(Object.keys(_pending).length===0 && !_startLock){
-      await loadData();updateBadges();
-      const p=curPage();if(p==='dash')R.dash();else if(p==='work'){renderMyActive();renderActFeed();}
+  updateClock(); setInterval(updateClock, 1000);
+
+  const ok = await loadData();
+  document.getElementById('loadingScreen').style.display = 'none';
+  if (!ok) toast('Failed to connect — check API URL', 'err');
+
+  // Restore worker session (per-device) or show sign-in
+  const sess = getSession();
+  if (sess && sess.worker && S.workers.includes(sess.worker)) {
+    WS = sess; CW = sess.worker;
+    enterApp();
+  } else {
+    clearSession();
+    showLogin();
+  }
+
+  document.querySelectorAll('.nb').forEach(b => b.addEventListener('click', () => go(b.dataset.p)));
+  updateQueueBadge();
+
+  // Auto-refresh every 30s — skips while saving / offline / queued
+  setInterval(async () => {
+    if (!WS) return;
+    if (Object.keys(_pending).length === 0 && !_startLock && _queue.length === 0 && navigator.onLine !== false) {
+      await loadData(); updateBadges();
+      const p = curPage();
+      if (p === 'dash') R.dash();
+      else if (p === 'work') renderStageContent();
     }
-  },30000);
-  if('serviceWorker'in navigator){
-    if('caches'in window)caches.keys().then(ns=>ns.forEach(n=>caches.delete(n)));
-    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  }, 30000);
+
+  // Offline queue — flush on reconnect and on a steady interval
+  window.addEventListener('online', () => { toast('Back online — syncing...', ''); flushQueue(); });
+  setInterval(() => { if (navigator.onLine !== false) flushQueue(); }, 20000);
+  flushQueue();
+
+  if ('serviceWorker' in navigator) {
+    if ('caches' in window) caches.keys().then(ns => ns.forEach(n => caches.delete(n)));
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 })();
 </script>
