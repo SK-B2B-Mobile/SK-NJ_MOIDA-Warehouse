@@ -1245,10 +1245,24 @@ function renderStageContent(){
     <div class="card" style="border-style:dashed;text-align:center;padding:22px 18px">
       <i class="ri-focus-3-line" style="font-size:24px;color:var(--t3);display:block;margin-bottom:6px"></i>
       <div style="font-weight:700;font-size:14px;margin-bottom:3px">One task at a time</div>
-      <div style="font-size:12px;color:var(--t3)">Finish your current session before starting a new one.</div>
-      ${others.length ? `<div style="display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-top:12px">
-        ${others.map(w => `<button class="btn btn-sm" style="border-color:${SCOL[w.stage]}66" onclick="selStage('${w.stage}')">
-          <i class="${SICON[w.stage]}" style="color:${SCOL[w.stage]}"></i> Active: ${w.stage} · <span class="mono">${w.oid}</span></button>`).join('')}
+      <div style="font-size:12px;color:var(--t3)">Finish your active session${myActiveAll.length>1?'s':''} below to start new work.</div>
+      ${others.length ? `<div style="max-width:480px;margin:14px auto 0">
+        ${others.map(w => {
+          const e = liveElapsed(w);
+          return `<div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid ${SCOL[w.stage]}44;border-left:3px solid ${SCOL[w.stage]};border-radius:var(--r);padding:10px 12px;margin-bottom:8px;text-align:left;flex-wrap:wrap">
+            <i class="${SICON[w.stage]}" style="color:${SCOL[w.stage]};font-size:16px"></i>
+            <div style="flex:1;min-width:120px">
+              <span style="color:${SCOL[w.stage]};font-weight:800;font-size:11px;letter-spacing:.05em">${w.stage}</span>
+              <span class="mono" style="font-weight:700;margin-left:6px">${w.oid}</span>
+              <div style="font-size:11px;color:var(--t3)">Started ${w.startT||'—'}${e?` · <span style="color:var(--amber)">${e}</span>`:''}</div>
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0">
+              <button class="btn btn-sm" onclick="selStage('${w.stage}')" title="Go to ${w.stage} tab"><i class="ri-arrow-right-line"></i></button>
+              <button class="btn btn-green btn-sm" style="font-weight:700" onclick="endWork('${w.id}','${w.stage}')">
+                <i class="ri-checkbox-circle-line"></i> End now</button>
+            </div>
+          </div>`;
+        }).join('')}
       </div>` : ''}
     </div>`;
   } else {
