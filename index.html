@@ -1233,21 +1233,33 @@ function renderStageContent(){
       </div>
     </div>` : '';
 
-  // v8.2 — ONE TASK AT A TIME: while this worker has ANY active
-  // session (in any stage), the start card is hidden. A worker
-  // handles a single IM number at a time on the floor, so showing
-  // a second Start button only invites accidental double-starts.
+  // v8.3 — CONCURRENCY RULES:
+  //  · PICK is exclusive (picking blocks everything, everything blocks picking)
+  //  · INSP + PALL can run TOGETHER, one active session per stage
+  //  · Overlapping INSP/PALL minutes are counted ONCE in worker KPI totals
   const myActiveAll = S.works.filter(w => w.w === CW && !w.endT);
+  const pickActive  = myActiveAll.find(w => w.stage === 'PICK');
+  const sameStage   = myActiveAll.filter(w => w.stage === s);
+  const companion   = (s !== 'PICK') ? myActiveAll.find(w => w.stage !== 'PICK' && w.stage !== s) : null;
+
+  let blockers = null, blockMsg = '';
+  if (pickActive && s !== 'PICK') {
+    blockers = [pickActive];
+    blockMsg = 'Picking is exclusive — finish it before starting other work.';
+  } else if (s === 'PICK' && myActiveAll.length > 0) {
+    blockers = myActiveAll;
+    blockMsg = 'Finish your active session' + (myActiveAll.length>1?'s':'') + ' before picking. (Picking is one task at a time.)';
+  }
+
   let startSect;
-  if (myActiveAll.length > 0) {
-    const others = myActiveAll.filter(w => w.stage !== s);
+  if (blockers) {
     startSect = `
     <div class="card" style="border-style:dashed;text-align:center;padding:22px 18px">
       <i class="ri-focus-3-line" style="font-size:24px;color:var(--t3);display:block;margin-bottom:6px"></i>
       <div style="font-weight:700;font-size:14px;margin-bottom:3px">One task at a time</div>
-      <div style="font-size:12px;color:var(--t3)">Finish your active session${myActiveAll.length>1?'s':''} below to start new work.</div>
-      ${others.length ? `<div style="max-width:480px;margin:14px auto 0">
-        ${others.map(w => {
+      <div style="font-size:12px;color:var(--t3)">${blockMsg}</div>
+      <div style="max-width:480px;margin:14px auto 0">
+        ${blockers.map(w => {
           const e = liveElapsed(w);
           return `<div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid ${SCOL[w.stage]}44;border-left:3px solid ${SCOL[w.stage]};border-radius:var(--r);padding:10px 12px;margin-bottom:8px;text-align:left;flex-wrap:wrap">
             <i class="${SICON[w.stage]}" style="color:${SCOL[w.stage]};font-size:16px"></i>
@@ -1263,7 +1275,18 @@ function renderStageContent(){
             </div>
           </div>`;
         }).join('')}
-      </div>` : ''}
+      </div>
+    </div>`;
+  } else if (sameStage.length > 0) {
+    // already running this stage — End button is in the card above;
+    // INSP & PALL pairing remains available on the other tab.
+    const other = s === 'INSP' ? 'PALL' : s === 'PALL' ? 'INSP' : '';
+    startSect = `
+    <div class="card" style="border-style:dashed;text-align:center;padding:16px 18px">
+      <div style="font-size:12px;color:var(--t3)">
+        <i class="ri-information-line"></i> One ${s} at a time — finish the session above to start another.
+        ${other ? `<br>INSP &amp; PALL can run together: <button class="btn btn-sm" style="margin-top:8px;border-color:${SCOL[other]}66" onclick="selStage('${other}')"><i class="${SICON[other]}" style="color:${SCOL[other]}"></i> Start ${other} alongside</button>` : ''}
+      </div>
     </div>`;
   } else {
     startSect = `
@@ -1280,6 +1303,11 @@ function renderStageContent(){
           <i class="ri-qr-scan-2-line"></i> Scan
         </button>
       </div>
+      ${companion ? `<div style="display:flex;align-items:center;gap:7px;background:${SCOL[companion.stage]}12;border:1px solid ${SCOL[companion.stage]}44;border-radius:var(--r);padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--t2)">
+        <i class="${SICON[companion.stage]}" style="color:${SCOL[companion.stage]}"></i>
+        Running alongside <b style="color:${SCOL[companion.stage]}">${companion.stage}</b> · <span class="mono">${companion.oid}</span>
+        <span style="color:var(--t3)">— overlapping time counts once in KPI</span>
+      </div>` : ''}
       <div class="fg">
         <label class="fl">Order</label>
         <select class="fi" id="workOrder" onchange="onOrderChange()" style="font-size:14px;padding:10px 12px">
@@ -1850,6 +1878,41 @@ function doneInRange(from, to){
   });
 }
 
+// ── v8.3: TRUE LABOR TIME ──
+// A worker can run INSP and PALL at the same time. Summing session
+// net minutes would double-count the overlap, so worker totals use
+// the UNION of session intervals (overlap counted once), netted
+// against business hours. Sessions without ISO timestamps fall back
+// to their stored netMin.
+function unionNetMin(sessions){
+  const iv = []; let fallback = 0;
+  (sessions||[]).forEach(w => {
+    if (w.startISO && w.endISO) {
+      const a = new Date(w.startISO).getTime(), b = new Date(w.endISO).getTime();
+      if (isFinite(a) && isFinite(b) && b > a) { iv.push([a,b]); return; }
+    }
+    fallback += (w.netMin||0);
+  });
+  iv.sort((x,y) => x[0]-y[0]);
+  const merged = [];
+  iv.forEach(([a,b]) => {
+    if (merged.length && a <= merged[merged.length-1][1])
+      merged[merged.length-1][1] = Math.max(merged[merged.length-1][1], b);
+    else merged.push([a,b]);
+  });
+  let tot = 0;
+  merged.forEach(([a,b]) => { const m = bizNet(new Date(a), new Date(b)); if (m !== null) tot += m; });
+  return Math.round(tot + fallback);
+}
+// Sum of per-worker unions (overlap merges only within the same worker)
+function laborMinByWorker(sessions){
+  const byW = {};
+  (sessions||[]).forEach(w => { (byW[w.w] = byW[w.w] || []).push(w); });
+  const out = {};
+  Object.keys(byW).forEach(k => out[k] = unionNetMin(byW[k]));
+  return out;
+}
+
 function renderKPI(){
   const from = document.getElementById('kpiFrom').value;
   const to   = document.getElementById('kpiTo').value;
@@ -1872,14 +1935,16 @@ function renderKPI(){
   const totItems = done.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
   const totQty   = done.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
   const totPall  = done.filter(w => ['INSP','PALL'].includes(w.stage)).reduce((s,w)=>s+(w.pallets||0),0);
-  const totMin   = done.reduce((s,w)=>s+(w.netMin||0),0);
+  // v8.3: true labor time — per-worker interval union, overlap counted once
+  const laborBy = laborMinByWorker(done);
+  const totMin  = Object.values(laborBy).reduce((s,v)=>s+v,0);
 
   let html = `<div style="font-size:12px;color:var(--t3);margin-bottom:14px;font-weight:600"><i class="ri-calendar-line"></i> ${label} — <strong style="color:var(--t2)">${done.length}</strong> completed sessions</div>
   <div class="g4" style="margin-bottom:18px">
     ${[{l:'Sessions done',v:done.length,c:'gr'},{l:'Items picked',v:totItems,c:'pu'},
        {l:'QTY picked',v:totQty,c:'tl'},{l:'Pallets (INSP+PALL)',v:fmtPallets(totPall),c:'am'}]
     .map(m=>`<div class="kmc ${m.c}"><div class="kmc-l">${m.l}</div><div class="kmc-v" style="color:var(--${{gr:'green',pu:'purple',tl:'teal',am:'amber'}[m.c]})">${m.v}</div></div>`).join('')}</div>
-  <div class="kmc bl" style="margin-bottom:18px"><div class="kmc-l">Total net work time (08:30–17:30, lunch 12:00–13:00 excluded)</div><div class="kmc-v" style="color:var(--blue)">${fmtMin(totMin)}</div></div>`;
+  <div class="kmc bl" style="margin-bottom:18px"><div class="kmc-l">Total labor time — 08:30–17:30, lunch excluded · overlapping INSP+PALL counted once</div><div class="kmc-v" style="color:var(--blue)">${fmtMin(totMin)}</div></div>`;
 
   // ── v8: daily productivity trend ──
   html += renderTrendChartHTML(done);
@@ -1899,7 +1964,7 @@ function renderKPI(){
     const tI = Object.values(stages).reduce((s,v)=>s+v.items,0);
     const tQ = Object.values(stages).reduce((s,v)=>s+v.qty,0);
     const tP = Object.values(stages).reduce((s,v)=>s+v.pallets,0);
-    const tM = Object.values(stages).reduce((s,v)=>s+v.min,0);
+    const tM = laborBy[wk] || 0;   // v8.3: union labor time (overlap once)
     workerTotals.push({ wk, totN, tI, tQ, tP, tM });
     let first = true;
     ['PICK','INSP','PALL'].forEach(stage => {
@@ -1924,12 +1989,13 @@ function renderKPI(){
       first = false;
     });
   });
-  html += `</tbody></table></div>`;
+  html += `</tbody></table></div>
+  <div style="font-size:11px;color:var(--t3);margin-top:6px"><i class="ri-information-line"></i> Stage rows show time engaged in each stage. <b>Labor time*</b> in the totals below counts overlapping INSP+PALL minutes once (actual hours worked).</div>`;
 
   // Worker totals
   html += `<div class="section">Worker totals</div>
   <div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)"><table class="kpi-tbl" style="min-width:580px">
-  <thead><tr><th>Worker</th><th>Sessions</th><th>Items picked</th><th>Pallets (INSP+PALL)</th><th>Net time</th><th>Performance</th></tr></thead><tbody>`;
+  <thead><tr><th>Worker</th><th>Sessions</th><th>Items picked</th><th>Pallets (INSP+PALL)</th><th>Labor time*</th><th>Performance</th></tr></thead><tbody>`;
   const maxI = Math.max(...workerTotals.map(x => x.tI), 1);
   workerTotals.sort((a,b)=>b.tI-a.tI).forEach(({wk,totN,tI,tQ,tP,tM}) => {
     const bar = Math.round(tI/maxI*100);
@@ -1982,11 +2048,15 @@ function renderTrendChartHTML(done){
   done.forEach(w => {
     const d = w.startISO ? w.startISO.slice(0,10) : (w.date || '');
     if (!d) return;
-    if (!byDate[d]) byDate[d] = { items:0, pallets:0, min:0, n:0 };
+    if (!byDate[d]) byDate[d] = { items:0, pallets:0, min:0, n:0, _sess:[] };
     byDate[d].items   += (w.stage==='PICK' ? (w.items||0) : 0);
     byDate[d].pallets += (w.stage!=='PICK' ? (w.pallets||0) : 0);
-    byDate[d].min     += (w.netMin||0);
+    byDate[d]._sess.push(w);
     byDate[d].n++;
+  });
+  // v8.3: daily labor minutes = per-worker union (overlap once)
+  Object.keys(byDate).forEach(d => {
+    byDate[d].min = Object.values(laborMinByWorker(byDate[d]._sess)).reduce((s,v)=>s+v,0);
   });
   let dates = Object.keys(byDate).sort();
   if (dates.length < 2) return '';                       // a single day has no trend
@@ -2052,15 +2122,17 @@ window.openDailyReport = function(){
   const totItems = done.filter(w=>w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
   const totQty   = done.filter(w=>w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
   const totPall  = done.filter(w=>['INSP','PALL'].includes(w.stage)).reduce((s,w)=>s+(w.pallets||0),0);
-  const totMin   = done.reduce((s,w)=>s+(w.netMin||0),0);
+  const totMin   = Object.values(laborMinByWorker(done)).reduce((s,v)=>s+v,0);  // v8.3 union
 
-  // by worker
+  // by worker — v8.3: labor time = interval union (overlap once)
+  const laborR = laborMinByWorker(done);
   const byW = {};
   done.forEach(w => {
     if (!byW[w.w]) byW[w.w] = { n:0, items:0, pallets:0, min:0 };
     byW[w.w].n++; byW[w.w].items += (w.stage==='PICK'?(w.items||0):0);
-    byW[w.w].pallets += (w.stage!=='PICK'?(w.pallets||0):0); byW[w.w].min += (w.netMin||0);
+    byW[w.w].pallets += (w.stage!=='PICK'?(w.pallets||0):0);
   });
+  Object.keys(byW).forEach(k => byW[k].min = laborR[k] || 0);
   // by stage
   const byS = { PICK:{n:0,v:0,min:0}, INSP:{n:0,v:0,min:0}, PALL:{n:0,v:0,min:0} };
   done.forEach(w => {
