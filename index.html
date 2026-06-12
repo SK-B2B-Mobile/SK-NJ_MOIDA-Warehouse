@@ -285,6 +285,15 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .empty{text-align:center;padding:40px 20px;color:var(--t3);font-size:14px}
 .empty i{font-size:32px;display:block;margin-bottom:8px;opacity:.3}
 
+/* WORKING NOW strip (v8.2) */
+.live-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.live-label{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--green);text-transform:uppercase;padding:6px 4px;white-space:nowrap}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 1.6s infinite;flex-shrink:0}
+.live-chip{display:inline-flex;align-items:center;gap:7px;background:var(--bg2);border:1px solid var(--bd2);border-radius:20px;padding:7px 13px;font-family:var(--font);font-size:13px;color:var(--t);cursor:pointer;transition:all .13s;white-space:nowrap}
+.live-chip:hover{background:var(--bg3);transform:translateY(-1px)}
+.live-chip b{font-weight:700}
+.wdot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;animation:pulse 1.6s infinite;vertical-align:1px}
+
 /* Daily report modal */
 .rep-h{font-family:var(--mono);font-weight:800;font-size:16px;display:flex;align-items:center;gap:8px;margin-bottom:2px}
 .rep-sub{font-size:11px;color:var(--t3);margin-bottom:14px}
@@ -348,6 +357,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <!-- DASHBOARD -->
   <div class="pg on" id="pg-dash">
     <div id="dashMetrics" style="margin-bottom:12px"></div>
+    <div id="dashLive"></div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap">
       <div id="dashFilterTabs" style="display:flex;gap:4px;flex-wrap:wrap"></div>
       <div style="flex:1"></div>
@@ -436,8 +446,6 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
         <div class="fg">
           <label class="fl">Customer</label>
           <div class="chip-group" id="cuGroup">
-            <button type="button" class="chip-opt" data-val="MOIDA(ORANGE)"   onclick="pickChip('cuGroup','MOIDA(ORANGE)')">MOIDA<span class="chip-sub">ORANGE</span></button>
-            <button type="button" class="chip-opt" data-val="MOIDA(ONTARIO)"  onclick="pickChip('cuGroup','MOIDA(ONTARIO)')">MOIDA<span class="chip-sub">ONTARIO</span></button>
             <button type="button" class="chip-opt" data-val="NJ(PURCHASE)"    onclick="pickChip('cuGroup','NJ(PURCHASE)')">NJ<span class="chip-sub">PURCHASE</span></button>
             <button type="button" class="chip-opt" data-val="WHOLESALE"       onclick="pickChip('cuGroup','WHOLESALE')">WHOLESALE</button>
             <button type="button" class="chip-opt" data-val="OTHER"           onclick="pickChip('cuGroup','OTHER')">OTHER</button>
@@ -994,8 +1002,29 @@ R.dash = function(){
        {l:'Palletizing',v:pallA,c:'tl'},{l:'Completed',v:done,c:'gr'},
        {l:'SLA risk',v:slaN,c:'rd',alert:slaN>0},{l:'Total',v:S.orders.length,c:'cy'}]
     .map(m => `<div class="mc ${m.c}${m.alert?' alert':''}"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${{am:'amber',bl:'blue',pu:'purple',tl:'teal',gr:'green',cy:'cyan',rd:'red'}[m.c]})">${m.v}</div></div>`).join('')}</div>`;
+  renderLiveNow();
   renderDashTable();
 };
+
+// ── v8.2: WORKING NOW — who is doing what, right now ──
+function renderLiveNow(){
+  const el = document.getElementById('dashLive'); if (!el) return;
+  const act = S.works.filter(w => !w.endT);
+  if (!act.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="live-strip">
+    <span class="live-label"><span class="live-dot"></span>WORKING NOW</span>
+    ${act.map(w => {
+      const e = liveElapsed(w);
+      return `<button class="live-chip" onclick="showOrderDetail('${w.oid}')" style="border-color:${SCOL[w.stage]}66" title="${w.w} — ${w.stage} on ${w.oid}">
+        <i class="${SICON[w.stage]}" style="color:${SCOL[w.stage]}"></i>
+        <b>${w.w}</b>
+        <span style="color:${SCOL[w.stage]};font-weight:800;font-size:11px;letter-spacing:.04em">${w.stage}</span>
+        <span class="mono" style="color:var(--t2);font-size:12px">${w.oid}</span>
+        ${e ? `<span class="mono" style="color:var(--amber);font-size:11px"><i class="ri-timer-line"></i> ${e}</span>` : ''}
+      </button>`;
+    }).join('')}
+  </div>`;
+}
 
 function renderDashTable(){
   const tabs = [{k:'all',l:'All'},{k:'active',l:'Active'},{k:'sla',l:'⚠ SLA'},{k:'done',l:'Done'},{k:'waiting',l:'Waiting'}];
@@ -1031,6 +1060,13 @@ function renderDashTable(){
   const trs = slice.map(o => {
     const ws = S.works.filter(w => w.oid === o.id);
     const workers = [...new Set(ws.map(w => w.w))];
+    // v8.2: which workers are active on this order right now, and in which stage
+    const activeBy = {};
+    ws.filter(w => !w.endT).forEach(w => { if (!activeBy[w.w]) activeBy[w.w] = w.stage; });
+    const workersHtml = workers.map(n => activeBy[n]
+      ? `<span style="color:${SCOL[activeBy[n]]};font-weight:700;white-space:nowrap"><span class="wdot" style="background:${SCOL[activeBy[n]]}"></span>${n} · ${activeBy[n]}</span>`
+      : `<span>${n}</span>`
+    ).join(', ');
     const totalItems   = ws.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
     const totalQty     = ws.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
     const totalPallets = ws.filter(w => w.stage==='PALL'&&w.endT&&w.pallets!==null).reduce((s,w)=>s+(w.pallets||0),0);
@@ -1043,7 +1079,7 @@ function renderDashTable(){
       <td><span class="dim">${o.ch}</span></td>
       <td><span class="dim">${o.cu}</span></td>
       <td><span class="num" style="${sla?'color:var(--red);font-weight:800':'color:var(--t2)'}">${fmtAge(ageH)}</span></td>
-      <td style="font-size:13px;color:var(--t2)">${workers.join(', ')||'<span style="color:var(--t3)">—</span>'}</td>
+      <td style="font-size:13px;color:var(--t2)">${workersHtml||'<span style="color:var(--t3)">—</span>'}</td>
       <td><span class="num">${totalItems||'—'}</span></td>
       <td><span class="num">${totalQty||'—'}</span></td>
       <td><span class="num" style="color:var(--teal)">${totalPallets?fmtPallets(totalPallets):'—'}</span></td>
@@ -1197,7 +1233,26 @@ function renderStageContent(){
       </div>
     </div>` : '';
 
-  const startSect = `
+  // v8.2 — ONE TASK AT A TIME: while this worker has ANY active
+  // session (in any stage), the start card is hidden. A worker
+  // handles a single IM number at a time on the floor, so showing
+  // a second Start button only invites accidental double-starts.
+  const myActiveAll = S.works.filter(w => w.w === CW && !w.endT);
+  let startSect;
+  if (myActiveAll.length > 0) {
+    const others = myActiveAll.filter(w => w.stage !== s);
+    startSect = `
+    <div class="card" style="border-style:dashed;text-align:center;padding:22px 18px">
+      <i class="ri-focus-3-line" style="font-size:24px;color:var(--t3);display:block;margin-bottom:6px"></i>
+      <div style="font-weight:700;font-size:14px;margin-bottom:3px">One task at a time</div>
+      <div style="font-size:12px;color:var(--t3)">Finish your current session before starting a new one.</div>
+      ${others.length ? `<div style="display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-top:12px">
+        ${others.map(w => `<button class="btn btn-sm" style="border-color:${SCOL[w.stage]}66" onclick="selStage('${w.stage}')">
+          <i class="${SICON[w.stage]}" style="color:${SCOL[w.stage]}"></i> Active: ${w.stage} · <span class="mono">${w.oid}</span></button>`).join('')}
+      </div>` : ''}
+    </div>`;
+  } else {
+    startSect = `
     <div class="start-card ${bdcl}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <div style="width:36px;height:36px;border-radius:50%;background:${col}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -1223,6 +1278,7 @@ function renderStageContent(){
         <i class="ri-play-circle-line"></i> ${SLABEL[s]}
       </button>
     </div>`;
+  }
 
   container.innerHTML = activeSect + startSect;
   startSessionTimer();
@@ -1472,6 +1528,13 @@ function doStartWork(oid, items, qty){
     if (!res.ok && res.error === 'duplicate_active') {
       S.works = S.works.filter(w => w.id !== tid);
       toast('⚠ Already active on server — refreshing...', 'err');
+      loadData().then(() => { updateBadges(); renderStageContent(); });
+      finish(); return;
+    }
+    if (!res.ok && res.error === 'busy_active') {
+      // v8.2 — one task at a time, enforced server-side too
+      S.works = S.works.filter(w => w.id !== tid);
+      toast(`⚠ Finish your active ${res.stage||''} on ${res.orderId||''} first`, 'err');
       loadData().then(() => { updateBadges(); renderStageContent(); });
       finish(); return;
     }
@@ -2263,8 +2326,6 @@ window.editOrder = function(oid){
        onclick="editChipPick('${groupId}','${v}')">${l}${sub?`<span class="chip-sub">${sub}</span>`:''}</button>`).join('');
   const chOptions = [{v:'NJ',l:'NJ'},{v:'CA',l:'CA'}];
   const cuOptions = [
-    {v:'MOIDA(ORANGE)',  l:'MOIDA', sub:'ORANGE'},
-    {v:'MOIDA(ONTARIO)', l:'MOIDA', sub:'ONTARIO'},
     {v:'NJ(PURCHASE)',   l:'NJ',    sub:'PURCHASE'},
     {v:'WHOLESALE',      l:'WHOLESALE'},
     {v:'OTHER',          l:'OTHER'}
