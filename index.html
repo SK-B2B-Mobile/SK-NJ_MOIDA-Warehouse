@@ -2118,24 +2118,34 @@ R.mgr = function(){
 };
 
 // ── Workers ──
+// v8.1 — uses atomic server ops (addWorker / removeWorker).
+// The server returns the FINAL list, which becomes the source of
+// truth — overlapping saves can no longer erase another worker.
 window.addWorker = function(){
   const n = document.getElementById('newWorker').value.trim();
   if (!n) { toast('Enter name', 'err'); return; }
+  if (n.includes(',') || n.includes(':')) { toast('Name cannot contain "," or ":"', 'err'); return; }
   if (S.workers.includes(n)) { toast('Already exists', 'err'); return; }
   const bk = [...S.workers];
-  S.workers.push(n);
+  S.workers.push(n);                       // optimistic
   document.getElementById('newWorker').value = '';
   toast(n + ' added', 'ok'); R.mgr();
-  mgrOp('setSettings', { workers:S.workers }).then(out => {
+  mgrOp('addWorker', { name:n }).then(out => {
+    if (out.net && out.res.workers) { S.workers = out.res.workers; R.mgr(); return; }  // server list wins
     if (!out.net || !out.res.ok) { S.workers = bk; toast('⚠ Save failed', 'err'); R.mgr(); }
   });
 };
 window.delWorker = function(n){
   if (!confirm(`Remove "${n}"?\nTheir past work records stay in the data.`)) return;
   const bk = [...S.workers];
-  S.workers = S.workers.filter(w => w !== n);
+  S.workers = S.workers.filter(w => w !== n);   // optimistic
   toast(n + ' removed', 'ok'); R.mgr();
-  mgrOp('setSettings', { workers:S.workers }).then(out => {
+  mgrOp('removeWorker', { name:n }).then(out => {
+    if (out.net && out.res.ok && out.res.workers) {
+      S.workers = out.res.workers;
+      S.pinned = S.pinned.filter(x => S.workers.includes(x));
+      R.mgr(); return;
+    }
     if (!out.net || !out.res.ok) { S.workers = bk; toast('⚠ Save failed', 'err'); R.mgr(); }
   });
 };
@@ -2415,10 +2425,12 @@ window.changePin = async function(){
   document.querySelectorAll('.nb').forEach(b => b.addEventListener('click', () => go(b.dataset.p)));
   updateQueueBadge();
 
-  // Auto-refresh every 30s — skips while saving / offline / queued
+  // Auto-refresh every 30s — skips while ANY save/API call is in
+  // flight (v8.1: _syncN guard prevents a stale read from
+  // overwriting state mid-save), or while offline / queued.
   setInterval(async () => {
     if (!WS) return;
-    if (Object.keys(_pending).length === 0 && !_startLock && _queue.length === 0 && navigator.onLine !== false) {
+    if (Object.keys(_pending).length === 0 && !_startLock && _syncN === 0 && _queue.length === 0 && navigator.onLine !== false) {
       await loadData(); updateBadges();
       const p = curPage();
       if (p === 'dash') R.dash();
