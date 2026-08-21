@@ -2987,6 +2987,14 @@ window.saveOrder = function(orig){
 // IMPORT PICK LIST — PDF (primary) / CSV / XLSX → OrderItems
 // ══════════════════════════════════════════════════════
 let _importBatch = [];   // [{id, fileName, parsed:{orderId, items}}] — supports importing several orders' pick lists in one go
+const IMPORT_BATCH_KEY = 'wms_import_batch';
+function saveImportBatch(){ try { localStorage.setItem(IMPORT_BATCH_KEY, JSON.stringify(_importBatch)); } catch(_){} }
+function loadImportBatchFromStorage(){
+  try {
+    const raw = localStorage.getItem(IMPORT_BATCH_KEY);
+    _importBatch = raw ? (JSON.parse(raw) || []) : [];
+  } catch(_) { _importBatch = []; }
+}
 
 // Strips combining marks and stray non-ASCII glyphs that leak in
 // from barcode-font rendering in PDF text extraction, leaving the
@@ -3217,6 +3225,7 @@ async function processImportFiles(files){
 // 2-3 order pick lists to import at once.
 function renderImportBatch(){
   const container = document.getElementById('importPreview');
+  saveImportBatch();
   if (!_importBatch.length) { container.innerHTML = ''; return; }
 
   const cardsHtml = _importBatch.map((entry, bi) => {
@@ -3457,6 +3466,15 @@ window.changePin = async function(){
   const ok = await loadData();
   document.getElementById('loadingScreen').style.display = 'none';
   if (!ok) toast('Failed to connect — check API URL', 'err');
+
+  // Restore any pick-list files that were parsed but not yet confirmed —
+  // survives an accidental refresh (PDF server parsing can take 20-30s).
+  loadImportBatchFromStorage();
+  if (_importBatch.length) {
+    const statusEl = document.getElementById('importStatus');
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--amber)"><i class="ri-history-line"></i> Restored ${_importBatch.length} unconfirmed file${_importBatch.length>1?'s':''} from before the refresh</span>`;
+    renderImportBatch();
+  }
 
   // Restore worker session (per-device) or show sign-in
   const sess = getSession();
