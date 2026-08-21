@@ -1335,24 +1335,105 @@ function renderScanUI(w){
 }
 
 // SKU-level checklist — used when a pick list was imported for this order.
+// v10.4 — scan input moved above the (potentially 100+ row) list so workers
+// don't have to scroll past it every time; added a live search (matches
+// SKU / name / rack / barcode — a partial barcode like the last 5 digits
+// is enough, since it's a plain substring match) and a page-size selector
+// (10/20/30/40 rows) so a long pick list stays easy to scan through.
+let _skuUI = {}; // wid -> { q, page, size }
+function skuUI(wid){
+  if (!_skuUI[wid]) _skuUI[wid] = { q:'', page:0, size:20 };
+  return _skuUI[wid];
+}
+function filterSkuItems(items, q){
+  if (!q) return items;
+  const s = q.trim().toLowerCase();
+  return items.filter(it =>
+    (it.sku||'').toLowerCase().includes(s) ||
+    (it.name||'').toLowerCase().includes(s) ||
+    (it.barcode||'').toLowerCase().includes(s) ||
+    (it.rack||'').toLowerCase().includes(s)
+  );
+}
+function skuRowHtml(it, st){
+  const key = it.barcode || it.sku;
+  const got = st.skuCounts[key] || 0;
+  const ok = it.reqQty > 0 && got >= it.reqQty;
+  const cls = ok ? 'ok' : (got > 0 ? 'warn' : '');
+  return `<div class="sku-row ${cls}">
+    <div class="sku-check ${ok?'ok':''}">${ok ? '<i class="ri-check-line"></i>' : ''}</div>
+    <div class="sku-row-name">
+      <div class="sku-row-sku">${it.sku||'—'}</div>
+      <div class="sku-row-nm">${it.name||''}${it.rack?' · '+it.rack:''}</div>
+    </div>
+    <div class="sku-row-qty" style="color:${ok?'var(--green)':got>0?'var(--amber)':'var(--t3)'}">${got}/${it.reqQty||0}</div>
+  </div>`;
+}
+/** Rebuilds only the list + pagination footer + size-button highlight —
+ *  never touches the search input's own DOM node, so it keeps focus and
+ *  cursor position while the worker is typing. */
+window.updateSkuListView = function(wid){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const items = _orderItemsCache[w.oid] || [];
+  const st = loadScanState(wid);
+  const ui = skuUI(wid);
+  const filtered = filterSkuItems(items, ui.q);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ui.size));
+  if (ui.page >= totalPages) ui.page = totalPages - 1;
+  if (ui.page < 0) ui.page = 0;
+  const pageItems = filtered.slice(ui.page * ui.size, ui.page * ui.size + ui.size);
+
+  const listEl = document.getElementById('skuListBody_' + wid);
+  if (listEl) listEl.innerHTML = pageItems.length
+    ? pageItems.map(it => skuRowHtml(it, st)).join('')
+    : '<div class="empty" style="padding:22px 10px"><i class="ri-search-line"></i>No matching items</div>';
+
+  const infoEl = document.getElementById('skuPageInfo_' + wid);
+  if (infoEl) infoEl.textContent = `${filtered.length} item${filtered.length!==1?'s':''}${ui.q?' found':''} · page ${ui.page+1}/${totalPages}`;
+
+  const prevBtn = document.getElementById('skuPagePrev_' + wid);
+  const nextBtn = document.getElementById('skuPageNext_' + wid);
+  if (prevBtn) prevBtn.disabled = ui.page <= 0;
+  if (nextBtn) nextBtn.disabled = ui.page >= totalPages - 1;
+
+  [10,20,30,40].forEach(n => {
+    const b = document.getElementById('skuSizeBtn_' + wid + '_' + n);
+    if (b) b.classList.toggle('on', ui.size === n);
+  });
+};
+window.setSkuSearch = function(wid, val){
+  const ui = skuUI(wid); ui.q = val; ui.page = 0;
+  updateSkuListView(wid);
+};
+window.setSkuPageSize = function(wid, n){
+  const ui = skuUI(wid); ui.size = n; ui.page = 0;
+  updateSkuListView(wid);
+};
+window.skuPage = function(wid, delta){
+  const ui = skuUI(wid); ui.page += delta;
+  updateSkuListView(wid);
+};
+
 function renderSkuChecklistUI(w, items, st){
   const mults = [1,6,12,24];
+  const pageSizes = [10,20,30,40];
+  const ui = skuUI(w.id);
   let doneCount = 0;
-  const rows = items.map(it => {
+  items.forEach(it => {
     const key = it.barcode || it.sku;
     const got = st.skuCounts[key] || 0;
-    const ok = it.reqQty > 0 && got >= it.reqQty;
-    if (ok) doneCount++;
-    const cls = ok ? 'ok' : (got > 0 ? 'warn' : '');
-    return `<div class="sku-row ${cls}">
-      <div class="sku-check ${ok?'ok':''}">${ok ? '<i class="ri-check-line"></i>' : ''}</div>
-      <div class="sku-row-name">
-        <div class="sku-row-sku">${it.sku||'—'}</div>
-        <div class="sku-row-nm">${it.name||''}${it.rack?' · '+it.rack:''}</div>
-      </div>
-      <div class="sku-row-qty" style="color:${ok?'var(--green)':got>0?'var(--amber)':'var(--t3)'}">${got}/${it.reqQty||0}</div>
-    </div>`;
-  }).join('');
+    if (it.reqQty > 0 && got >= it.reqQty) doneCount++;
+  });
+
+  const filtered = filterSkuItems(items, ui.q);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ui.size));
+  if (ui.page >= totalPages) ui.page = totalPages - 1;
+  if (ui.page < 0) ui.page = 0;
+  const pageItems = filtered.slice(ui.page * ui.size, ui.page * ui.size + ui.size);
+  const rows = pageItems.length
+    ? pageItems.map(it => skuRowHtml(it, st)).join('')
+    : '<div class="empty" style="padding:22px 10px"><i class="ri-search-line"></i>No matching items</div>';
+
   const unknownLine = st.unknown ? `<div style="font-size:11px;color:var(--red);margin-top:6px"><i class="ri-error-warning-line"></i> ${st.unknown} scan${st.unknown>1?'s':''} didn't match any item on this order's list</div>` : '';
 
   return `
@@ -1363,17 +1444,40 @@ function renderSkuChecklistUI(w, items, st){
         ${mults.map(m => `<button type="button" class="scan-mult-btn${st.mult===m?' on':''}" style="margin-left:3px" onclick="setScanMult('${w.id}',${m})">${m}</button>`).join('')}
       </span>
     </div>
-    <div class="sku-list">${rows}</div>
-    ${unknownLine}
+
     <div class="scan-input-row">
       <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
       <button class="btn btn-purple" onclick="scanHit('${w.id}')" title="Add"><i class="ri-add-line"></i></button>
     </div>
-    <div style="display:flex;gap:6px;margin-top:8px">
+    <div style="display:flex;gap:6px;margin-top:8px;margin-bottom:14px">
       <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="openCameraCount('${w.id}')"><i class="ri-camera-line"></i> Camera scan</button>
       <button class="btn btn-sm" style="flex:1;justify-content:center;color:var(--t3)" onclick="resetScanCount('${w.id}')"><i class="ri-restart-line"></i> Reset</button>
     </div>
+
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <div style="position:relative;flex:1;min-width:140px">
+        <i class="ri-search-line" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:13px"></i>
+        <input class="fi" id="skuSearch_${w.id}" placeholder="Search SKU / name / barcode / rack" autocomplete="off"
+          oninput="setSkuSearch('${w.id}', this.value)" value="${(ui.q||'').replace(/"/g,'&quot;')}"
+          style="padding-left:30px;font-size:12px">
+      </div>
+      <div style="display:flex;gap:3px;align-items:center">
+        <span style="font-size:10px;color:var(--t3);font-weight:600;margin-right:1px">Show:</span>
+        ${pageSizes.map(n => `<button type="button" id="skuSizeBtn_${w.id}_${n}" class="scan-mult-btn${ui.size===n?' on':''}" onclick="setSkuPageSize('${w.id}',${n})">${n}</button>`).join('')}
+      </div>
+    </div>
+
+    <div class="sku-list" id="skuListBody_${w.id}">${rows}</div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+      <span id="skuPageInfo_${w.id}" style="font-size:11px;color:var(--t3)">${filtered.length} item${filtered.length!==1?'s':''}${ui.q?' found':''} · page ${ui.page+1}/${totalPages}</span>
+      <div style="display:flex;gap:5px">
+        <button class="btn btn-sm" id="skuPagePrev_${w.id}" ${ui.page<=0?'disabled':''} onclick="skuPage('${w.id}',-1)"><i class="ri-arrow-left-s-line"></i></button>
+        <button class="btn btn-sm" id="skuPageNext_${w.id}" ${ui.page>=totalPages-1?'disabled':''} onclick="skuPage('${w.id}',1)"><i class="ri-arrow-right-s-line"></i></button>
+      </div>
+    </div>
+    ${unknownLine}
   </div>`;
 }
 
