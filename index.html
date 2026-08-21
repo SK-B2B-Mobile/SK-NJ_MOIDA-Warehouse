@@ -240,8 +240,10 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .sku-row:last-child{border-bottom:none}
 .sku-row.ok{background:rgba(34,197,94,.05)}
 .sku-row.warn{background:rgba(245,158,11,.05)}
+.sku-row.issue{background:rgba(239,68,68,.06)}
 .sku-check{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;background:var(--bg4);color:var(--t3)}
 .sku-check.ok{background:var(--green);color:#000}
+.sku-check.issue{background:var(--red);color:#fff}
 .sku-row-name{flex:1;min-width:0}
 .sku-row-sku{font-family:var(--mono);font-weight:700;font-size:12px}
 .sku-row-nm{color:var(--t3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -568,6 +570,12 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
       <div class="section" style="margin-top:16px">Import history</div>
       <div id="importLog" style="font-size:12px;color:var(--t3)">Loading…</div>
     </div>
+    <div class="card" style="border-color:var(--red-bd)">
+      <div class="card-t" style="color:var(--red)"><i class="ri-flag-2-line"></i> Reported issues (EXP · NF · OOS · Damage · Other)</div>
+      <p style="font-size:12px;color:var(--t2);margin-bottom:10px">Items flagged during inspection — expired, not found, out of stock, damaged, or other. Every flag is recorded here permanently, even after the checklist is finished.</p>
+      <div class="fg"><input class="fi" id="issueLogSearch" placeholder="Search by order or SKU..." oninput="renderIssueLog()"></div>
+      <div id="issueLog" style="font-size:12px;color:var(--t3)">Loading…</div>
+    </div>
     <div class="card">
       <div class="card-t"><i class="ri-edit-line" style="color:var(--purple)"></i> Work entries</div>
       <div class="fg"><input class="fi" id="entrySearch" placeholder="Search by order number or worker..." oninput="renderEntries()"></div>
@@ -869,7 +877,7 @@ function expectedForOrder(oid){
 let _scanState = {};
 function loadScanState(wid){
   if (_scanState[wid]) return _scanState[wid];
-  let st = { mode:'agg', count:0, mult:1, skuCounts:{}, unknown:0 };
+  let st = { mode:'agg', count:0, mult:1, skuCounts:{}, unknown:0, skuIssues:{} };
   try { const raw = localStorage.getItem('wms_scan_' + wid); if (raw) st = Object.assign(st, JSON.parse(raw)); } catch(_){}
   _scanState[wid] = st;
   return st;
@@ -1355,18 +1363,24 @@ function filterSkuItems(items, q){
     (it.rack||'').toLowerCase().includes(s)
   );
 }
-function skuRowHtml(it, st){
+function skuRowHtml(it, st, wid){
   const key = it.barcode || it.sku;
   const got = st.skuCounts[key] || 0;
-  const ok = it.reqQty > 0 && got >= it.reqQty;
-  const cls = ok ? 'ok' : (got > 0 ? 'warn' : '');
+  const issue = (st.skuIssues || {})[key] || null;
+  const ok = issue ? true : (it.reqQty > 0 && got >= it.reqQty);
+  const cls = issue ? 'issue' : (ok ? 'ok' : (got > 0 ? 'warn' : ''));
+  const keyEsc = String(key).replace(/'/g, "\\'");
+  const qtyHtml = issue
+    ? `<span style="color:var(--red);font-size:11px;font-weight:800">${issue.type}${issue.qty?(' ×'+issue.qty):''}</span>`
+    : `${got}/${it.reqQty||0}`;
   return `<div class="sku-row ${cls}">
-    <div class="sku-check ${ok?'ok':''}">${ok ? '<i class="ri-check-line"></i>' : ''}</div>
+    <div class="sku-check ${issue?'issue':(ok?'ok':'')}">${issue ? '<i class="ri-flag-2-fill"></i>' : (ok ? '<i class="ri-check-line"></i>' : '')}</div>
     <div class="sku-row-name">
       <div class="sku-row-sku">${it.sku||'—'}</div>
       <div class="sku-row-nm">${it.name||''}${it.rack?' · '+it.rack:''}</div>
     </div>
-    <div class="sku-row-qty" style="color:${ok?'var(--green)':got>0?'var(--amber)':'var(--t3)'}">${got}/${it.reqQty||0}</div>
+    <div class="sku-row-qty" style="color:${issue?'var(--red)':ok?'var(--green)':got>0?'var(--amber)':'var(--t3)'}">${qtyHtml}</div>
+    <button class="btn btn-sm" style="padding:2px 6px;flex-shrink:0" title="Report issue (expired / not found / out of stock / damaged / other)" onclick="openSkuIssueModal('${wid}','${keyEsc}')"><i class="ri-flag-2-line" style="color:${issue?'var(--red)':'var(--t3)'}"></i></button>
   </div>`;
 }
 /** Rebuilds only the list + pagination footer + size-button highlight —
@@ -1385,7 +1399,7 @@ window.updateSkuListView = function(wid){
 
   const listEl = document.getElementById('skuListBody_' + wid);
   if (listEl) listEl.innerHTML = pageItems.length
-    ? pageItems.map(it => skuRowHtml(it, st)).join('')
+    ? pageItems.map(it => skuRowHtml(it, st, wid)).join('')
     : '<div class="empty" style="padding:22px 10px"><i class="ri-search-line"></i>No matching items</div>';
 
   const infoEl = document.getElementById('skuPageInfo_' + wid);
@@ -1414,6 +1428,107 @@ window.skuPage = function(wid, delta){
   updateSkuListView(wid);
 };
 
+// ── Per-item issue reporting (EXP / NF / OOS / DAMAGE / OTHER) ──────
+// v10.5 — a checklist item doesn't always end in a full scan: it can be
+// expired, missing, out of stock, or damaged. Recording that explicitly
+// (instead of just leaving it short forever) is what lets a manager later
+// answer "which products had a problem, and what kind?" — every flag is
+// also written to the ImportLog-style server log (SkuIssues sheet) so it
+// survives refreshes and is visible across devices, not just this phone.
+const SKU_ISSUE_TYPES = [
+  { v:'EXP',    l:'Expired' },
+  { v:'NF',     l:'Not found' },
+  { v:'OOS',    l:'Out of stock' },
+  { v:'DAMAGE', l:'Damaged' },
+  { v:'OTHER',  l:'Other' }
+];
+
+window.openSkuIssueModal = function(wid, key){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const items = _orderItemsCache[w.oid] || [];
+  const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
+  const st = loadScanState(wid);
+  const existing = (st.skuIssues || {})[key] || null;
+  const remaining = Math.max(0, (it.reqQty||0) - (st.skuCounts[key]||0));
+  const keyEsc = String(key).replace(/'/g, "\\'");
+
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
+      <i class="ri-flag-2-line" style="color:var(--red)"></i> Report issue
+    </div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:14px" class="mono">${it.sku||'—'} · ${(it.name||'').replace(/</g,'&lt;')}</div>
+    <div class="fg">
+      <label class="fl">Issue type</label>
+      <div class="chip-group" id="issueTypeGroup">
+        ${SKU_ISSUE_TYPES.map(t => `<button type="button" class="chip-opt${existing&&existing.type===t.v?' selected':''}" data-val="${t.v}" onclick="pickIssueType('${t.v}')">${t.l}</button>`).join('')}
+      </div>
+      <input type="hidden" id="issueTypeVal" value="${existing?existing.type:''}">
+    </div>
+    <div class="fg">
+      <label class="fl">Qty affected</label>
+      <input class="fi" type="number" min="0" id="issueQty" value="${existing?existing.qty:remaining}">
+    </div>
+    <div class="fg">
+      <label class="fl">Note</label>
+      <input class="fi" id="issueNote" placeholder="e.g. torn box, wrong expiry date..." value="${existing&&existing.note?String(existing.note).replace(/"/g,'&quot;'):''}">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
+      ${existing ? `<button class="btn btn-sm" style="color:var(--red)" onclick="clearSkuIssue('${wid}','${keyEsc}')"><i class="ri-delete-bin-line"></i> Clear</button>` : '<span></span>'}
+      <div style="flex:1"></div>
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-red btn-sm" onclick="saveSkuIssue('${wid}','${keyEsc}')"><i class="ri-flag-2-line"></i> Save</button>
+    </div>
+  `);
+};
+
+window.pickIssueType = function(val){
+  const group = document.getElementById('issueTypeGroup'); if (!group) return;
+  group.querySelectorAll('.chip-opt').forEach(b => b.classList.toggle('selected', b.dataset.val === val));
+  const hidden = document.getElementById('issueTypeVal'); if (hidden) hidden.value = val;
+};
+
+window.saveSkuIssue = async function(wid, key){
+  const type = document.getElementById('issueTypeVal')?.value || '';
+  const qty  = Number(document.getElementById('issueQty')?.value) || 0;
+  const note = (document.getElementById('issueNote')?.value || '').trim();
+  if (!type) { toast('Select an issue type', 'err'); return; }
+  if (type === 'OTHER' && !note) { toast('Add a short note for "Other"', 'err'); return; }
+
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const items = _orderItemsCache[w.oid] || [];
+  const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
+
+  const st = loadScanState(wid);
+  st.skuIssues = st.skuIssues || {};
+  st.skuIssues[key] = { type, qty, note };
+  saveScanState(wid, st);
+
+  closeModal();
+  toast(`Issue recorded: ${type}`, 'ok');
+  renderStageContent();
+
+  // Server record — this is a normal worker action (not manager-gated),
+  // same auth pattern as startWork/endWork: worker + their PIN if set.
+  const out = await apiOp('logSkuIssue', {
+    orderId: w.oid, entryId: wid, sku: it.sku, barcode: it.barcode, name: it.name,
+    issueType: type, qty, note,
+    worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
+  });
+  if (!out.net || !out.res.ok) toast('⚠ Issue saved on this device but failed to sync — will retry on refresh', 'err');
+};
+
+window.clearSkuIssue = function(wid, key){
+  // Local-only: removes the flag from THIS checklist so the worker can
+  // correct a mis-tap. The server-side record is an audit trail and is
+  // intentionally NOT deleted — history of what was flagged stays intact.
+  const st = loadScanState(wid);
+  if (st.skuIssues) delete st.skuIssues[key];
+  saveScanState(wid, st);
+  closeModal();
+  toast('Issue flag cleared', '');
+  renderStageContent();
+};
+
 function renderSkuChecklistUI(w, items, st){
   const mults = [1,6,12,24];
   const pageSizes = [10,20,30,40];
@@ -1422,7 +1537,8 @@ function renderSkuChecklistUI(w, items, st){
   items.forEach(it => {
     const key = it.barcode || it.sku;
     const got = st.skuCounts[key] || 0;
-    if (it.reqQty > 0 && got >= it.reqQty) doneCount++;
+    const issue = (st.skuIssues || {})[key];
+    if (issue || (it.reqQty > 0 && got >= it.reqQty)) doneCount++;
   });
 
   const filtered = filterSkuItems(items, ui.q);
@@ -1431,7 +1547,7 @@ function renderSkuChecklistUI(w, items, st){
   if (ui.page < 0) ui.page = 0;
   const pageItems = filtered.slice(ui.page * ui.size, ui.page * ui.size + ui.size);
   const rows = pageItems.length
-    ? pageItems.map(it => skuRowHtml(it, st)).join('')
+    ? pageItems.map(it => skuRowHtml(it, st, w.id)).join('')
     : '<div class="empty" style="padding:22px 10px"><i class="ri-search-line"></i>No matching items</div>';
 
   const unknownLine = st.unknown ? `<div style="font-size:11px;color:var(--red);margin-top:6px"><i class="ri-error-warning-line"></i> ${st.unknown} scan${st.unknown>1?'s':''} didn't match any item on this order's list</div>` : '';
@@ -2267,27 +2383,39 @@ function openInspEndModalSku(wid, items, st){
   const rows = items.map(it => {
     const key = it.barcode || it.sku;
     const got = st.skuCounts[key] || 0;
-    return { sku:it.sku, name:it.name, reqQty:it.reqQty||0, got, ok:(it.reqQty>0 && got>=it.reqQty) };
+    const issue = (st.skuIssues || {})[key] || null;
+    const fullyScanned = it.reqQty > 0 && got >= it.reqQty;
+    return { sku:it.sku, name:it.name, reqQty:it.reqQty||0, got, issue, ok: fullyScanned && !issue, hasIssue: !!issue };
   });
-  const shortRows = rows.filter(r => !r.ok);
-  const allOk = shortRows.length === 0;
+  const shortRows = rows.filter(r => !r.ok && !r.hasIssue);   // unexplained mismatches — still need a reason
+  const issueRows = rows.filter(r => r.hasIssue);              // already explained via per-item flag
+  const allClean = shortRows.length === 0 && issueRows.length === 0;
 
-  const rowsHtml = rows.map(r => `<div class="sku-row ${r.ok?'ok':'warn'}">
-      <div class="sku-check ${r.ok?'ok':''}">${r.ok?'<i class="ri-check-line"></i>':''}</div>
+  const rowsHtml = rows.map(r => {
+    const cls = r.hasIssue ? 'issue' : (r.ok ? 'ok' : 'warn');
+    const qtyHtml = r.hasIssue
+      ? `<span style="color:var(--red)">${r.issue.type}${r.issue.qty?(' ×'+r.issue.qty):''}</span>`
+      : `<span style="color:${r.ok?'var(--green)':'var(--red)'}">${r.got}/${r.reqQty}</span>`;
+    return `<div class="sku-row ${cls}">
+      <div class="sku-check ${r.hasIssue?'issue':(r.ok?'ok':'')}">${r.hasIssue?'<i class="ri-flag-2-fill"></i>':(r.ok?'<i class="ri-check-line"></i>':'')}</div>
       <div class="sku-row-name"><div class="sku-row-sku">${r.sku||'—'}</div><div class="sku-row-nm">${r.name||''}</div></div>
-      <div class="sku-row-qty" style="color:${r.ok?'var(--green)':'var(--red)'}">${r.got}/${r.reqQty}</div>
-    </div>`).join('');
+      <div class="sku-row-qty">${qtyHtml}</div>
+    </div>`;
+  }).join('');
+
+  const summaryLine = allClean ? '✓ All items match' :
+    [shortRows.length ? shortRows.length + ' short/missing' : '', issueRows.length ? issueRows.length + ' issue-flagged' : ''].filter(Boolean).join(' · ');
 
   openModal(`<div class="end-modal-inner">
     <i class="ri-search-eye-line" style="font-size:28px;color:var(--purple);display:block;margin-bottom:8px"></i>
     <div style="font-size:15px;font-weight:700;margin-bottom:2px">Finish Inspection</div>
     <div style="font-size:12px;color:var(--t2);margin-bottom:12px">${w.oid} · ${w.startT} → now</div>
-    <div style="text-align:center;margin-bottom:10px;font-size:13px;font-weight:700;color:${allOk?'var(--green)':'var(--red)'}">
-      ${allOk ? '✓ All items match' : `⚠ ${shortRows.length} of ${rows.length} SKUs short or missing`}
+    <div style="text-align:center;margin-bottom:10px;font-size:13px;font-weight:700;color:${allClean?'var(--green)':'var(--red)'}">
+      ${allClean ? summaryLine : '⚠ ' + summaryLine}
     </div>
     <div class="sku-list" style="margin-bottom:14px;text-align:left">${rowsHtml}</div>
-    ${!allOk ? `<div class="fg" style="text-align:left">
-      <label class="fl">Reason for mismatch (required)</label>
+    ${shortRows.length ? `<div class="fg" style="text-align:left">
+      <label class="fl">Reason for unexplained mismatch (required)</label>
       <select class="fi" id="inspReasonSel" style="margin-bottom:8px">
         <option value="">— Select reason —</option>
         <option value="Missing / short items">Missing / short items</option>
@@ -2297,7 +2425,7 @@ function openInspEndModalSku(wid, items, st){
         <option value="Other">Other (specify below)</option>
       </select>
       <textarea class="fi" id="inspReasonNote" rows="2" placeholder="Additional notes..." style="resize:vertical"></textarea>
-    </div>` : ''}
+    </div>` : (issueRows.length ? `<div style="font-size:11px;color:var(--t3);text-align:left;margin-bottom:8px"><i class="ri-information-line"></i> ${issueRows.length} item${issueRows.length>1?'s were':' was'} flagged individually (EXP/NF/OOS/etc.) — already recorded, no extra reason needed.</div>` : '')}
     <div style="display:flex;gap:8px;justify-content:center;margin-top:16px">
       <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
       <button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="confirmInspEndSku('${wid}')">
@@ -2314,20 +2442,30 @@ window.confirmInspEndSku = function(wid){
   const rows = items.map(it => {
     const key = it.barcode || it.sku;
     const got = st.skuCounts[key] || 0;
-    return { sku:it.sku, got, req:it.reqQty||0, ok:(it.reqQty>0 && got>=it.reqQty) };
+    const issue = (st.skuIssues || {})[key] || null;
+    const fullyScanned = it.reqQty > 0 && got >= it.reqQty;
+    return { sku:it.sku, got, req:it.reqQty||0, issue, ok: fullyScanned && !issue, hasIssue: !!issue };
   });
-  const shortRows = rows.filter(r => !r.ok);
-  const allOk = shortRows.length === 0;
+  const shortRows = rows.filter(r => !r.ok && !r.hasIssue);
+  const issueRows = rows.filter(r => r.hasIssue);
+  const allClean = shortRows.length === 0 && issueRows.length === 0;
+
   let reason = '', note = '';
-  if (!allOk) {
+  if (shortRows.length) {
     reason = document.getElementById('inspReasonSel')?.value || '';
     note = (document.getElementById('inspReasonNote')?.value || '').trim();
     if (!reason) { toast('Select a reason for the mismatch', 'err'); return; }
   }
   const totalScanned = rows.reduce((s,r) => s + r.got, 0);
-  const result = allOk ? 'PASS' : 'ISSUE';
+  const result = allClean ? 'PASS' : 'ISSUE';
   const shortSummary = shortRows.slice(0, 6).map(r => `${r.sku}:${r.got}/${r.req}`).join(', ');
-  const fullNote = allOk ? '' : (reason + (shortSummary ? ' — ' + shortSummary : '') + (note ? ' · ' + note : ''));
+  const issueSummary = issueRows.slice(0, 6).map(r => `${r.sku}:${r.issue.type}${r.issue.qty?('×'+r.issue.qty):''}`).join(', ');
+  const fullNote = allClean ? '' : [
+    reason,
+    shortSummary ? 'Short: ' + shortSummary : '',
+    issueSummary ? 'Issues: ' + issueSummary : '',
+    note
+  ].filter(Boolean).join(' — ');
   closeModal();
   clearScanState(wid);
   doEndWork(wid, null, { scannedQty:totalScanned, inspResult:result, inspNote:fullNote });
@@ -2929,6 +3067,7 @@ R.mgr = function(){
   }).join('') || '<div style="font-size:12px;color:var(--t3)">No orders</div>';
   renderEntries();
   renderImportLog();
+  loadIssueLog();
 };
 
 // ── Workers ──
@@ -3522,6 +3661,35 @@ async function renderImportLog(){
       }</tbody></table>`
     : '<div style="padding:6px 0">No imports recorded yet</div>';
 }
+
+// ── Reported issues (EXP/NF/OOS/DAMAGE/OTHER) — server-recorded, cross-device ──
+let _issueLogCache = [];
+async function loadIssueLog(){
+  const el = document.getElementById('issueLog');
+  if (el) el.innerHTML = 'Loading…';
+  const out = await apiOp('getSkuIssues');
+  if (!out.net || !out.res.ok) { if (el) el.innerHTML = '<span style="color:var(--red)">Failed to load issue log</span>'; return; }
+  _issueLogCache = out.res.log || [];
+  renderIssueLog();
+}
+window.renderIssueLog = function(){
+  const el = document.getElementById('issueLog'); if (!el) return;
+  const q = (document.getElementById('issueLogSearch')?.value || '').toUpperCase();
+  const rows = q ? _issueLogCache.filter(r => (r.orderId||'').toUpperCase().includes(q) || (r.sku||'').toUpperCase().includes(q)) : _issueLogCache;
+  el.innerHTML = rows.length
+    ? `<table class="mgr-tbl"><thead><tr><th>Order</th><th>SKU</th><th>Type</th><th>Qty</th><th>Note</th><th>Worker</th><th>Date / time</th></tr></thead><tbody>${
+        rows.map(r => `<tr>
+          <td class="mono" style="font-weight:700">${r.orderId}</td>
+          <td class="mono">${r.sku||'—'}</td>
+          <td><span class="badge b-issue" style="font-size:10px;padding:2px 7px">${r.issueType}</span></td>
+          <td class="mono">${r.qty||0}</td>
+          <td style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.note||'').replace(/"/g,'&quot;')}">${r.note||''}</td>
+          <td>${r.worker||''}</td>
+          <td class="mono" style="color:var(--t2)">${r.createdAt||''}</td>
+        </tr>`).join('')
+      }</tbody></table>`
+    : `<div style="padding:6px 0">${q ? 'No matching issues' : 'No issues recorded yet'}</div>`;
+};
 
 window.confirmImportItems = async function(entryId, btn){
   const done = await importOneEntry(entryId, btn);
