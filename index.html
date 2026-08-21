@@ -248,8 +248,9 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .sku-row-qty{font-family:var(--mono);font-weight:800;font-size:13px;flex-shrink:0;white-space:nowrap}
 
 /* Import pick list */
-.import-drop{border:2px dashed var(--bd2);border-radius:var(--r2);padding:26px 16px;text-align:center;cursor:pointer;transition:border-color .15s}
+.import-drop{border:2px dashed var(--bd2);border-radius:var(--r2);padding:26px 16px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
 .import-drop:hover{border-color:var(--blue-bd)}
+.import-drop.dragover{border-color:var(--blue);background:var(--blue-bg)}
 .import-preview-tbl{width:100%;border-collapse:collapse;font-size:12px}
 .import-preview-tbl th{text-align:left;padding:6px 8px;color:var(--t3);font-size:10px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--bd2)}
 .import-preview-tbl td{padding:4px 8px;border-bottom:1px solid var(--bd)}
@@ -525,11 +526,11 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
         PDF files are parsed by the same proven pdfplumber-based service used in SK B2B Fulfillment — reads the PDF's real table structure, not just raw text.
         Review the parsed rows before confirming.
       </p>
-      <div class="import-drop" onclick="document.getElementById('importFile').click()">
+      <div class="import-drop" id="importDropZone" onclick="document.getElementById('importFile').click()">
         <i class="ri-file-pdf-2-line" style="font-size:26px;color:var(--t3);display:block;margin-bottom:6px"></i>
-        <div style="font-size:13px;font-weight:600">Click to select a file</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:2px">PDF, CSV, or XLSX</div>
-        <input type="file" id="importFile" accept=".pdf,.csv,.xlsx,.xls" style="display:none" onchange="handleImportFile(event)">
+        <div style="font-size:13px;font-weight:600">Click to select, or drag files here</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px">PDF, CSV, or XLSX · select multiple files for several orders at once</div>
+        <input type="file" id="importFile" accept=".pdf,.csv,.xlsx,.xls" multiple style="display:none" onchange="handleImportFile(event)">
       </div>
       <div id="importStatus" style="font-size:12px;color:var(--t3);margin-top:8px"></div>
       <div id="importPreview"></div>
@@ -2985,7 +2986,7 @@ window.saveOrder = function(orig){
 // ══════════════════════════════════════════════════════
 // IMPORT PICK LIST — PDF (primary) / CSV / XLSX → OrderItems
 // ══════════════════════════════════════════════════════
-let _importParsed = null;
+let _importBatch = [];   // [{id, fileName, parsed:{orderId, items}}] — supports importing several orders' pick lists in one go
 
 // Strips combining marks and stray non-ASCII glyphs that leak in
 // from barcode-font rendering in PDF text extraction, leaving the
@@ -3157,96 +3158,170 @@ function parseXlsxFile(file){
 }
 
 window.handleImportFile = async function(ev){
-  const file = ev.target.files && ev.target.files[0];
-  if (!file) return;
-  const statusEl = document.getElementById('importStatus');
-  const isPdf = /\.pdf$/i.test(file.name);
-  statusEl.innerHTML = isPdf
-    ? '<i class="ri-loader-4-line"></i> Parsing on server (pdfplumber)... first request can take ~20-30s if the server was idle'
-    : '<i class="ri-loader-4-line"></i> Parsing file...';
-  document.getElementById('importPreview').innerHTML = '';
-  try {
-    const ext = file.name.split('.').pop().toLowerCase();
-    let parsed;
-    if (ext === 'pdf') parsed = await parsePdfFile(file);
-    else if (ext === 'csv') parsed = await parseCsvFile(file);
-    else if (ext === 'xlsx' || ext === 'xls') parsed = await parseXlsxFile(file);
-    else { statusEl.innerHTML = '<span style="color:var(--red)">Unsupported file type</span>'; return; }
-
-    if (!parsed.items.length) {
-      statusEl.innerHTML = '<span style="color:var(--red)">No items could be parsed from this file — try CSV/Excel for a more reliable import.</span>';
-      return;
-    }
-    _importParsed = parsed;
-    statusEl.innerHTML = `<span style="color:var(--green)"><i class="ri-checkbox-circle-line"></i> Parsed ${parsed.items.length} line items</span>`;
-    renderImportPreview(parsed);
-  } catch(err) {
-    console.error(err);
-    statusEl.innerHTML = '<span style="color:var(--red)">Failed to parse file: ' + (err.message||'unknown error') + '</span>';
-  } finally {
-    ev.target.value = '';
-  }
+  const files = Array.from(ev.target.files || []);
+  ev.target.value = '';
+  if (files.length) await processImportFiles(files);
 };
 
-function renderImportPreview(parsed){
-  const orderOpts = S.orders.map(o => `<option value="${o.id}"${o.id===parsed.orderId?' selected':''}>${o.id} (${o.ch}·${o.cu})</option>`).join('');
-  const rowsHtml = parsed.items.map((it,i) => `<tr>
-    <td><input value="${(it.sku||'').replace(/"/g,'&quot;')}" data-f="sku" data-i="${i}"></td>
-    <td><input value="${(it.name||'').replace(/"/g,'&quot;')}" data-f="name" data-i="${i}"></td>
-    <td><input value="${(it.barcode||'').replace(/"/g,'&quot;')}" data-f="barcode" data-i="${i}"></td>
-    <td style="width:60px"><input value="${it.reqQty||0}" data-f="reqQty" data-i="${i}" style="text-align:center"></td>
-    <td style="width:80px"><input value="${(it.rack||'').replace(/"/g,'&quot;')}" data-f="rack" data-i="${i}"></td>
-    <td><button class="btn btn-sm" style="color:var(--red);padding:2px 6px" onclick="removeImportRow(${i})"><i class="ri-close-line"></i></button></td>
-  </tr>`).join('');
+// Parses multiple files in sequence (one order per file) and adds each
+// successfully-parsed result to the batch as its own reviewable card.
+async function processImportFiles(files){
+  const statusEl = document.getElementById('importStatus');
+  let ok = 0, failed = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const isPdf = /\.pdf$/i.test(file.name);
+    statusEl.innerHTML = `<i class="ri-loader-4-line"></i> Parsing file ${i+1}/${files.length}: ${file.name}` +
+      (isPdf ? ' (server pdfplumber — first request can take ~20-30s if idle)' : '');
+    try {
+      const ext = file.name.split('.').pop().toLowerCase();
+      let parsed;
+      if (ext === 'pdf') parsed = await parsePdfFile(file);
+      else if (ext === 'csv') parsed = await parseCsvFile(file);
+      else if (ext === 'xlsx' || ext === 'xls') parsed = await parseXlsxFile(file);
+      else { failed.push(file.name + ' (unsupported type)'); continue; }
 
-  document.getElementById('importPreview').innerHTML = `
-    <div class="fg" style="margin-top:14px">
-      <label class="fl">Target order ${parsed.orderId ? '(detected: <span class="mono" style="color:var(--teal)">'+parsed.orderId+'</span>)' : '(not detected — select manually)'}</label>
-      <select class="fi" id="importOrderSel">
-        <option value="">— Select order —</option>${orderOpts}
-      </select>
-    </div>
-    <div style="font-size:11px;color:var(--amber);margin-bottom:8px"><i class="ri-alert-line"></i> Review each row carefully — fix any parsing errors before confirming.</div>
-    <div style="overflow-x:auto;max-height:340px;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--r)">
-      <table class="import-preview-tbl"><thead><tr>
-        <th>SKU</th><th>Product name</th><th>Barcode</th><th>Req Qty</th><th>Rack</th><th></th>
-      </tr></thead><tbody id="importRowsBody">${rowsHtml}</tbody></table>
-    </div>
-    <button class="btn btn-teal btn-block" style="margin-top:12px;padding:12px;font-weight:700" onclick="confirmImportItems(this)">
-      <i class="ri-check-double-line"></i> Confirm import (${parsed.items.length} items)
-    </button>`;
+      if (!parsed.items.length) { failed.push(file.name + ' (no items found)'); continue; }
+      _importBatch.push({ id: 'imp' + Date.now() + Math.floor(Math.random()*10000), fileName: file.name, parsed });
+      ok++;
+    } catch(err) {
+      console.error(err);
+      failed.push(file.name + ' (' + (err.message||'parse error') + ')');
+    }
+  }
+  statusEl.innerHTML = ok
+    ? `<span style="color:var(--green)"><i class="ri-checkbox-circle-line"></i> Parsed ${ok} file${ok>1?'s':''}</span>` + (failed.length ? ` · <span style="color:var(--red)">${failed.length} failed</span>` : '')
+    : `<span style="color:var(--red)">All files failed to parse</span>`;
+  if (failed.length) console.warn('Import parse failures:', failed);
+  renderImportBatch();
 }
 
-window.removeImportRow = function(i){
-  if (!_importParsed) return;
-  _importParsed.items.splice(i, 1);
-  renderImportPreview(_importParsed);
+// Drag-and-drop wiring for the import drop zone — accepts multiple files at once
+(function setupImportDragDrop(){
+  const zone = document.getElementById('importDropZone');
+  if (!zone) return;
+  const allowedExt = /\.(pdf|csv|xlsx|xls)$/i;
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    const files = Array.from(e.dataTransfer.files || []).filter(f => allowedExt.test(f.name));
+    if (!files.length) { toast('Unsupported file type — use PDF, CSV, or XLSX', 'err'); return; }
+    processImportFiles(files);
+  });
+})();
+
+// Renders one review card per file in the batch — each independently
+// editable, confirmable, or removable, since a day's work often has
+// 2-3 order pick lists to import at once.
+function renderImportBatch(){
+  const container = document.getElementById('importPreview');
+  if (!_importBatch.length) { container.innerHTML = ''; return; }
+
+  const cardsHtml = _importBatch.map((entry, bi) => {
+    const parsed = entry.parsed;
+    const orderOpts = S.orders.map(o => `<option value="${o.id}"${o.id===parsed.orderId?' selected':''}>${o.id} (${o.ch}·${o.cu})</option>`).join('');
+    const rowsHtml = parsed.items.map((it,i) => `<tr>
+      <td><input value="${(it.sku||'').replace(/"/g,'&quot;')}" data-f="sku" data-i="${i}"></td>
+      <td><input value="${(it.name||'').replace(/"/g,'&quot;')}" data-f="name" data-i="${i}"></td>
+      <td><input value="${(it.barcode||'').replace(/"/g,'&quot;')}" data-f="barcode" data-i="${i}"></td>
+      <td style="width:60px"><input value="${it.reqQty||0}" data-f="reqQty" data-i="${i}" style="text-align:center"></td>
+      <td style="width:80px"><input value="${(it.rack||'').replace(/"/g,'&quot;')}" data-f="rack" data-i="${i}"></td>
+      <td><button class="btn btn-sm" style="color:var(--red);padding:2px 6px" onclick="removeImportRow('${entry.id}',${i})"><i class="ri-close-line"></i></button></td>
+    </tr>`).join('');
+
+    return `<div class="card" style="border-color:var(--bd2);margin-top:14px" id="importCard_${entry.id}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:12px;color:var(--t2);display:flex;align-items:center;gap:6px">
+          <i class="ri-file-list-3-line"></i> ${entry.fileName}
+        </div>
+        <button class="btn btn-sm" style="color:var(--t3)" onclick="removeImportFile('${entry.id}')" title="Discard this file"><i class="ri-delete-bin-line"></i></button>
+      </div>
+      <div class="fg" style="margin-top:4px">
+        <label class="fl">Target order ${parsed.orderId ? '(detected: <span class="mono" style="color:var(--teal)">'+parsed.orderId+'</span>)' : '(not detected — select manually)'}</label>
+        <select class="fi" id="importOrderSel_${entry.id}">
+          <option value="">— Select order —</option>${orderOpts}
+        </select>
+      </div>
+      <div style="font-size:11px;color:var(--amber);margin-bottom:8px"><i class="ri-alert-line"></i> Review each row carefully — fix any parsing errors before confirming.</div>
+      <div style="overflow-x:auto;max-height:280px;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--r)">
+        <table class="import-preview-tbl"><thead><tr>
+          <th>SKU</th><th>Product name</th><th>Barcode</th><th>Req Qty</th><th>Rack</th><th></th>
+        </tr></thead><tbody id="importRowsBody_${entry.id}">${rowsHtml}</tbody></table>
+      </div>
+      <button class="btn btn-teal btn-block" style="margin-top:12px;padding:12px;font-weight:700" onclick="confirmImportItems('${entry.id}',this)">
+        <i class="ri-check-double-line"></i> Confirm import (${parsed.items.length} items)
+      </button>
+    </div>`;
+  }).join('');
+
+  const allBtn = _importBatch.length > 1
+    ? `<button class="btn btn-blue btn-block" style="margin-top:14px;padding:12px;font-weight:700" onclick="confirmAllImports(this)">
+         <i class="ri-check-double-line"></i> Confirm all ${_importBatch.length} files
+       </button>`
+    : '';
+
+  container.innerHTML = cardsHtml + allBtn;
+}
+
+window.removeImportRow = function(entryId, i){
+  const entry = _importBatch.find(x => x.id === entryId); if (!entry) return;
+  entry.parsed.items.splice(i, 1);
+  renderImportBatch();
 };
 
-window.confirmImportItems = async function(btn){
-  if (!_importParsed) return;
-  document.querySelectorAll('#importRowsBody input').forEach(inp => {
+window.removeImportFile = function(entryId){
+  _importBatch = _importBatch.filter(x => x.id !== entryId);
+  renderImportBatch();
+};
+
+function readBackImportEdits(entryId){
+  const entry = _importBatch.find(x => x.id === entryId); if (!entry) return;
+  document.querySelectorAll(`#importRowsBody_${entryId} input`).forEach(inp => {
     const i = Number(inp.dataset.i), f = inp.dataset.f;
-    if (_importParsed.items[i]) {
-      _importParsed.items[i][f] = f === 'reqQty' ? (Number(inp.value)||0) : inp.value.trim();
+    if (entry.parsed.items[i]) {
+      entry.parsed.items[i][f] = f === 'reqQty' ? (Number(inp.value)||0) : inp.value.trim();
     }
   });
-  const orderId = document.getElementById('importOrderSel')?.value || _importParsed.orderId;
-  if (!orderId) { toast('Select the target order', 'err'); return; }
-  if (!S.orders.find(o => o.id === orderId)) { toast('Order not found — create it first in Orders above', 'err'); return; }
+}
+
+async function importOneEntry(entryId, btn){
+  const entry = _importBatch.find(x => x.id === entryId); if (!entry) return false;
+  readBackImportEdits(entryId);
+  const orderId = document.getElementById('importOrderSel_' + entryId)?.value || entry.parsed.orderId;
+  if (!orderId) { toast(`Select the target order for ${entry.fileName}`, 'err'); return false; }
+  if (!S.orders.find(o => o.id === orderId)) { toast(`Order ${orderId} not found — create it first in Orders above`, 'err'); return false; }
 
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line"></i> Importing...'; }
-  const out = await mgrOp('importOrderItems', { orderId, items:_importParsed.items });
+  const out = await mgrOp('importOrderItems', { orderId, items:entry.parsed.items });
   if (out.net && out.res.ok) {
     delete _orderItemsCache[orderId];
     toast(`✓ Imported ${out.res.imported} items for ${orderId}`, 'ok');
-    document.getElementById('importStatus').innerHTML = '';
-    document.getElementById('importPreview').innerHTML = '';
-    _importParsed = null;
-  } else {
-    toast('⚠ Import failed: ' + ((out.res&&out.res.error)||'unknown'), 'err');
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ri-check-double-line"></i> Confirm import'; }
+    _importBatch = _importBatch.filter(x => x.id !== entryId);
+    return true;
   }
+  toast(`⚠ Import failed for ${entry.fileName}: ` + ((out.res&&out.res.error)||'unknown'), 'err');
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ri-check-double-line"></i> Confirm import'; }
+  return false;
+}
+
+window.confirmImportItems = async function(entryId, btn){
+  const done = await importOneEntry(entryId, btn);
+  if (done) {
+    renderImportBatch();
+    if (!_importBatch.length) document.getElementById('importStatus').innerHTML = '';
+  }
+};
+
+window.confirmAllImports = async function(btn){
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line"></i> Importing all...'; }
+  const ids = _importBatch.map(x => x.id);
+  let ok = 0;
+  for (const id of ids) { if (await importOneEntry(id)) ok++; }
+  renderImportBatch();
+  if (!_importBatch.length) document.getElementById('importStatus').innerHTML = '';
+  toast(`✓ Imported ${ok}/${ids.length} files`, ok === ids.length ? 'ok' : 'err');
 };
 
 // ── Work entries (edit / delete) ──
