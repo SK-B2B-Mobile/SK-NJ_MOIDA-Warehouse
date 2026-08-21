@@ -105,6 +105,8 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .b-saving{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd);animation:pulse 1s infinite}
 .b-queued{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd)}
 .b-sla{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
+.b-pass{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)}
+.b-issue{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* Stage pills */
@@ -214,6 +216,21 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .end-modal-inner{text-align:center;padding:4px 0}
 .pallet-input{font-size:38px;font-weight:800;text-align:center;font-family:var(--mono);width:150px;margin:0 auto}
 
+/* Scan counter (inspection) */
+.scan-counter-wrap{background:var(--bg3);border:2px solid var(--purple-bd);border-radius:var(--r2);padding:16px;margin-bottom:12px;text-align:center}
+.scan-counter-big{font-family:var(--mono);font-size:44px;font-weight:800;line-height:1;letter-spacing:-1px;color:var(--amber);transition:color .15s}
+.scan-counter-big.match{color:var(--green)}
+.scan-counter-big.short{color:var(--amber)}
+.scan-counter-big.over{color:var(--red)}
+.scan-counter-sub{font-size:12px;color:var(--t2);margin-top:4px;font-weight:600}
+.scan-progress{height:8px;background:var(--bg4);border-radius:5px;overflow:hidden;margin-top:10px}
+.scan-progress-fill{height:100%;border-radius:5px;transition:width .2s}
+.scan-input-row{display:flex;gap:6px;margin-top:12px}
+.scan-input-row input{flex:1;font-family:var(--mono);font-size:14px;text-align:center}
+.scan-mult-row{display:flex;gap:5px;align-items:center;justify-content:center;margin-top:10px;flex-wrap:wrap}
+.scan-mult-btn{padding:5px 12px;border-radius:20px;border:1px solid var(--bd2);background:var(--bg4);color:var(--t3);font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer}
+.scan-mult-btn.on{background:var(--purple);border-color:var(--purple);color:#fff}
+
 /* KPI filters */
 .kpi-bar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
 .kpi-bar label{font-size:13px;color:var(--t2);font-weight:600}
@@ -285,6 +302,9 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .empty{text-align:center;padding:40px 20px;color:var(--t3);font-size:14px}
 .empty i{font-size:32px;display:block;margin-bottom:8px;opacity:.3}
 
+/* Small credit line under header title */
+.hdr-credit{font-size:10px;color:var(--t3);opacity:.55;letter-spacing:.02em;margin-top:2px}
+
 /* WORKING NOW strip (v8.2) */
 .live-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .live-label{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--green);text-transform:uppercase;padding:6px 4px;white-space:nowrap}
@@ -336,7 +356,10 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 <div class="shell" style="display:none" id="app">
   <!-- Header -->
   <header class="hdr">
-    <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
+    <div>
+      <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
+      <div class="hdr-credit">Built by David Kim · 2026</div>
+    </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
       <span class="qbadge" id="queueBadge" style="display:none" onclick="flushQueue()" title="Saves waiting to sync — tap to retry"></span>
@@ -752,6 +775,31 @@ function initials(name){
 }
 
 // ═══════════════════════════════════════════════
+// SCAN-BASED INSPECTION — expected qty + live counter
+// ═══════════════════════════════════════════════
+
+/** Expected items/qty for an order = sum of its PICK entries. */
+function expectedForOrder(oid){
+  const picks = S.works.filter(w => w.oid === oid && w.stage === 'PICK');
+  const items = picks.reduce((s,w) => s + (w.items || 0), 0);
+  const qty   = picks.reduce((s,w) => s + (w.qty   || 0), 0);
+  return { items, qty, sessions: picks.length };
+}
+
+// In-memory + localStorage-backed scan counts, keyed by work-entry id.
+// Survives page reload mid-inspection; cleared once the session ends.
+let _scanState = {};
+function loadScanState(wid){
+  if (_scanState[wid]) return _scanState[wid];
+  let st = { count:0, mult:1 };
+  try { const raw = localStorage.getItem('wms_scan_' + wid); if (raw) st = JSON.parse(raw); } catch(_){}
+  _scanState[wid] = st;
+  return st;
+}
+function saveScanState(wid, st){ _scanState[wid] = st; try { localStorage.setItem('wms_scan_' + wid, JSON.stringify(st)); } catch(_){} }
+function clearScanState(wid){ delete _scanState[wid]; try { localStorage.removeItem('wms_scan_' + wid); } catch(_){} }
+
+// ═══════════════════════════════════════════════
 // WORKER SIGN-IN (v8) — identity persists per device
 // ═══════════════════════════════════════════════
 function getSession(){ try { return JSON.parse(localStorage.getItem('wms_session')) || null; } catch(_) { return null; } }
@@ -1120,13 +1168,17 @@ window.showOrderDetail = function(oid){
     html += `<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:${col};letter-spacing:.06em;margin-bottom:5px">${stage}</div>`;
     sw.forEach(w => {
       const done = !!w.endT;
-      const detail = stage==='PICK' ? `${w.items} items · ${w.qty} QTY` : (w.pallets!==null&&done?`${fmtPallets(w.pallets)} pallets`:'');
+      const detail = stage==='PICK' ? `${w.items} items · ${w.qty} QTY`
+        : stage==='INSP' ? (done ? `Scanned ${w.scanQty!=null?w.scanQty:'—'}` : '')
+        : (w.pallets!==null&&done?`${fmtPallets(w.pallets)} pallets`:'');
+      const inspBadge = stage==='INSP' && done && w.inspResult
+        ? ` <span class="badge ${w.inspResult==='PASS'?'b-pass':'b-issue'}" style="font-size:10px;padding:2px 8px">${w.inspResult}</span>` : '';
       html += `<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 11px;margin-bottom:4px;font-size:12px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">${w.w}</span>
-          ${done?`<span class="badge b-done">Done · ${fmtMin(w.netMin)}</span>`:`<span class="badge b-live">Active</span>`}
+          <span>${done?`<span class="badge b-done">Done · ${fmtMin(w.netMin)}</span>`:`<span class="badge b-live">Active</span>`}${inspBadge}</span>
         </div>
-        <div style="color:var(--t3);margin-top:2px">${w.startT}${done?' → '+w.endT:' → now'} · ${detail}</div>
+        <div style="color:var(--t3);margin-top:2px">${w.startT}${done?' → '+w.endT:' → now'} · ${detail}${stage==='INSP'&&done&&w.inspNote?` · <span style="color:var(--red)">${w.inspNote}</span>`:''}</div>
       </div>`;
     });
     html += '</div>';
@@ -1169,6 +1221,138 @@ function updateTabStatus(){
   });
 }
 
+// Scan counter block shown inside an active INSP session card.
+function renderScanUI(w){
+  const exp = expectedForOrder(w.oid);
+  const st = loadScanState(w.id);
+  const hasExp = exp.qty > 0;
+  const cls = !hasExp ? '' : st.count === exp.qty ? 'match' : st.count < exp.qty ? 'short' : 'over';
+  const color = cls === 'match' ? 'var(--green)' : cls === 'over' ? 'var(--red)' : 'var(--amber)';
+  const pct = hasExp ? Math.min(100, Math.round(st.count / exp.qty * 100)) : 0;
+  const mults = [1,6,12,24];
+  return `
+  <div class="scan-counter-wrap">
+    <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px">
+      Expected · ${exp.items || '—'} items · ${exp.qty || '—'} QTY (from picking)
+    </div>
+    <div class="scan-counter-big ${cls}" id="scanCount_${w.id}">${st.count}</div>
+    <div class="scan-counter-sub">${hasExp ? 'of ' + exp.qty + ' scanned' : 'scanned so far'}</div>
+    <div class="scan-progress"><div class="scan-progress-fill" id="scanBar_${w.id}" style="width:${pct}%;background:${color}"></div></div>
+    <div class="scan-mult-row">
+      <span style="font-size:11px;color:var(--t3);font-weight:600;margin-right:2px">Qty per scan:</span>
+      ${mults.map(m => `<button type="button" class="scan-mult-btn${st.mult===m?' on':''}" onclick="setScanMult('${w.id}',${m})">${m}</button>`).join('')}
+    </div>
+    <div class="scan-input-row">
+      <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
+      <button class="btn btn-purple" onclick="scanHit('${w.id}')" title="Add"><i class="ri-add-line"></i></button>
+      <button class="btn" onclick="scanAdjust('${w.id}',-1)" title="Remove one"><i class="ri-subtract-line"></i></button>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="openCameraCount('${w.id}')"><i class="ri-camera-line"></i> Camera scan</button>
+      <button class="btn btn-sm" style="flex:1;justify-content:center;color:var(--t3)" onclick="resetScanCount('${w.id}')"><i class="ri-restart-line"></i> Reset</button>
+    </div>
+  </div>`;
+}
+
+window.setScanMult = function(wid, m){
+  const st = loadScanState(wid);
+  st.mult = m; saveScanState(wid, st);
+  renderStageContent();
+};
+
+window.scanHit = function(wid){
+  const inp = document.getElementById('scanIn_' + wid);
+  if (inp) inp.value = '';
+  const st = loadScanState(wid);
+  scanAdjust(wid, st.mult || 1);
+};
+
+window.scanAdjust = function(wid, delta){
+  const st = loadScanState(wid);
+  st.count = Math.max(0, (st.count || 0) + delta);
+  saveScanState(wid, st);
+  if (navigator.vibrate) try { navigator.vibrate(25); } catch(_){}
+  updateScanDisplay(wid);
+  const inp = document.getElementById('scanIn_' + wid);
+  if (inp) inp.focus();
+};
+
+function updateScanDisplay(wid){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const exp = expectedForOrder(w.oid);
+  const st = loadScanState(wid);
+  const cEl = document.getElementById('scanCount_' + wid);
+  const bEl = document.getElementById('scanBar_' + wid);
+  if (!cEl) return;
+  const hasExp = exp.qty > 0;
+  const cls = !hasExp ? '' : st.count === exp.qty ? 'match' : st.count < exp.qty ? 'short' : 'over';
+  const color = cls === 'match' ? 'var(--green)' : cls === 'over' ? 'var(--red)' : 'var(--amber)';
+  cEl.textContent = st.count;
+  cEl.className = 'scan-counter-big ' + cls;
+  if (bEl) { bEl.style.width = (hasExp ? Math.min(100, Math.round(st.count/exp.qty*100)) : 0) + '%'; bEl.style.background = color; }
+}
+
+window.resetScanCount = function(wid){
+  if (!confirm('Reset scanned count to 0?')) return;
+  saveScanState(wid, { count:0, mult:(loadScanState(wid).mult)||1 });
+  updateScanDisplay(wid);
+};
+
+// Camera-assisted counting for inspection — each detected barcode
+// adds "qty per scan" to the counter. Debounced so holding a code
+// in frame doesn't rack up duplicate hits.
+let _camCountWid = null, _camCountLast = '', _camCountLastAt = 0;
+window.openCameraCount = async function(wid){
+  if (!('BarcodeDetector' in window)) { toast('Camera scanning not supported — use the scan field or +/-', 'err'); return; }
+  _camCountWid = wid; _camCountLast = ''; _camCountLastAt = 0;
+  const st = loadScanState(wid);
+  openModal(`<div style="text-align:center">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px"><i class="ri-qr-scan-2-line"></i> Scan items</div>
+    <div style="font-size:11px;color:var(--t3);margin-bottom:12px">Each detected barcode adds ${st.mult||1} to the count</div>
+    <div class="scan-wrap">
+      <video class="scan-video" id="scanVideo" autoplay playsinline muted></video>
+      <div class="scan-frame"></div><div class="scan-line"></div>
+    </div>
+    <div id="camCountVal" style="font-size:26px;font-weight:800;font-family:var(--mono);color:var(--purple);min-height:32px;margin-bottom:10px">${st.count||0}</div>
+    <button class="btn btn-block" onclick="closeModal()"><i class="ri-close-line"></i> Done scanning</button>
+  </div>`, { wide:true });
+
+  try {
+    _scanStream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:720} }, audio:false
+    });
+    const video = document.getElementById('scanVideo');
+    if (!video) { stopScanHardware(); return; }
+    video.srcObject = _scanStream;
+    const detector = new BarcodeDetector({
+      formats:['qr_code','code_128','code_39','code_93','ean_13','ean_8','upc_a','upc_e','itf']
+    });
+    _scanTimer = setInterval(async () => {
+      const v = document.getElementById('scanVideo');
+      if (!v || v.readyState < 2) return;
+      try {
+        const codes = await detector.detect(v);
+        if (codes && codes.length && codes[0].rawValue) handleCameraCountHit(codes[0].rawValue);
+      } catch(_) {}
+    }, 250);
+  } catch(e) {
+    stopScanHardware();
+    toast('Camera unavailable — check permissions', 'err');
+  }
+};
+
+function handleCameraCountHit(raw){
+  const v = String(raw || '').trim(); if (!v || !_camCountWid) return;
+  const now = Date.now();
+  if (v === _camCountLast && (now - _camCountLastAt) < 900) return;  // debounce same code held in frame
+  _camCountLast = v; _camCountLastAt = now;
+  const st = loadScanState(_camCountWid);
+  scanAdjust(_camCountWid, st.mult || 1);
+  const el = document.getElementById('camCountVal');
+  if (el) el.textContent = loadScanState(_camCountWid).count;
+}
+
 function renderStageContent(){
   const container = document.getElementById('stageContent'); if (!container) return;
   updateTabStatus();
@@ -1199,6 +1383,7 @@ function renderStageContent(){
           <span class="chip"><i class="ri-play-line"></i> Started ${w.startT||'—'}</span>
           ${elapsed ? `<span class="chip hi" id="elapsed_${w.id}"><i class="ri-timer-line"></i> ${elapsed}</span>` : `<span id="elapsed_${w.id}"></span>`}
         </div>
+        ${s==='INSP' ? renderScanUI(w) : ''}
         <button class="btn btn-green btn-block btn-lg" onclick="endWork('${w.id}','${s}')" ${inf?'disabled':''}>
           <i class="ri-checkbox-circle-line"></i> ${SELABEL[s]}
         </button>
@@ -1217,7 +1402,7 @@ function renderStageContent(){
 
   const instrMap = {
     PICK: 'Enter item count + quantity, then start picking.',
-    INSP: 'Select order and start. Enter pallet count when done.',
+    INSP: 'Select order and start. Scan items to verify against picked quantity.',
     PALL: 'Select order and start. Enter pallet count when done.'
   };
 
@@ -1324,6 +1509,10 @@ function renderStageContent(){
 
   container.innerHTML = activeSect + startSect;
   startSessionTimer();
+
+  if (s === 'INSP' && mySessions.length === 1) {
+    setTimeout(() => document.getElementById('scanIn_' + mySessions[0].id)?.focus(), 80);
+  }
 }
 
 // Live timer
@@ -1617,6 +1806,8 @@ window.endWork = function(wid, stage){
   const w = S.works.find(x => x.id === wid); if (!w || _pending[wid]) return;
   if (stage === 'PICK') {
     doEndWork(wid, null);
+  } else if (stage === 'INSP') {
+    openInspEndModal(wid);
   } else {
     const col = SCOL[stage];
     const quickVals = [0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,6,7,8];
@@ -1678,21 +1869,112 @@ window.confirmEnd = function(wid, stage){
   doEndWork(wid, pallVal);
 };
 
-function doEndWork(wid, pallets){
+// ── Inspection end flow: compare Expected (from PICK) vs Scanned ──
+function openInspEndModal(wid){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const exp = expectedForOrder(w.oid);
+  const st = loadScanState(wid);
+  const hasExp = exp.qty > 0;
+  const isMatch = hasExp && st.count === exp.qty;
+
+  openModal(`<div class="end-modal-inner">
+    <i class="ri-search-eye-line" style="font-size:28px;color:var(--purple);display:block;margin-bottom:8px"></i>
+    <div style="font-size:15px;font-weight:700;margin-bottom:2px">Finish Inspection</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:16px">${w.oid} · ${w.startT} → now</div>
+    <div style="background:var(--bg3);border-radius:var(--r2);padding:14px 16px;margin-bottom:14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:center">
+        <div>
+          <div style="font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px">Expected</div>
+          <div class="mono" style="font-size:24px;font-weight:800">${hasExp ? exp.qty : '—'}</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px">Scanned</div>
+          <div class="mono" style="font-size:24px;font-weight:800;color:${isMatch?'var(--green)':'var(--amber)'}">${st.count}</div>
+        </div>
+      </div>
+      <div id="inspMatchLine" style="text-align:center;margin-top:10px;font-size:12px;font-weight:700"></div>
+    </div>
+    <div class="fg" style="text-align:left">
+      <label class="fl">Final scanned qty (adjust if needed)</label>
+      <input class="fi" type="number" id="finalScanInput" min="0" value="${st.count}"
+        style="font-family:var(--mono);font-size:16px;font-weight:700;text-align:center"
+        oninput="updateInspFinalPreview(${hasExp?exp.qty:0})">
+    </div>
+    <div id="inspFinalNote" style="display:none;text-align:left;margin-top:8px">
+      <label class="fl">Reason for mismatch (required)</label>
+      <select class="fi" id="inspReasonSel" style="margin-bottom:8px">
+        <option value="">— Select reason —</option>
+        <option value="Missing / short items">Missing / short items</option>
+        <option value="Extra items found">Extra items found</option>
+        <option value="Damaged items">Damaged items</option>
+        <option value="Wrong item / mix-up">Wrong item / mix-up</option>
+        <option value="Other">Other (specify below)</option>
+      </select>
+      <textarea class="fi" id="inspReasonNote" rows="2" placeholder="Additional notes..." style="resize:vertical"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:16px">
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="confirmInspEnd('${wid}',${hasExp?exp.qty:0})">
+        <i class="ri-checkbox-circle-line"></i> Confirm
+      </button>
+    </div>
+  </div>`);
+  updateInspFinalPreview(hasExp ? exp.qty : 0);
+}
+
+window.updateInspFinalPreview = function(expQty){
+  const inp = document.getElementById('finalScanInput');
+  const n = parseInt(inp?.value); const val = isNaN(n) ? 0 : n;
+  const noteBox = document.getElementById('inspFinalNote');
+  const line = document.getElementById('inspMatchLine');
+  const mismatch = expQty > 0 && val !== expQty;
+  if (noteBox) noteBox.style.display = mismatch ? 'block' : 'none';
+  if (line) {
+    if (!expQty) line.innerHTML = '<span style="color:var(--t3);font-weight:600">No picking quantity on record for this order</span>';
+    else if (!mismatch) line.innerHTML = '<span style="color:var(--green)">✓ Quantities match</span>';
+    else {
+      const diff = val - expQty;
+      line.innerHTML = `<span style="color:var(--red)">⚠ ${diff > 0 ? diff + ' MORE than expected' : Math.abs(diff) + ' SHORT of expected'}</span>`;
+    }
+  }
+};
+
+window.confirmInspEnd = function(wid, expQty){
+  const inp = document.getElementById('finalScanInput');
+  const n = Math.max(0, parseInt(inp?.value) || 0);
+  const mismatch = expQty > 0 && n !== expQty;
+  let reason = '', note = '';
+  if (mismatch) {
+    reason = document.getElementById('inspReasonSel')?.value || '';
+    note = (document.getElementById('inspReasonNote')?.value || '').trim();
+    if (!reason) { toast('Select a reason for the mismatch', 'err'); return; }
+  }
+  const result = mismatch ? 'ISSUE' : 'PASS';
+  const fullNote = mismatch ? (reason + (note ? ' — ' + note : '')) : '';
+  closeModal();
+  clearScanState(wid);
+  doEndWork(wid, null, { scannedQty:n, inspResult:result, inspNote:fullNote });
+};
+
+function doEndWork(wid, pallets, inspData){
   const w = S.works.find(x => x.id === wid); if (!w || _pending[wid]) return;
   const now = new Date();
   const hhmm = nowHHmm();
-  const orig = { endT:w.endT, netMin:w.netMin, pallets:w.pallets, endISO:w.endISO };
+  const orig = { endT:w.endT, netMin:w.netMin, pallets:w.pallets, endISO:w.endISO, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote };
   const nm = clientNet(w, now);
   w.endT = hhmm; w.netMin = nm;
   w.endISO = todayStr() + 'T' + hhmm + ':00';
   if (pallets !== null) w.pallets = pallets;
+  if (inspData) { w.scanQty = inspData.scannedQty; w.inspResult = inspData.inspResult; w.inspNote = inspData.inspNote; }
 
-  showCompletionCard(wid, w, nm, pallets, hhmm);
+  showCompletionCard(wid, w, nm, pallets, hhmm, inspData);
   updateBadges(); renderStageContent();
   if (curPage() === 'dash') R.dash();
 
-  const reqData = { entryId:wid, pallets:pallets!==null?pallets:undefined, wpin:(WS&&WS.wpin)||'' };
+  const reqData = Object.assign(
+    { entryId:wid, pallets:pallets!==null?pallets:undefined, wpin:(WS&&WS.wpin)||'' },
+    inspData ? { scannedQty:inspData.scannedQty, inspResult:inspData.inspResult, inspNote:inspData.inspNote } : {}
+  );
 
   // Entry's start is still waiting in the offline queue → queue the end too (order preserved)
   if (isTempQueued(wid) || !navigator.onLine) {
@@ -1719,13 +2001,15 @@ function doEndWork(wid, pallets){
     if (res.endTime) w.endT = res.endTime;
     if (res.netMinutes !== undefined && res.netMinutes !== null) w.netMin = res.netMinutes;
     if (res.pallets !== null && res.pallets !== undefined) w.pallets = res.pallets;
+    if (res.scannedQty !== undefined && res.scannedQty !== null) w.scanQty = res.scannedQty;
+    if (res.inspResult) w.inspResult = res.inspResult;
     renderStageContent();
     if (curPage() === 'dash') R.dash();
   });
 }
 
 // Completion summary card
-function showCompletionCard(wid, w, netMin, pallets, endTime){
+function showCompletionCard(wid, w, netMin, pallets, endTime, inspData){
   const stage = w.stage || 'PICK';
   const col = SCOL[stage] || 'var(--green)';
   const bdCol = SBDCOL[stage] || 'var(--green-bd)';
@@ -1735,6 +2019,9 @@ function showCompletionCard(wid, w, netMin, pallets, endTime){
   if (stage === 'PICK') {
     if (w.items) details.push(`<span><i class="ri-box-3-line"></i> ${w.items} items</span>`);
     if (w.qty)   details.push(`<span><i class="ri-stack-line"></i> ${w.qty} QTY</span>`);
+  } else if (stage === 'INSP' && inspData) {
+    const ok = inspData.inspResult === 'PASS';
+    details.push(`<span><i class="ri-${ok?'checkbox-circle':'error-warning'}-line"></i> ${inspData.inspResult} · ${inspData.scannedQty} scanned</span>`);
   } else if (pallets !== null) {
     details.push(`<span><i class="ri-stack-line"></i> ${fmtPallets(pallets)} pallets</span>`);
   }
@@ -1765,8 +2052,8 @@ function showCompletionCard(wid, w, netMin, pallets, endTime){
         <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:${col}">${fmtMin(netMin)}</div>
       </div>
       <div style="background:var(--bg3);border-radius:8px;padding:8px 10px;text-align:center">
-        <div style="font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px">${stage==='PICK'?'Items':'Pallets'}</div>
-        <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--amber)">${stage==='PICK'?(w.items||'—'):fmtPallets(pallets)}</div>
+        <div style="font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px">${stage==='PICK'?'Items':stage==='INSP'?'Result':'Pallets'}</div>
+        <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:${stage==='INSP'?(inspData&&inspData.inspResult==='PASS'?'var(--green)':'var(--red)'):'var(--amber)'}">${stage==='PICK'?(w.items||'—'):stage==='INSP'?(inspData?inspData.inspResult:'—'):fmtPallets(pallets)}</div>
       </div>
     </div>
     <div style="display:flex;gap:8px;font-size:11px;color:var(--t3);flex-wrap:wrap;margin-top:6px">${details.join('')}</div>`;
@@ -2461,13 +2748,16 @@ window.renderEntries = function(){
   const q = (document.getElementById('entrySearch')?.value || '').toUpperCase();
   const ws = q ? S.works.filter(w => w.oid.toUpperCase().includes(q) || w.w.toUpperCase().includes(q)) : S.works.slice(0, 50);
   document.getElementById('entryTable').innerHTML = ws.length ?
-    `<table class="mgr-tbl"><thead><tr><th>Order</th><th>Worker</th><th>Stage</th><th>Items</th><th>QTY</th><th>Pallets</th><th>Start</th><th>End</th><th>Net</th><th></th></tr></thead><tbody>${
+    `<table class="mgr-tbl"><thead><tr><th>Order</th><th>Worker</th><th>Stage</th><th>Items</th><th>QTY</th><th>Pallets</th><th>Result</th><th>Start</th><th>End</th><th>Net</th><th></th></tr></thead><tbody>${
       ws.map(w => `<tr>
         <td class="mono">${w.oid}</td><td>${w.w}</td>
         <td><span style="color:${SCOL[w.stage]||'var(--t)'};font-weight:700;font-size:11px">${w.stage}</span></td>
         <td class="mono">${w.items!==null?w.items:'—'}</td>
         <td class="mono">${w.qty!==null?w.qty:'—'}</td>
         <td class="mono" style="color:var(--amber)">${w.pallets!==null?fmtPallets(w.pallets):'—'}</td>
+        <td>${w.stage==='INSP' && w.inspResult
+              ? `<span class="badge ${w.inspResult==='PASS'?'b-pass':'b-issue'}" style="font-size:10px;padding:2px 7px">${w.inspResult}</span> <span class="mono" style="font-size:11px">${w.scanQty!=null?w.scanQty:''}</span>`
+              : '—'}</td>
         <td class="mono">${w.startT||'—'}</td><td class="mono">${w.endT||'—'}</td>
         <td class="mono" style="color:var(--teal)">${fmtMin(w.netMin)}</td>
         <td style="white-space:nowrap">
@@ -2496,6 +2786,15 @@ window.editEntryModal = function(wid){
       <div class="fg"><label class="fl">QTY</label><input class="fi" type="number" id="eeQty" min="0" value="${w.qty!==null?w.qty:''}"></div>
     </div>
     <div class="fg"><label class="fl">Pallets</label><input class="fi" type="number" id="eePallets" min="0" step="0.5" value="${w.pallets!==null?w.pallets:''}"></div>
+    <div class="frow">
+      <div class="fg"><label class="fl">Scanned Qty (INSP)</label><input class="fi" type="number" id="eeScanQty" min="0" value="${w.scanQty!=null?w.scanQty:''}"></div>
+      <div class="fg"><label class="fl">Insp. Result</label><select class="fi" id="eeInspResult">
+        <option value=""${!w.inspResult?' selected':''}>—</option>
+        <option value="PASS"${w.inspResult==='PASS'?' selected':''}>PASS</option>
+        <option value="ISSUE"${w.inspResult==='ISSUE'?' selected':''}>ISSUE</option>
+      </select></div>
+    </div>
+    <div class="fg"><label class="fl">Insp. Note</label><input class="fi" id="eeInspNote" value="${w.inspNote||''}"></div>
     <div style="font-size:11px;color:var(--t3);margin-bottom:14px"><i class="ri-information-line"></i> Times are not editable here — they stay as recorded. KPI_Daily reflects edits after the next rebuild.</div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
@@ -2509,15 +2808,21 @@ window.saveEntryEdit = function(wid){
   const items  = document.getElementById('eeItems').value;
   const qty    = document.getElementById('eeQty').value;
   const pall   = document.getElementById('eePallets').value;
-  const bk = { w:w.w, stage:w.stage, items:w.items, qty:w.qty, pallets:w.pallets };
+  const scanQ  = document.getElementById('eeScanQty').value;
+  const inspR  = document.getElementById('eeInspResult').value;
+  const inspN  = document.getElementById('eeInspNote').value;
+  const bk = { w:w.w, stage:w.stage, items:w.items, qty:w.qty, pallets:w.pallets, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote };
   w.w = worker; w.stage = stage;
   w.items   = items !== '' ? Number(items) : null;
   w.qty     = qty   !== '' ? Number(qty)   : null;
   w.pallets = pall  !== '' ? Number(pall)  : null;
+  w.scanQty = scanQ !== '' ? Number(scanQ) : null;
+  w.inspResult = inspR || '';
+  w.inspNote   = inspN || '';
   closeModal(); toast('Entry updated', 'ok'); renderEntries();
-  mgrOp('editEntry', { entryId:wid, worker, stage, items, qty, pallets:pall }).then(out => {
+  mgrOp('editEntry', { entryId:wid, worker, stage, items, qty, pallets:pall, scannedQty:scanQ, inspResult:inspR, inspNote:inspN }).then(out => {
     if (!out.net || !out.res.ok) {
-      Object.assign(w, { w:bk.w, stage:bk.stage, items:bk.items, qty:bk.qty, pallets:bk.pallets });
+      Object.assign(w, { w:bk.w, stage:bk.stage, items:bk.items, qty:bk.qty, pallets:bk.pallets, scanQty:bk.scanQty, inspResult:bk.inspResult, inspNote:bk.inspNote });
       toast('⚠ Save failed', 'err'); renderEntries();
     }
   });
