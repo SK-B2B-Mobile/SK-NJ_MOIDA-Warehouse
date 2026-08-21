@@ -229,6 +229,8 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .scan-progress{height:8px;background:var(--bg4);border-radius:5px;overflow:hidden;margin-top:10px}
 .scan-progress-fill{height:100%;border-radius:5px;transition:width .2s}
 .scan-input-row{display:flex;gap:6px;margin-top:12px}
+.scan-input-row input{border:2px solid var(--purple-bd) !important;background:var(--bg4) !important;font-weight:600}
+.scan-input-row input:focus{border-color:var(--purple) !important;box-shadow:0 0 0 3px rgba(168,85,247,.18) !important}
 .scan-input-row input{flex:1;font-family:var(--mono);font-size:14px;text-align:center}
 .scan-mult-row{display:flex;gap:5px;align-items:center;justify-content:center;margin-top:10px;flex-wrap:wrap}
 .scan-mult-btn{padding:5px 12px;border-radius:20px;border:1px solid var(--bd2);background:var(--bg4);color:var(--t3);font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer}
@@ -1380,7 +1382,7 @@ function skuRowHtml(it, st, wid){
       <div class="sku-row-nm">${it.name||''}${it.rack?' · '+it.rack:''}</div>
     </div>
     <div class="sku-row-qty" style="color:${issue?'var(--red)':ok?'var(--green)':got>0?'var(--amber)':'var(--t3)'}">${qtyHtml}</div>
-    <button class="btn btn-sm" style="padding:2px 6px;flex-shrink:0" title="Report issue (expired / not found / out of stock / damaged / other)" onclick="openSkuIssueModal('${wid}','${keyEsc}')"><i class="ri-flag-2-line" style="color:${issue?'var(--red)':'var(--t3)'}"></i></button>
+    <button class="btn btn-sm" style="padding:5px 10px;flex-shrink:0;border-color:${issue?'var(--red-bd)':'var(--amber-bd)'};background:${issue?'var(--red-bg)':'var(--bg4)'}" title="Report issue (expired / not found / out of stock / damaged / other)" onclick="openSkuIssueModal('${wid}','${keyEsc}')"><i class="ri-flag-2-line" style="color:${issue?'var(--red)':'var(--amber)'};font-size:15px"></i></button>
   </div>`;
 }
 /** Rebuilds only the list + pagination footer + size-button highlight —
@@ -1763,6 +1765,26 @@ function handleCameraCountHit(raw){
   }
 }
 
+// Answers "is everything on this SKU checklist accounted for?" — either
+// fully scanned or explicitly issue-flagged (EXP/NF/OOS/DAMAGE/OTHER).
+// Used only to show a clear visual cue; ending inspection always stays a
+// manual tap (it's an irreversible submit to the server), never automatic.
+function skuChecklistReadyInfo(w){
+  if (w.stage !== 'INSP') return null;
+  const items = _orderItemsCache[w.oid];
+  if (!items || !items.length) return null;
+  const st = loadScanState(w.id);
+  if (st.mode !== 'sku') return null;
+  let done = 0;
+  items.forEach(it => {
+    const key = it.barcode || it.sku;
+    const got = st.skuCounts[key] || 0;
+    const issue = (st.skuIssues || {})[key];
+    if (issue || (it.reqQty > 0 && got >= it.reqQty)) done++;
+  });
+  return { done, total: items.length, ready: done === items.length };
+}
+
 function renderStageContent(){
   const container = document.getElementById('stageContent'); if (!container) return;
   updateTabStatus();
@@ -1794,6 +1816,9 @@ function renderStageContent(){
           ${elapsed ? `<span class="chip hi" id="elapsed_${w.id}"><i class="ri-timer-line"></i> ${elapsed}</span>` : `<span id="elapsed_${w.id}"></span>`}
         </div>
         ${s==='INSP' ? renderScanUI(w) : ''}
+        ${(() => { const r = skuChecklistReadyInfo(w); return r && r.ready
+            ? `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px"><i class="ri-checkbox-circle-fill"></i> All ${r.total} items accounted for — tap below to finish</div>`
+            : ''; })()}
         <button class="btn btn-green btn-block btn-lg" onclick="endWork('${w.id}','${s}')" ${inf?'disabled':''}>
           <i class="ri-checkbox-circle-line"></i> ${SELABEL[s]}
         </button>
