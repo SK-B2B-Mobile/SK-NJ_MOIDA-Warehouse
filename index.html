@@ -3326,6 +3326,32 @@ function readBackImportEdits(entryId){
   });
 }
 
+// Large pick lists don't fit in a single JSONP request — this transport
+// sends the payload as a URL query string, and long URLs get silently
+// rejected ("network" failure) before the server even sees them.
+//
+// v10.2 — chunk by ACTUAL ENCODED CHARACTER LENGTH, not a fixed row
+// count. A fixed count (old: 20 rows/chunk) works fine for short SKU
+// names but overflows the safe URL-length budget as soon as product
+// names run long (real PDFs regularly do) — that's exactly what caused
+// "Import failed ... items 1-20: network" even on chunk #1. Packing by
+// measured length means every chunk is safe regardless of name length.
+const IMPORT_CHUNK_MAX_CHARS = 2200; // encoded chars of the items[] payload — safe margin under Apps Script's ~8KB URL limit, and conservative for flaky mobile networks too
+const IMPORT_CHUNK_MAX_ITEMS = 25;   // secondary cap even if names are very short
+function buildImportChunks(items){
+  const chunks = [];
+  let cur = [], curLen = 2; // account for the [ ] wrapper
+  items.forEach(it => {
+    const len = encodeURIComponent(JSON.stringify(it)).length + 1; // +1 for comma separator
+    if (cur.length && (curLen + len > IMPORT_CHUNK_MAX_CHARS || cur.length >= IMPORT_CHUNK_MAX_ITEMS)) {
+      chunks.push(cur); cur = []; curLen = 2;
+    }
+    cur.push(it); curLen += len;
+  });
+  if (cur.length) chunks.push(cur);
+  return chunks;
+}
+
 async function importOneEntry(entryId, btn){
   const entry = _importBatch.find(x => x.id === entryId); if (!entry) return false;
   readBackImportEdits(entryId);
@@ -3333,24 +3359,32 @@ async function importOneEntry(entryId, btn){
   if (!orderId) { toast(`Select the target order for ${entry.fileName}`, 'err'); return false; }
   if (!S.orders.find(o => o.id === orderId)) { toast(`Order ${orderId} not found — create it first in Orders above`, 'err'); return false; }
 
-  // Large pick lists (100+ SKU lines) don't fit in a single JSONP request —
-  // this transport sends the payload as a URL query string, and long URLs
-  // get silently rejected ("network" failure) before the server even sees
-  // them. Send the item list in small chunks instead: the first chunk
-  // replaces any prior items for this order, later chunks just append.
-  const CHUNK = 20;
   const items = entry.parsed.items;
-  let importedTotal = 0;
-  for (let i = 0; i < items.length; i += CHUNK) {
-    const chunk = items.slice(i, i + CHUNK);
-    if (btn) { btn.disabled = true; btn.innerHTML = `<i class="ri-loader-4-line"></i> Importing ${Math.min(i+CHUNK, items.length)}/${items.length}...`; }
-    const out = await mgrOp('importOrderItems', { orderId, items:chunk, replace: i === 0 });
+  const chunks = buildImportChunks(items);
+  let importedTotal = 0, doneItems = 0;
+
+  for (let ci = 0; ci < chunks.length; ci++) {
+    const chunk = chunks[ci];
+    const fromN = doneItems + 1, toN = doneItems + chunk.length;
+    if (btn) { btn.disabled = true; btn.innerHTML = `<i class="ri-loader-4-line"></i> Importing ${toN}/${items.length}...`; }
+
+    // One automatic retry on a pure transport failure (JSONP timeout/blocked
+    // request) before giving up — mobile networks in this warehouse are
+    // known to be flaky (see handover doc §5), and a single retry recovers
+    // most transient drops without bothering the manager.
+    let out = await mgrOp('importOrderItems', { orderId, items:chunk, replace: ci === 0 });
+    if (!out.net) {
+      await new Promise(r => setTimeout(r, 800));
+      out = await mgrOp('importOrderItems', { orderId, items:chunk, replace: ci === 0 });
+    }
+
     if (!out.net || !out.res.ok) {
-      toast(`⚠ Import failed for ${entry.fileName} (items ${i+1}-${Math.min(i+CHUNK,items.length)}): ` + ((out.res&&out.res.error)||'network'), 'err');
+      toast(`⚠ Import failed for ${entry.fileName} (items ${fromN}-${toN}): ` + ((out.res&&out.res.error)||'network') + ` — retry Confirm import to resume`, 'err');
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ri-check-double-line"></i> Confirm import'; }
       return false;
     }
     importedTotal += out.res.imported || chunk.length;
+    doneItems += chunk.length;
   }
 
   delete _orderItemsCache[orderId];
