@@ -8,6 +8,9 @@
 <meta name="theme-color" content="#1a56db">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@4.1.0/fonts/remixicon.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
   --bg:#080c12;--bg2:#0f1520;--bg3:#161e2e;--bg4:#1d2840;
@@ -230,6 +233,27 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .scan-mult-row{display:flex;gap:5px;align-items:center;justify-content:center;margin-top:10px;flex-wrap:wrap}
 .scan-mult-btn{padding:5px 12px;border-radius:20px;border:1px solid var(--bd2);background:var(--bg4);color:var(--t3);font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer}
 .scan-mult-btn.on{background:var(--purple);border-color:var(--purple);color:#fff}
+
+/* SKU checklist (inspection) */
+.sku-list{max-height:360px;overflow-y:auto;border-radius:var(--r);border:1px solid var(--bd)}
+.sku-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--bd);font-size:12px}
+.sku-row:last-child{border-bottom:none}
+.sku-row.ok{background:rgba(34,197,94,.05)}
+.sku-row.warn{background:rgba(245,158,11,.05)}
+.sku-check{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;background:var(--bg4);color:var(--t3)}
+.sku-check.ok{background:var(--green);color:#000}
+.sku-row-name{flex:1;min-width:0}
+.sku-row-sku{font-family:var(--mono);font-weight:700;font-size:12px}
+.sku-row-nm{color:var(--t3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sku-row-qty{font-family:var(--mono);font-weight:800;font-size:13px;flex-shrink:0;white-space:nowrap}
+
+/* Import pick list */
+.import-drop{border:2px dashed var(--bd2);border-radius:var(--r2);padding:26px 16px;text-align:center;cursor:pointer;transition:border-color .15s}
+.import-drop:hover{border-color:var(--blue-bd)}
+.import-preview-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.import-preview-tbl th{text-align:left;padding:6px 8px;color:var(--t3);font-size:10px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--bd2)}
+.import-preview-tbl td{padding:4px 8px;border-bottom:1px solid var(--bd)}
+.import-preview-tbl input{width:100%;background:var(--bg3);border:1px solid var(--bd2);border-radius:5px;padding:5px 7px;color:var(--t);font-family:var(--mono);font-size:11px}
 
 /* KPI filters */
 .kpi-bar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
@@ -495,6 +519,22 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
       </div>
     </div>
     <div class="card">
+      <div class="card-t"><i class="ri-file-upload-line" style="color:var(--teal)"></i> Import pick list (SKU-level scan verification)</div>
+      <p style="font-size:12px;color:var(--t2);margin-bottom:12px">
+        Upload a pick list (PDF preferred, CSV/Excel also supported) to enable SKU-level barcode scanning during inspection.
+        PDF files are parsed by the same proven pdfplumber-based service used in SK B2B Fulfillment — reads the PDF's real table structure, not just raw text.
+        Review the parsed rows before confirming.
+      </p>
+      <div class="import-drop" onclick="document.getElementById('importFile').click()">
+        <i class="ri-file-pdf-2-line" style="font-size:26px;color:var(--t3);display:block;margin-bottom:6px"></i>
+        <div style="font-size:13px;font-weight:600">Click to select a file</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px">PDF, CSV, or XLSX</div>
+        <input type="file" id="importFile" accept=".pdf,.csv,.xlsx,.xls" style="display:none" onchange="handleImportFile(event)">
+      </div>
+      <div id="importStatus" style="font-size:12px;color:var(--t3);margin-top:8px"></div>
+      <div id="importPreview"></div>
+    </div>
+    <div class="card">
       <div class="card-t"><i class="ri-edit-line" style="color:var(--purple)"></i> Work entries</div>
       <div class="fg"><input class="fi" id="entrySearch" placeholder="Search by order number or worker..." oninput="renderEntries()"></div>
       <div id="entryTable" style="overflow-x:auto"></div>
@@ -544,6 +584,8 @@ let _dp = 0;                   // dashboard page
 let _dFilter = 'all';
 let _startLock = false;
 let _loginSel = '';
+let _orderItemsCache = {};    // oid -> [{sku,name,barcode,reqQty,rack}]
+let _orderItemsLoading = {};  // oid -> true while fetching
 
 // ═══════════════════════════════════════════════
 // OFFLINE QUEUE — saves survive network loss
@@ -788,16 +830,35 @@ function expectedForOrder(oid){
 
 // In-memory + localStorage-backed scan counts, keyed by work-entry id.
 // Survives page reload mid-inspection; cleared once the session ends.
+// mode 'agg' = total-quantity check (no pick list imported for this order)
+// mode 'sku' = per-SKU checklist (pick list imported — see ensureOrderItems)
 let _scanState = {};
 function loadScanState(wid){
   if (_scanState[wid]) return _scanState[wid];
-  let st = { count:0, mult:1 };
-  try { const raw = localStorage.getItem('wms_scan_' + wid); if (raw) st = JSON.parse(raw); } catch(_){}
+  let st = { mode:'agg', count:0, mult:1, skuCounts:{}, unknown:0 };
+  try { const raw = localStorage.getItem('wms_scan_' + wid); if (raw) st = Object.assign(st, JSON.parse(raw)); } catch(_){}
   _scanState[wid] = st;
   return st;
 }
 function saveScanState(wid, st){ _scanState[wid] = st; try { localStorage.setItem('wms_scan_' + wid, JSON.stringify(st)); } catch(_){} }
 function clearScanState(wid){ delete _scanState[wid]; try { localStorage.removeItem('wms_scan_' + wid); } catch(_){} }
+
+/** Returns cached SKU-level pick list for an order, or null while it's still loading (fetch kicked off in background). */
+function ensureOrderItems(oid){
+  if (!oid) return [];
+  if (_orderItemsCache[oid]) return _orderItemsCache[oid];
+  if (!_orderItemsLoading[oid]) {
+    _orderItemsLoading[oid] = true;
+    apiOp('getOrderItems', { oid }).then(out => {
+      _orderItemsLoading[oid] = false;
+      if (out.net && out.res.ok) {
+        _orderItemsCache[oid] = out.res.items || [];
+        if (curPage() === 'work' && CS === 'INSP') renderStageContent();
+      }
+    });
+  }
+  return null;
+}
 
 // ═══════════════════════════════════════════════
 // WORKER SIGN-IN (v8) — identity persists per device
@@ -1222,9 +1283,69 @@ function updateTabStatus(){
 }
 
 // Scan counter block shown inside an active INSP session card.
+// Dispatches to SKU checklist mode (pick list imported for this
+// order) or the legacy total-quantity mode (no pick list on file).
 function renderScanUI(w){
-  const exp = expectedForOrder(w.oid);
+  const items = ensureOrderItems(w.oid);
   const st = loadScanState(w.id);
+
+  if (items === null) {
+    return `<div class="scan-counter-wrap"><div style="color:var(--t3);font-size:12px"><i class="ri-loader-4-line"></i> Loading pick list...</div></div>`;
+  }
+  if (items.length > 0) {
+    if (st.mode !== 'sku') { st.mode = 'sku'; st.skuCounts = st.skuCounts || {}; saveScanState(w.id, st); }
+    return renderSkuChecklistUI(w, items, st);
+  }
+  if (st.mode !== 'agg') { st.mode = 'agg'; saveScanState(w.id, st); }
+  return renderAggScanUI(w, st);
+}
+
+// SKU-level checklist — used when a pick list was imported for this order.
+function renderSkuChecklistUI(w, items, st){
+  const mults = [1,6,12,24];
+  let doneCount = 0;
+  const rows = items.map(it => {
+    const key = it.barcode || it.sku;
+    const got = st.skuCounts[key] || 0;
+    const ok = it.reqQty > 0 && got >= it.reqQty;
+    if (ok) doneCount++;
+    const cls = ok ? 'ok' : (got > 0 ? 'warn' : '');
+    return `<div class="sku-row ${cls}">
+      <div class="sku-check ${ok?'ok':''}">${ok ? '<i class="ri-check-line"></i>' : ''}</div>
+      <div class="sku-row-name">
+        <div class="sku-row-sku">${it.sku||'—'}</div>
+        <div class="sku-row-nm">${it.name||''}${it.rack?' · '+it.rack:''}</div>
+      </div>
+      <div class="sku-row-qty" style="color:${ok?'var(--green)':got>0?'var(--amber)':'var(--t3)'}">${got}/${it.reqQty||0}</div>
+    </div>`;
+  }).join('');
+  const unknownLine = st.unknown ? `<div style="font-size:11px;color:var(--red);margin-top:6px"><i class="ri-error-warning-line"></i> ${st.unknown} scan${st.unknown>1?'s':''} didn't match any item on this order's list</div>` : '';
+
+  return `
+  <div class="scan-counter-wrap" style="text-align:left">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+      <span style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase">SKU checklist · ${doneCount}/${items.length} complete</span>
+      <span style="font-size:11px;color:var(--t3)">Qty/scan:
+        ${mults.map(m => `<button type="button" class="scan-mult-btn${st.mult===m?' on':''}" style="margin-left:3px" onclick="setScanMult('${w.id}',${m})">${m}</button>`).join('')}
+      </span>
+    </div>
+    <div class="sku-list">${rows}</div>
+    ${unknownLine}
+    <div class="scan-input-row">
+      <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
+      <button class="btn btn-purple" onclick="scanHit('${w.id}')" title="Add"><i class="ri-add-line"></i></button>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="openCameraCount('${w.id}')"><i class="ri-camera-line"></i> Camera scan</button>
+      <button class="btn btn-sm" style="flex:1;justify-content:center;color:var(--t3)" onclick="resetScanCount('${w.id}')"><i class="ri-restart-line"></i> Reset</button>
+    </div>
+  </div>`;
+}
+
+// Legacy total-quantity mode — used when no pick list has been imported for this order.
+function renderAggScanUI(w, st){
+  const exp = expectedForOrder(w.oid);
   const hasExp = exp.qty > 0;
   const cls = !hasExp ? '' : st.count === exp.qty ? 'match' : st.count < exp.qty ? 'short' : 'over';
   const color = cls === 'match' ? 'var(--green)' : cls === 'over' ? 'var(--red)' : 'var(--amber)';
@@ -1233,7 +1354,7 @@ function renderScanUI(w){
   return `
   <div class="scan-counter-wrap">
     <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px">
-      Expected · ${exp.items || '—'} items · ${exp.qty || '—'} QTY (from picking)
+      Expected · ${exp.items || '—'} items · ${exp.qty || '—'} QTY (from picking) · <span style="color:var(--t2)">no pick list imported</span>
     </div>
     <div class="scan-counter-big ${cls}" id="scanCount_${w.id}">${st.count}</div>
     <div class="scan-counter-sub">${hasExp ? 'of ' + exp.qty + ' scanned' : 'scanned so far'}</div>
@@ -1263,10 +1384,38 @@ window.setScanMult = function(wid, m){
 
 window.scanHit = function(wid){
   const inp = document.getElementById('scanIn_' + wid);
+  const raw = inp ? inp.value.trim() : '';
   if (inp) inp.value = '';
   const st = loadScanState(wid);
-  scanAdjust(wid, st.mult || 1);
+  if (st.mode === 'sku') {
+    if (!raw) { toast('Scan a barcode first', 'err'); return; }
+    registerSkuScan(wid, raw);
+  } else {
+    scanAdjust(wid, st.mult || 1);
+  }
 };
+
+// SKU mode: match a scanned code against the order's imported pick list.
+function registerSkuScan(wid, code){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const items = _orderItemsCache[w.oid] || [];
+  const match = items.find(it => it.barcode && it.barcode === code)
+             || items.find(it => it.sku && it.sku.toUpperCase() === code.toUpperCase());
+  const st = loadScanState(wid);
+  if (!match) {
+    st.unknown = (st.unknown || 0) + 1;
+    saveScanState(wid, st);
+    toast('⚠ Not on this order\'s list: ' + code, 'err');
+    if (navigator.vibrate) try { navigator.vibrate([40,40,40]); } catch(_){}
+    renderStageContent();
+    return;
+  }
+  const key = match.barcode || match.sku;
+  st.skuCounts[key] = (st.skuCounts[key] || 0) + (st.mult || 1);
+  saveScanState(wid, st);
+  if (navigator.vibrate) try { navigator.vibrate(25); } catch(_){}
+  renderStageContent();
+}
 
 window.scanAdjust = function(wid, delta){
   const st = loadScanState(wid);
@@ -1295,8 +1444,9 @@ function updateScanDisplay(wid){
 
 window.resetScanCount = function(wid){
   if (!confirm('Reset scanned count to 0?')) return;
-  saveScanState(wid, { count:0, mult:(loadScanState(wid).mult)||1 });
-  updateScanDisplay(wid);
+  const st = loadScanState(wid);
+  saveScanState(wid, { mode:st.mode, count:0, mult:st.mult||1, skuCounts:{}, unknown:0 });
+  renderStageContent();
 };
 
 // Camera-assisted counting for inspection — each detected barcode
@@ -1314,8 +1464,8 @@ window.openCameraCount = async function(wid){
       <video class="scan-video" id="scanVideo" autoplay playsinline muted></video>
       <div class="scan-frame"></div><div class="scan-line"></div>
     </div>
-    <div id="camCountVal" style="font-size:26px;font-weight:800;font-family:var(--mono);color:var(--purple);min-height:32px;margin-bottom:10px">${st.count||0}</div>
-    <button class="btn btn-block" onclick="closeModal()"><i class="ri-close-line"></i> Done scanning</button>
+    <div id="camCountVal" style="font-size:26px;font-weight:800;font-family:var(--mono);color:var(--purple);min-height:32px;margin-bottom:10px">${st.mode==='sku' ? Object.values(st.skuCounts||{}).reduce((a,b)=>a+b,0) : (st.count||0)}</div>
+    <button class="btn btn-block" onclick="closeModal();renderStageContent()"><i class="ri-close-line"></i> Done scanning</button>
   </div>`, { wide:true });
 
   try {
@@ -1347,10 +1497,16 @@ function handleCameraCountHit(raw){
   const now = Date.now();
   if (v === _camCountLast && (now - _camCountLastAt) < 900) return;  // debounce same code held in frame
   _camCountLast = v; _camCountLastAt = now;
-  const st = loadScanState(_camCountWid);
-  scanAdjust(_camCountWid, st.mult || 1);
+  const wid = _camCountWid;
+  const st = loadScanState(wid);
   const el = document.getElementById('camCountVal');
-  if (el) el.textContent = loadScanState(_camCountWid).count;
+  if (st.mode === 'sku') {
+    registerSkuScan(wid, v);
+    if (el) { const s2 = loadScanState(wid); el.textContent = Object.values(s2.skuCounts||{}).reduce((a,b)=>a+b,0); }
+  } else {
+    scanAdjust(wid, st.mult || 1);
+    if (el) el.textContent = loadScanState(wid).count;
+  }
 }
 
 function renderStageContent(){
@@ -1510,9 +1666,16 @@ function renderStageContent(){
   container.innerHTML = activeSect + startSect;
   startSessionTimer();
 
-  if (s === 'INSP' && mySessions.length === 1) {
+  // Auto-focus the scan input for hardware (Bluetooth/USB) barcode
+  // scanners on desktop. Skipped on mobile — autofocus there just
+  // pops the on-screen keyboard unnecessarily when no scanner is attached.
+  if (s === 'INSP' && mySessions.length === 1 && !isMobileDevice()) {
     setTimeout(() => document.getElementById('scanIn_' + mySessions[0].id)?.focus(), 80);
   }
+}
+
+function isMobileDevice(){
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
 // Live timer
@@ -1540,6 +1703,7 @@ function onOrderChange(){
   const oid = document.getElementById('workOrder')?.value;
   const el = document.getElementById('workOrderInfo'); if (!el) return;
   if (!oid) { el.innerHTML = ''; return; }
+  if (CS === 'INSP') ensureOrderItems(oid);   // prefetch pick list so it's ready when INSP starts
   const o = S.orders.find(x => x.id === oid);
   const ws = S.works.filter(w => w.oid===oid && w.stage===CS);
   const active = ws.filter(w => !w.endT).length;
@@ -1872,8 +2036,11 @@ window.confirmEnd = function(wid, stage){
 // ── Inspection end flow: compare Expected (from PICK) vs Scanned ──
 function openInspEndModal(wid){
   const w = S.works.find(x => x.id === wid); if (!w) return;
-  const exp = expectedForOrder(w.oid);
+  const items = _orderItemsCache[w.oid] || [];
   const st = loadScanState(wid);
+  if (items.length > 0 && st.mode === 'sku') { openInspEndModalSku(wid, items, st); return; }
+
+  const exp = expectedForOrder(w.oid);
   const hasExp = exp.qty > 0;
   const isMatch = hasExp && st.count === exp.qty;
 
@@ -1954,6 +2121,78 @@ window.confirmInspEnd = function(wid, expQty){
   closeModal();
   clearScanState(wid);
   doEndWork(wid, null, { scannedQty:n, inspResult:result, inspNote:fullNote });
+};
+
+// ── SKU-level end flow: per-item checklist comparison ──
+function openInspEndModalSku(wid, items, st){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const rows = items.map(it => {
+    const key = it.barcode || it.sku;
+    const got = st.skuCounts[key] || 0;
+    return { sku:it.sku, name:it.name, reqQty:it.reqQty||0, got, ok:(it.reqQty>0 && got>=it.reqQty) };
+  });
+  const shortRows = rows.filter(r => !r.ok);
+  const allOk = shortRows.length === 0;
+
+  const rowsHtml = rows.map(r => `<div class="sku-row ${r.ok?'ok':'warn'}">
+      <div class="sku-check ${r.ok?'ok':''}">${r.ok?'<i class="ri-check-line"></i>':''}</div>
+      <div class="sku-row-name"><div class="sku-row-sku">${r.sku||'—'}</div><div class="sku-row-nm">${r.name||''}</div></div>
+      <div class="sku-row-qty" style="color:${r.ok?'var(--green)':'var(--red)'}">${r.got}/${r.reqQty}</div>
+    </div>`).join('');
+
+  openModal(`<div class="end-modal-inner">
+    <i class="ri-search-eye-line" style="font-size:28px;color:var(--purple);display:block;margin-bottom:8px"></i>
+    <div style="font-size:15px;font-weight:700;margin-bottom:2px">Finish Inspection</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:12px">${w.oid} · ${w.startT} → now</div>
+    <div style="text-align:center;margin-bottom:10px;font-size:13px;font-weight:700;color:${allOk?'var(--green)':'var(--red)'}">
+      ${allOk ? '✓ All items match' : `⚠ ${shortRows.length} of ${rows.length} SKUs short or missing`}
+    </div>
+    <div class="sku-list" style="margin-bottom:14px;text-align:left">${rowsHtml}</div>
+    ${!allOk ? `<div class="fg" style="text-align:left">
+      <label class="fl">Reason for mismatch (required)</label>
+      <select class="fi" id="inspReasonSel" style="margin-bottom:8px">
+        <option value="">— Select reason —</option>
+        <option value="Missing / short items">Missing / short items</option>
+        <option value="Extra items found">Extra items found</option>
+        <option value="Damaged items">Damaged items</option>
+        <option value="Wrong item / mix-up">Wrong item / mix-up</option>
+        <option value="Other">Other (specify below)</option>
+      </select>
+      <textarea class="fi" id="inspReasonNote" rows="2" placeholder="Additional notes..." style="resize:vertical"></textarea>
+    </div>` : ''}
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:16px">
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="confirmInspEndSku('${wid}')">
+        <i class="ri-checkbox-circle-line"></i> Confirm
+      </button>
+    </div>
+  </div>`, { wide:true });
+}
+
+window.confirmInspEndSku = function(wid){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const items = _orderItemsCache[w.oid] || [];
+  const st = loadScanState(wid);
+  const rows = items.map(it => {
+    const key = it.barcode || it.sku;
+    const got = st.skuCounts[key] || 0;
+    return { sku:it.sku, got, req:it.reqQty||0, ok:(it.reqQty>0 && got>=it.reqQty) };
+  });
+  const shortRows = rows.filter(r => !r.ok);
+  const allOk = shortRows.length === 0;
+  let reason = '', note = '';
+  if (!allOk) {
+    reason = document.getElementById('inspReasonSel')?.value || '';
+    note = (document.getElementById('inspReasonNote')?.value || '').trim();
+    if (!reason) { toast('Select a reason for the mismatch', 'err'); return; }
+  }
+  const totalScanned = rows.reduce((s,r) => s + r.got, 0);
+  const result = allOk ? 'PASS' : 'ISSUE';
+  const shortSummary = shortRows.slice(0, 6).map(r => `${r.sku}:${r.got}/${r.req}`).join(', ');
+  const fullNote = allOk ? '' : (reason + (shortSummary ? ' — ' + shortSummary : '') + (note ? ' · ' + note : ''));
+  closeModal();
+  clearScanState(wid);
+  doEndWork(wid, null, { scannedQty:totalScanned, inspResult:result, inspNote:fullNote });
 };
 
 function doEndWork(wid, pallets, inspData){
@@ -2741,6 +2980,273 @@ window.saveOrder = function(orig){
   mgrOp('upsertOrder', { id:orig, newId:newId!==orig?newId:undefined, ch, cu }).then(out => {
     if (!out.net || !out.res.ok) { S.orders = bkO; S.works = bkW; toast('⚠ Save failed', 'err'); R.mgr(); }
   });
+};
+
+// ══════════════════════════════════════════════════════
+// IMPORT PICK LIST — PDF (primary) / CSV / XLSX → OrderItems
+// ══════════════════════════════════════════════════════
+let _importParsed = null;
+
+// Strips combining marks and stray non-ASCII glyphs that leak in
+// from barcode-font rendering in PDF text extraction, leaving the
+// underlying digits/letters intact.
+function cleanPdfText(raw){
+  return String(raw || '')
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^\x20-\x7E\n]/g, ' ')
+    .replace(/[ \t]+/g, ' ');
+}
+
+function detectOrderIdFromText(text){
+  const m = String(text || '').match(/IM\d{5,}/g);
+  if (!m || !m.length) return '';
+  const freq = {}; m.forEach(x => freq[x] = (freq[x]||0) + 1);
+  return Object.keys(freq).sort((a,b) => freq[b]-freq[a])[0];
+}
+
+const PICKLIST_HEADER_WORDS = new Set(["SKU","Product","name","bar","code","Imov","Q'ty","Request","Rack","Stock","pick","TOTAL"]);
+
+// Position-based parser: barcodes (8-14 digit tokens) anchor each
+// row. Everything between the end of the previous row and the
+// barcode is [SKU, ...product name words] — this avoids needing a
+// strict SKU regex, since real SKU codes vary a lot in format.
+function parsePickListText(rawText){
+  const text = cleanPdfText(rawText);
+  const orderId = detectOrderIdFromText(text);
+
+  let tokens = text.split(/\s+/).filter(Boolean);
+  tokens = tokens.filter(t => {
+    const bare = t.replace(/[():]/g, '');
+    if (PICKLIST_HEADER_WORDS.has(bare)) return false;
+    if (/^\d{0,3}SKU$/i.test(bare)) return false;     // page-number+"SKU" header artifact at page breaks
+    return true;
+  });
+
+  const barcodeRe = /^\d{8,14}$/;
+  const stockQtyRe = /^\d+\(\d+\)$/;
+  const numRe = /^\d{1,4}$/;
+  const rackRe = /^[A-Z]{1,4}-[A-Za-z0-9]+(-[A-Za-z0-9]+)*$/;
+
+  const items = [];
+  let cursor = 0;
+
+  for (let i = 0; i < tokens.length; i++) {
+    if (!barcodeRe.test(tokens[i])) continue;
+    const barcode = tokens[i];
+    const nameTokens = tokens.slice(cursor, i);
+    if (!nameTokens.length) continue;
+    const sku = nameTokens[0];
+    const name = nameTokens.slice(1).join(' ').trim();
+
+    let j = i + 1;
+    const imovQty = numRe.test(tokens[j]) ? tokens[j++] : '';
+    const reqQty  = numRe.test(tokens[j]) ? tokens[j++] : '';
+    let rack = '', k = j;
+    const limit1 = Math.min(tokens.length, j + 4);
+    while (k < limit1) { if (rackRe.test(tokens[k])) { rack = tokens[k]; k++; break; } k++; }
+    let stockTok = '', m = k;
+    const limit2 = Math.min(tokens.length, k + 3);
+    while (m < limit2) { if (stockQtyRe.test(tokens[m])) { stockTok = tokens[m]; m++; break; } m++; }
+
+    items.push({ sku, name, barcode, reqQty: reqQty ? Number(reqQty) : (imovQty ? Number(imovQty) : 0), rack });
+    cursor = m || k || j;
+  }
+  return { orderId, items };
+}
+
+// PDF parsing — primary path calls the proven sk-sorting-parser service
+// (Flask + pdfplumber, same backend used by SK B2B Fulfillment batch.html).
+// It reads the PDF's actual table structure (cell coordinates) instead of
+// flattening to text + regex, so it doesn't suffer the "barcode-adjacent
+// glyph garbling" issue that plagues client-side pdf.js text extraction.
+// Falls back to the client-side best-effort parser only if that service
+// is unreachable (e.g. Render free-tier cold start taking too long, or offline).
+const PDF_PARSER_API = 'https://sk-sorting-parser.onrender.com';
+
+async function parsePdfFile(file){
+  try {
+    const fd = new FormData();
+    fd.append('pdf', file);
+    fd.append('kind', 'customer');
+    const resp = await fetch(PDF_PARSER_API + '/api/parse', { method:'POST', body: fd });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (!data.error && data.items && data.items.length) {
+        return {
+          orderId: (data.meta && data.meta.invoice_no) || detectOrderIdFromText(JSON.stringify(data.meta || {})),
+          items: data.items.map(it => ({
+            sku: it.sku || '', name: it.name || '', barcode: it.barcode || '',
+            reqQty: it.req_qty || 0, rack: it.rack || ''
+          }))
+        };
+      }
+    }
+    console.warn('sk-sorting-parser returned no items — falling back to client-side parsing');
+  } catch(err) {
+    console.warn('sk-sorting-parser unreachable (cold start or offline) — falling back to client-side parsing', err);
+  }
+  return parsePdfFileClientSide(file);
+}
+
+// Fallback only — best-effort client-side parser, used if the server above is unreachable.
+async function parsePdfFileClientSide(file){
+  const buf = await file.arrayBuffer();
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let fullText = '';
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    fullText += content.items.map(it => it.str).join(' ') + '\n';
+  }
+  return parsePickListText(fullText);
+}
+
+function mapHeaderRow(headers){
+  const norm = h => String(h||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const map = {};
+  (headers||[]).forEach((h,i) => {
+    const n = norm(h);
+    if (map.sku===undefined && /^sku$|itemcode|productcode/.test(n)) map.sku = i;
+    else if (map.name===undefined && /name|product|description/.test(n)) map.name = i;
+    else if (map.barcode===undefined && /barcode|upc|ean/.test(n)) map.barcode = i;
+    else if (map.reqQty===undefined && /request|reqqty|orderqty|^qty$|quantity/.test(n)) map.reqQty = i;
+    else if (map.rack===undefined && /rack|location|^bin$/.test(n)) map.rack = i;
+  });
+  return map;
+}
+function rowsToItems(rows){
+  const map = mapHeaderRow(rows[0]);
+  const orderId = detectOrderIdFromText(rows.map(r => (r||[]).join(' ')).join(' '));
+  const items = rows.slice(1).map(r => ({
+    sku:     map.sku!==undefined     ? String(r[map.sku]||'').trim()     : '',
+    name:    map.name!==undefined    ? String(r[map.name]||'').trim()    : '',
+    barcode: map.barcode!==undefined ? String(r[map.barcode]||'').trim() : '',
+    reqQty:  map.reqQty!==undefined  ? (Number(String(r[map.reqQty]||'').replace(/[^\d.]/g,'')) || 0) : 0,
+    rack:    map.rack!==undefined    ? String(r[map.rack]||'').trim()    : ''
+  })).filter(it => it.sku || it.barcode);
+  return { orderId, items };
+}
+function parseCsvFile(file){
+  return new Promise((resolve, reject) => {
+    Papa.parse(file, {
+      complete: res => {
+        const rows = (res.data||[]).filter(r => r.some(c => String(c||'').trim()));
+        if (!rows.length) return reject(new Error('Empty file'));
+        resolve(rowsToItems(rows));
+      },
+      error: reject
+    });
+  });
+}
+function parseXlsxFile(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type:'array' });
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:'' });
+        if (!rows.length) return reject(new Error('Empty file'));
+        resolve(rowsToItems(rows));
+      } catch(err) { reject(err); }
+    };
+    reader.onerror = () => reject(new Error('Read failed'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+window.handleImportFile = async function(ev){
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('importStatus');
+  const isPdf = /\.pdf$/i.test(file.name);
+  statusEl.innerHTML = isPdf
+    ? '<i class="ri-loader-4-line"></i> Parsing on server (pdfplumber)... first request can take ~20-30s if the server was idle'
+    : '<i class="ri-loader-4-line"></i> Parsing file...';
+  document.getElementById('importPreview').innerHTML = '';
+  try {
+    const ext = file.name.split('.').pop().toLowerCase();
+    let parsed;
+    if (ext === 'pdf') parsed = await parsePdfFile(file);
+    else if (ext === 'csv') parsed = await parseCsvFile(file);
+    else if (ext === 'xlsx' || ext === 'xls') parsed = await parseXlsxFile(file);
+    else { statusEl.innerHTML = '<span style="color:var(--red)">Unsupported file type</span>'; return; }
+
+    if (!parsed.items.length) {
+      statusEl.innerHTML = '<span style="color:var(--red)">No items could be parsed from this file — try CSV/Excel for a more reliable import.</span>';
+      return;
+    }
+    _importParsed = parsed;
+    statusEl.innerHTML = `<span style="color:var(--green)"><i class="ri-checkbox-circle-line"></i> Parsed ${parsed.items.length} line items</span>`;
+    renderImportPreview(parsed);
+  } catch(err) {
+    console.error(err);
+    statusEl.innerHTML = '<span style="color:var(--red)">Failed to parse file: ' + (err.message||'unknown error') + '</span>';
+  } finally {
+    ev.target.value = '';
+  }
+};
+
+function renderImportPreview(parsed){
+  const orderOpts = S.orders.map(o => `<option value="${o.id}"${o.id===parsed.orderId?' selected':''}>${o.id} (${o.ch}·${o.cu})</option>`).join('');
+  const rowsHtml = parsed.items.map((it,i) => `<tr>
+    <td><input value="${(it.sku||'').replace(/"/g,'&quot;')}" data-f="sku" data-i="${i}"></td>
+    <td><input value="${(it.name||'').replace(/"/g,'&quot;')}" data-f="name" data-i="${i}"></td>
+    <td><input value="${(it.barcode||'').replace(/"/g,'&quot;')}" data-f="barcode" data-i="${i}"></td>
+    <td style="width:60px"><input value="${it.reqQty||0}" data-f="reqQty" data-i="${i}" style="text-align:center"></td>
+    <td style="width:80px"><input value="${(it.rack||'').replace(/"/g,'&quot;')}" data-f="rack" data-i="${i}"></td>
+    <td><button class="btn btn-sm" style="color:var(--red);padding:2px 6px" onclick="removeImportRow(${i})"><i class="ri-close-line"></i></button></td>
+  </tr>`).join('');
+
+  document.getElementById('importPreview').innerHTML = `
+    <div class="fg" style="margin-top:14px">
+      <label class="fl">Target order ${parsed.orderId ? '(detected: <span class="mono" style="color:var(--teal)">'+parsed.orderId+'</span>)' : '(not detected — select manually)'}</label>
+      <select class="fi" id="importOrderSel">
+        <option value="">— Select order —</option>${orderOpts}
+      </select>
+    </div>
+    <div style="font-size:11px;color:var(--amber);margin-bottom:8px"><i class="ri-alert-line"></i> Review each row carefully — fix any parsing errors before confirming.</div>
+    <div style="overflow-x:auto;max-height:340px;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--r)">
+      <table class="import-preview-tbl"><thead><tr>
+        <th>SKU</th><th>Product name</th><th>Barcode</th><th>Req Qty</th><th>Rack</th><th></th>
+      </tr></thead><tbody id="importRowsBody">${rowsHtml}</tbody></table>
+    </div>
+    <button class="btn btn-teal btn-block" style="margin-top:12px;padding:12px;font-weight:700" onclick="confirmImportItems(this)">
+      <i class="ri-check-double-line"></i> Confirm import (${parsed.items.length} items)
+    </button>`;
+}
+
+window.removeImportRow = function(i){
+  if (!_importParsed) return;
+  _importParsed.items.splice(i, 1);
+  renderImportPreview(_importParsed);
+};
+
+window.confirmImportItems = async function(btn){
+  if (!_importParsed) return;
+  document.querySelectorAll('#importRowsBody input').forEach(inp => {
+    const i = Number(inp.dataset.i), f = inp.dataset.f;
+    if (_importParsed.items[i]) {
+      _importParsed.items[i][f] = f === 'reqQty' ? (Number(inp.value)||0) : inp.value.trim();
+    }
+  });
+  const orderId = document.getElementById('importOrderSel')?.value || _importParsed.orderId;
+  if (!orderId) { toast('Select the target order', 'err'); return; }
+  if (!S.orders.find(o => o.id === orderId)) { toast('Order not found — create it first in Orders above', 'err'); return; }
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line"></i> Importing...'; }
+  const out = await mgrOp('importOrderItems', { orderId, items:_importParsed.items });
+  if (out.net && out.res.ok) {
+    delete _orderItemsCache[orderId];
+    toast(`✓ Imported ${out.res.imported} items for ${orderId}`, 'ok');
+    document.getElementById('importStatus').innerHTML = '';
+    document.getElementById('importPreview').innerHTML = '';
+    _importParsed = null;
+  } else {
+    toast('⚠ Import failed: ' + ((out.res&&out.res.error)||'unknown'), 'err');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ri-check-double-line"></i> Confirm import'; }
+  }
 };
 
 // ── Work entries (edit / delete) ──
