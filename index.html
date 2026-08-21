@@ -3293,17 +3293,30 @@ async function importOneEntry(entryId, btn){
   if (!orderId) { toast(`Select the target order for ${entry.fileName}`, 'err'); return false; }
   if (!S.orders.find(o => o.id === orderId)) { toast(`Order ${orderId} not found — create it first in Orders above`, 'err'); return false; }
 
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line"></i> Importing...'; }
-  const out = await mgrOp('importOrderItems', { orderId, items:entry.parsed.items });
-  if (out.net && out.res.ok) {
-    delete _orderItemsCache[orderId];
-    toast(`✓ Imported ${out.res.imported} items for ${orderId}`, 'ok');
-    _importBatch = _importBatch.filter(x => x.id !== entryId);
-    return true;
+  // Large pick lists (100+ SKU lines) don't fit in a single JSONP request —
+  // this transport sends the payload as a URL query string, and long URLs
+  // get silently rejected ("network" failure) before the server even sees
+  // them. Send the item list in small chunks instead: the first chunk
+  // replaces any prior items for this order, later chunks just append.
+  const CHUNK = 20;
+  const items = entry.parsed.items;
+  let importedTotal = 0;
+  for (let i = 0; i < items.length; i += CHUNK) {
+    const chunk = items.slice(i, i + CHUNK);
+    if (btn) { btn.disabled = true; btn.innerHTML = `<i class="ri-loader-4-line"></i> Importing ${Math.min(i+CHUNK, items.length)}/${items.length}...`; }
+    const out = await mgrOp('importOrderItems', { orderId, items:chunk, replace: i === 0 });
+    if (!out.net || !out.res.ok) {
+      toast(`⚠ Import failed for ${entry.fileName} (items ${i+1}-${Math.min(i+CHUNK,items.length)}): ` + ((out.res&&out.res.error)||'network'), 'err');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ri-check-double-line"></i> Confirm import'; }
+      return false;
+    }
+    importedTotal += out.res.imported || chunk.length;
   }
-  toast(`⚠ Import failed for ${entry.fileName}: ` + ((out.res&&out.res.error)||'unknown'), 'err');
-  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ri-check-double-line"></i> Confirm import'; }
-  return false;
+
+  delete _orderItemsCache[orderId];
+  toast(`✓ Imported ${importedTotal} items for ${orderId}`, 'ok');
+  _importBatch = _importBatch.filter(x => x.id !== entryId);
+  return true;
 }
 
 window.confirmImportItems = async function(entryId, btn){
