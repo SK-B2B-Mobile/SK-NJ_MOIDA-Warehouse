@@ -760,6 +760,16 @@ async function loadData(){
       if (q.op === 'startWork' && q.meta && q.meta.tempId && !S.works.find(w => w.id === q.meta.tempId) && q.meta.local) {
         S.works.push(q.meta.local);
       }
+      // v10.7 — a queued endWork means the server hasn't processed the
+      // completion yet, so its listAll response still shows this entry as
+      // active. Without this, ANY loadData() call while the end is still
+      // queued (offline, slow network, or a rejected concurrent action
+      // elsewhere) silently reverts the entry back to "active" in the UI —
+      // even though it's genuinely finished and just waiting to sync.
+      if (q.op === 'endWork' && q.data && q.data.entryId && q.meta && q.meta.localEnd) {
+        const w = S.works.find(x => x.id === q.data.entryId);
+        if (w && !w.endT) Object.assign(w, q.meta.localEnd);
+      }
     });
     return true;
   }
@@ -2723,10 +2733,13 @@ function doEndWork(wid, pallets, inspData){
     { entryId:wid, pallets:pallets!==null?pallets:undefined, wpin:(WS&&WS.wpin)||'' },
     inspData ? { scannedQty:inspData.scannedQty, inspResult:inspData.inspResult, inspNote:inspData.inspNote } : {}
   );
+  // v10.7 — carried into the queue so loadData() can re-apply it if a
+  // server refresh happens before this op actually syncs (see loadData()).
+  const localEnd = { endT:w.endT, netMin:w.netMin, endISO:w.endISO, pallets:w.pallets, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote };
 
   // Entry's start is still waiting in the offline queue → queue the end too (order preserved)
   if (isTempQueued(wid) || !navigator.onLine) {
-    enqueueOp('endWork', reqData, null);
+    enqueueOp('endWork', reqData, { localEnd });
     toast('Offline — end saved to queue', '');
     return;
   }
@@ -2735,7 +2748,7 @@ function doEndWork(wid, pallets, inspData){
   apiOp('endWork', reqData).then(out => {
     delete _pending[wid];
     if (!out.net) {
-      enqueueOp('endWork', reqData, null);   // keep optimistic values; sync later
+      enqueueOp('endWork', reqData, { localEnd });   // keep optimistic values; sync later
       toast('Connection lost — end saved to queue', '');
       renderStageContent(); return;
     }
