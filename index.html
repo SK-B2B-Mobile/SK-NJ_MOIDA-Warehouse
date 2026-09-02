@@ -1374,7 +1374,7 @@ function skuRowHtml(it, st, wid){
   const keyEsc = String(key).replace(/'/g, "\\'");
   const qtyHtml = issue
     ? `<span style="color:var(--red);font-size:11px;font-weight:800">${issue.type}${issue.qty?(' ×'+issue.qty):''}</span>`
-    : `${got}/${it.reqQty||0}`;
+    : `<span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" title="Tap to correct this quantity" onclick="event.stopPropagation();openQtyEditModal('${wid}','${keyEsc}')">${got}/${it.reqQty||0}</span>`;
   return `<div class="sku-row ${cls}">
     <div class="sku-check ${issue?'issue':(ok?'ok':'')}">${issue ? '<i class="ri-flag-2-fill"></i>' : (ok ? '<i class="ri-check-line"></i>' : '')}</div>
     <div class="sku-row-name">
@@ -1528,6 +1528,44 @@ window.clearSkuIssue = function(wid, key){
   saveScanState(wid, st);
   closeModal();
   toast('Issue flag cleared', '');
+  renderStageContent();
+};
+
+// ── Manual quantity correction — v10.6 ──────────────────────────────
+// Scanning only ever adds; this lets a worker fix a miscount (double
+// scan, misread barcode, etc.) by setting the exact number directly.
+window.openQtyEditModal = function(wid, key){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const items = _orderItemsCache[w.oid] || [];
+  const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
+  const st = loadScanState(wid);
+  const got = st.skuCounts[key] || 0;
+  const keyEsc = String(key).replace(/'/g, "\\'");
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
+      <i class="ri-pencil-line" style="color:var(--purple)"></i> Correct scanned qty
+    </div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:14px" class="mono">${it.sku||'—'} · ${(it.name||'').replace(/</g,'&lt;')} · needs ${it.reqQty||0}</div>
+    <div class="fg">
+      <label class="fl">Actual scanned qty</label>
+      <input class="fi" type="number" min="0" id="qtyEditVal" value="${got}" style="font-size:18px;text-align:center;font-weight:700" autofocus>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-purple btn-sm" onclick="saveQtyEdit('${wid}','${keyEsc}')"><i class="ri-check-line"></i> Save</button>
+    </div>
+  `);
+};
+
+window.saveQtyEdit = function(wid, key){
+  const val = Number(document.getElementById('qtyEditVal')?.value);
+  if (isNaN(val) || val < 0) { toast('Enter a valid quantity', 'err'); return; }
+  const st = loadScanState(wid);
+  st.skuCounts[key] = Math.round(val);
+  saveScanState(wid, st);
+  closeModal();
+  toast('Quantity updated', 'ok');
   renderStageContent();
 };
 
@@ -1785,6 +1823,29 @@ function skuChecklistReadyInfo(w){
   return { done, total: items.length, ready: done === items.length };
 }
 
+// Who else (if anyone) is on this order+stage right now, and has it been
+// done before? Used to enrich the order picker so a worker can see —
+// before selecting — whether starting this stage would collide with
+// someone else's in-progress work.
+function orderStageWork(oid, stage){
+  const ws = S.works.filter(w => w.oid === oid && w.stage === stage);
+  return { active: ws.filter(w => !w.endT), done: ws.filter(w => w.endT) };
+}
+function orderStageStatusTag(o, stage){
+  const { active, done } = orderStageWork(o.id, stage);
+  const otherActive = active.filter(w => w.w !== CW);
+  if (otherActive.length) {
+    const names = [...new Set(otherActive.map(w => w.w))].join(', ');
+    return ` — 🔴 ${stage} in progress (${names})`;
+  }
+  if (stage !== 'PICK') {
+    const pick = orderStageWork(o.id, 'PICK');
+    if (!pick.active.length && !pick.done.length) return ' — ⏳ not picked yet';
+  }
+  if (done.length) return ` — ✅ ${stage} done ×${done.length}`;
+  return '';
+}
+
 function renderStageContent(){
   const container = document.getElementById('stageContent'); if (!container) return;
   updateTabStatus();
@@ -1832,7 +1893,7 @@ function renderStageContent(){
 
   const orderOpts = S.orders.map(o => {
     const myHere = S.works.filter(w => w.oid===o.id && w.w===CW && w.stage===s && !w.endT).length;
-    return `<option value="${o.id}">${o.id} (${o.ch}·${o.cu})${myHere?' ⚡ Active':''}${isSLA(o)?' ⚠ SLA':''}</option>`;
+    return `<option value="${o.id}">${o.id} (${o.ch}·${o.cu})${orderStageStatusTag(o, s)}${myHere?' ⚡ Active':''}${isSLA(o)?' ⚠ SLA':''}</option>`;
   }).join('');
 
   const instrMap = {
@@ -2010,7 +2071,12 @@ function onOrderChange(){
     </div>`;
   }).join('');
 
+  const otherActiveWorkers = [...new Set(ws.filter(w => !w.endT && w.w !== CW).map(w => w.w))];
+
   el.innerHTML = `
+    ${otherActiveWorkers.length ? `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--red-bg);border:1px solid var(--red-bd);border-radius:var(--r);margin-bottom:10px;font-size:12px;color:var(--red);font-weight:700">
+      <i class="ri-error-warning-fill" style="font-size:16px"></i> ${otherActiveWorkers.join(', ')} ${otherActiveWorkers.length>1?'are':'is'} already doing ${CS} on this order right now — starting will conflict.
+    </div>` : ''}
     <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);margin-bottom:12px;font-size:12px;flex-wrap:wrap">
       <span style="font-weight:700">${o.ch} · ${o.cu}</span>
       <span style="color:${col};margin-left:4px">${CS}: ${active} active · ${done} done</span>
@@ -2045,11 +2111,38 @@ window.startWork = function(){
   const activeDupe = S.works.filter(w => w.w===CW && w.oid===oid && w.stage===CS && !w.endT);
   if (activeDupe.length > 0) { showDupeBlockModal(oid, activeDupe[0]); return; }
 
+  const otherActive = S.works.filter(w => w.oid===oid && w.stage===CS && !w.endT && w.w!==CW);
+  if (otherActive.length > 0) { showOtherWorkerBlockModal(oid, otherActive); return; }
+
   const completedHere = S.works.filter(w => w.w===CW && w.oid===oid && w.stage===CS && w.endT);
   if (completedHere.length > 0) { showDupeWarnModal(oid, completedHere, items, qty); return; }
 
   doStartWork(oid, items, qty);
 };
+
+function showOtherWorkerBlockModal(oid, otherActive){
+  const o = S.orders.find(x => x.id === oid);
+  const col = SCOL[CS];
+  const names = [...new Set(otherActive.map(w => w.w))];
+  openModal(`
+    <div style="text-align:center;padding:8px 0">
+      <div style="width:56px;height:56px;border-radius:50%;background:var(--red-bg);border:2px solid var(--red-bd);
+           display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+        <i class="ri-team-line" style="font-size:26px;color:var(--red)"></i>
+      </div>
+      <div style="font-size:17px;font-weight:800;margin-bottom:6px">Someone else is on this</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:16px">
+        <strong>${names.join(', ')}</strong> ${names.length>1?'are':'is'} already doing<br>
+        <strong style="color:${col}">${CS}</strong> on <strong>${oid}</strong> (${o?.ch}·${o?.cu}) right now
+      </div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:16px;line-height:1.6">
+        To avoid duplicate or conflicting work,<br>pick a different order for now.
+      </div>
+      <button class="btn btn-blue btn-block" onclick="closeModal()" style="justify-content:center;padding:13px">
+        <i class="ri-arrow-left-line"></i> Choose another order
+      </button>
+    </div>`);
+}
 
 function showDupeBlockModal(oid, existing){
   const o = S.orders.find(x => x.id === oid);
@@ -2154,6 +2247,11 @@ function doStartWork(oid, items, qty){
     _startLock = false; clearTimeout(lockTimer);
     showDupeBlockModal(oid, activeDupe[0]); return;
   }
+  const otherActiveNow = S.works.filter(w => w.oid===oid && w.stage===CS && !w.endT && w.w!==CW);
+  if (otherActiveNow.length > 0) {
+    _startLock = false; clearTimeout(lockTimer);
+    showOtherWorkerBlockModal(oid, otherActiveNow); return;
+  }
 
   const tid = genId();
   const hhmm = nowHHmm();
@@ -2209,6 +2307,14 @@ function doStartWork(oid, items, qty){
       // v8.2 — one task at a time, enforced server-side too
       S.works = S.works.filter(w => w.id !== tid);
       toast(`⚠ Finish your active ${res.stage||''} on ${res.orderId||''} first`, 'err');
+      loadData().then(() => { updateBadges(); renderStageContent(); });
+      finish(); return;
+    }
+    if (!res.ok && res.error === 'stage_taken_by_other') {
+      // v10.6 — another worker started this exact order+stage a moment
+      // before us (race condition) — server is the final authority.
+      S.works = S.works.filter(w => w.id !== tid);
+      toast(`⚠ ${res.worker||'Another worker'} just started ${CS} on this order`, 'err');
       loadData().then(() => { updateBadges(); renderStageContent(); });
       finish(); return;
     }
@@ -2469,7 +2575,7 @@ window.confirmInspEndSku = function(wid){
     const got = st.skuCounts[key] || 0;
     const issue = (st.skuIssues || {})[key] || null;
     const fullyScanned = it.reqQty > 0 && got >= it.reqQty;
-    return { sku:it.sku, got, req:it.reqQty||0, issue, ok: fullyScanned && !issue, hasIssue: !!issue };
+    return { sku:it.sku, name:it.name, barcode:it.barcode, got, req:it.reqQty||0, issue, ok: fullyScanned && !issue, hasIssue: !!issue };
   });
   const shortRows = rows.filter(r => !r.ok && !r.hasIssue);
   const issueRows = rows.filter(r => r.hasIssue);
@@ -2494,7 +2600,112 @@ window.confirmInspEndSku = function(wid){
   closeModal();
   clearScanState(wid);
   doEndWork(wid, null, { scannedQty:totalScanned, inspResult:result, inspNote:fullNote });
+
+  // Print the packing slip right now, from the data we already have in
+  // memory — no need to wait on a server round-trip. In parallel, log the
+  // same per-SKU snapshot to Sheets so it can be reprinted later from any
+  // device (scan counts themselves only ever lived in this browser).
+  printPackingSlip(w, rows, { result, worker: WS ? WS.worker : CW });
+  logInspectionResultsToServer(wid, w.oid, rows, result);
 };
+
+// ── Packing slip — printed the moment inspection ends ───────────────
+function printPackingSlip(w, rows, meta){
+  const o = S.orders.find(x => x.id === w.oid);
+  const printedAt = new Date().toLocaleString('en-US');
+  const worker = meta.worker || '';
+  const result = meta.result || '';
+
+  const rowsHtml = rows.map(r => `<tr>
+      <td>${r.barcode||''}</td>
+      <td>${r.name||''}</td>
+      <td style="text-align:center">${r.req}</td>
+      <td style="text-align:center">${r.hasIssue ? (r.issue.qty||0) : 0}</td>
+      <td style="text-align:center;font-weight:700">${r.hasIssue ? (r.req - (r.issue.qty||0)) : r.got}</td>
+    </tr>`).join('');
+  const totalOrdered = rows.reduce((a,r) => a + (r.req||0), 0);
+  const totalIssue   = rows.reduce((a,r) => a + (r.hasIssue ? (r.issue.qty||0) : 0), 0);
+  const totalPacked  = rows.reduce((a,r) => a + (r.hasIssue ? (r.req - (r.issue.qty||0)) : r.got), 0);
+  const issueRows = rows.filter(r => r.hasIssue);
+  const issuesHtml = issueRows.length ? `
+    <h4 class="issues-h4">Issues / Shortages</h4>
+    <table class="slip-table"><thead><tr><th>Type</th><th>Product</th><th style="text-align:center">Qty</th><th>Note</th></tr></thead><tbody>
+    ${issueRows.map(r => `<tr><td>${r.issue.type}</td><td>${r.name||r.sku||''}</td><td style="text-align:center">${r.issue.qty||0}</td><td>${r.issue.note||''}</td></tr>`).join('')}
+    </tbody></table>` : '';
+
+  const badgeClass = result === 'PASS' ? 'verify-ok' : 'verify-bad';
+  const badgeText = result === 'PASS' ? '✓ INSPECTION PASSED — ALL ITEMS VERIFIED' : '⚠ INSPECTION COMPLETE — WITH ISSUES';
+
+  const css = `
+    @page{ size: letter; margin: 12mm; }
+    body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; padding:36px; max-width:760px; margin:0 auto; font-size:13px;}
+    .slip-head{display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #111; padding-bottom:16px; margin-bottom:20px;}
+    .slip-logo{font-size:26px; font-weight:800; letter-spacing:-0.02em;}
+    .slip-addr{font-size:12px; color:#555; margin-top:4px; line-height:1.5;}
+    .slip-title{font-size:20px; font-weight:800; text-align:right;}
+    .slip-meta{font-size:12px; color:#555; text-align:right; margin-top:4px;}
+    .slip-info{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; font-size:13px;}
+    .slip-info div b{display:block; font-size:11px; color:#777; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:2px;}
+    table.slip-table{width:100%; border-collapse:collapse; font-size:13px; margin-top:8px;}
+    table.slip-table th{background:#111; color:#fff; padding:8px 10px; text-align:left; font-size:11px; text-transform:uppercase;}
+    table.slip-table td{padding:8px 10px; border-bottom:1px solid #ddd;}
+    .slip-total-row td{border-top:2px solid #111; border-bottom:none; padding-top:10px; background:#f7f7f7;}
+    .issues-h4{margin-top:18px; font-size:13px; text-transform:uppercase; color:#555;}
+    .verify-badge{display:inline-block; padding:6px 14px; border-radius:6px; font-weight:800; font-size:13px; margin-top:18px;}
+    .verify-ok{background:#ede9fe; color:#5b21b6; border:1px solid #8b5cf6;}
+    .verify-bad{background:#fee2e2; color:#991b1b; border:1px solid #dc2626;}
+    .slip-footer{margin-top:28px; padding-top:14px; border-top:1px solid #ccc; font-size:11px; color:#777; display:flex; justify-content:space-between;}
+  `;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Packing Slip · ${w.oid}</title><style>${css}</style></head><body>
+    <div class="slip-head">
+      <div><div class="slip-logo">StyleKorean</div><div class="slip-addr">NJ / MOIDA Warehouse</div></div>
+      <div><div class="slip-title">PACKING SLIP</div><div class="slip-meta">Order ${w.oid}<br>Printed ${printedAt}</div></div>
+    </div>
+    <div class="slip-info">
+      <div><b>Customer</b>${o?.ch||''} · ${o?.cu||''}</div>
+      <div><b>Order #</b>${w.oid}</div>
+      <div><b>Inspected by</b>${worker}</div>
+      <div><b>Result</b>${result}</div>
+    </div>
+    <table class="slip-table"><thead><tr><th>Barcode</th><th>Product</th><th style="text-align:center">Ordered</th><th style="text-align:center">Issue</th><th style="text-align:center">Packed</th></tr></thead>
+    <tbody>${rowsHtml}</tbody>
+    <tfoot><tr class="slip-total-row"><td colspan="2"><b>TOTAL — ${rows.length} SKU${rows.length===1?'':'s'}</b></td><td style="text-align:center"><b>${totalOrdered}</b></td><td style="text-align:center"><b>${totalIssue}</b></td><td style="text-align:center"><b>${totalPacked}</b></td></tr></tfoot>
+    </table>
+    ${issuesHtml}
+    <div class="verify-badge ${badgeClass}">${badgeText}</div>
+    <div class="slip-footer"><span>Verified by: ${worker} · ${printedAt}</span><span>StyleKorean NJ/MOIDA Warehouse System</span></div>
+  </body></html>`;
+
+  const win = window.open('', '_blank', 'width=820,height=1000');
+  if (!win) { toast('⚠ Popup blocked — allow popups for this site to print packing slips', 'err'); return; }
+  win.document.write(html);
+  win.document.close();
+  setTimeout(() => { win.focus(); win.print(); }, 300);
+}
+
+// Reuses the same adaptive byte-length chunking as pick-list import, since
+// this goes over the same JSONP URL-length-limited transport.
+async function logInspectionResultsToServer(wid, orderId, rows, result){
+  const payload = rows.map(r => ({
+    sku:r.sku, barcode:r.barcode, name:r.name, reqQty:r.req,
+    packedQty: r.hasIssue ? (r.req - (r.issue.qty||0)) : r.got,
+    issueType: r.hasIssue ? r.issue.type : '',
+    issueQty:  r.hasIssue ? (r.issue.qty||0) : 0,
+    issueNote: r.hasIssue ? (r.issue.note||'') : ''
+  }));
+  const chunks = buildImportChunks(payload);
+  for (let ci = 0; ci < chunks.length; ci++) {
+    const out = await apiOp('logInspectionResults', {
+      entryId: wid, orderId, result, rows: chunks[ci], replace: ci === 0,
+      worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
+    });
+    if (!out.net || !out.res.ok) {
+      console.warn('logInspectionResults chunk failed', ci, out);
+      return; // best-effort — the printed slip already exists either way
+    }
+  }
+}
 
 function doEndWork(wid, pallets, inspData){
   const w = S.works.find(x => x.id === wid); if (!w || _pending[wid]) return;
@@ -3752,11 +3963,30 @@ window.renderEntries = function(){
         <td class="mono">${w.startT||'—'}</td><td class="mono">${w.endT||'—'}</td>
         <td class="mono" style="color:var(--teal)">${fmtMin(w.netMin)}</td>
         <td style="white-space:nowrap">
+          ${(w.stage==='INSP' && w.endT) ? `<button class="btn btn-sm" style="padding:2px 5px" title="Reprint packing slip" onclick="reprintPackingSlip('${w.id}')"><i class="ri-printer-line"></i></button>` : ''}
           <button class="btn btn-sm" style="padding:2px 5px" title="Edit" onclick="editEntryModal('${w.id}')"><i class="ri-edit-line"></i></button>
           <button class="btn btn-sm" style="color:var(--red);padding:2px 5px" title="Delete" onclick="delEntry('${w.id}')"><i class="ri-delete-bin-line"></i></button>
         </td>
       </tr>`).join('')}</tbody></table>`
     : '<div style="font-size:12px;color:var(--t3);padding:8px 0">No entries</div>';
+};
+
+// Reprint from the persisted per-SKU snapshot (InspectionResults) —
+// works from any device, even long after the worker's own scan session
+// (and its localStorage) is gone.
+window.reprintPackingSlip = async function(wid){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  toast('Loading packing slip...', '');
+  const out = await apiOp('getInspectionResults', { entryId: wid });
+  if (!out.net || !out.res.ok || !out.res.rows.length) {
+    toast('⚠ No saved packing slip data for this entry', 'err'); return;
+  }
+  const rows = out.res.rows.map(r => ({
+    sku:r.sku, name:r.name, barcode:r.barcode, req:r.reqQty, got:r.packedQty,
+    hasIssue: !!r.issueType,
+    issue: r.issueType ? { type:r.issueType, qty:r.issueQty, note:r.issueNote } : null
+  }));
+  printPackingSlip(w, rows, { result: w.inspResult || '', worker: w.w });
 };
 
 window.editEntryModal = function(wid){
