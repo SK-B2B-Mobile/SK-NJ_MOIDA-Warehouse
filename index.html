@@ -889,14 +889,25 @@ function expectedForOrder(oid){
 let _scanState = {};
 function loadScanState(wid){
   if (_scanState[wid]) return _scanState[wid];
-  let st = { mode:'agg', count:0, mult:1, skuCounts:{}, unknown:0, skuIssues:{}, currentBox:1, maxBox:1, boxScans:{} };
+  let st = { mode:'agg', count:0, mult:1, skuCounts:{}, unknown:0, skuIssues:{}, currentBox:1, maxBox:1, boxScans:{}, unitType:'box' };
   try { const raw = localStorage.getItem('wms_scan_' + wid); if (raw) st = Object.assign(st, JSON.parse(raw)); } catch(_){}
   if (!st.currentBox) st.currentBox = 1;
   if (!st.maxBox) st.maxBox = 1;
   if (!st.boxScans) st.boxScans = {};
+  if (!st.unitType) st.unitType = 'box';
   _scanState[wid] = st;
   return st;
 }
+function unitWord(unitType, cap){
+  const w = unitType === 'pallet' ? 'pallet' : 'box';
+  return cap ? (w.charAt(0).toUpperCase() + w.slice(1)) : w;
+}
+window.setUnitType = function(wid, type){
+  const st = loadScanState(wid);
+  st.unitType = type === 'pallet' ? 'pallet' : 'box';
+  saveScanState(wid, st);
+  renderStageContent();
+};
 function saveScanState(wid, st){ _scanState[wid] = st; try { localStorage.setItem('wms_scan_' + wid, JSON.stringify(st)); } catch(_){} }
 function clearScanState(wid){ delete _scanState[wid]; try { localStorage.removeItem('wms_scan_' + wid); } catch(_){} }
 
@@ -1614,13 +1625,17 @@ function renderSkuChecklistUI(w, items, st){
       </span>
     </div>
 
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <button type="button" class="scan-mult-btn${st.unitType!=='pallet'?' on':''}" style="flex:1" onclick="setUnitType('${w.id}','box')"><i class="ri-archive-2-line"></i> Box</button>
+      <button type="button" class="scan-mult-btn${st.unitType==='pallet'?' on':''}" style="flex:1" onclick="setUnitType('${w.id}','pallet')"><i class="ri-truck-line"></i> Pallet</button>
+    </div>
     <div style="display:flex;justify-content:space-between;align-items:center;background:var(--purple-bg);border:1px solid var(--purple-bd);border-radius:var(--r);padding:8px 12px;margin-bottom:10px">
-      <span style="font-size:12px;color:var(--purple);font-weight:700"><i class="ri-archive-2-line"></i> Current box</span>
+      <span style="font-size:12px;color:var(--purple);font-weight:700"><i class="ri-archive-2-line"></i> Current ${unitWord(st.unitType)}</span>
       <span style="font-size:16px;font-weight:800">${st.currentBox || 1}</span>
     </div>
     <div style="display:flex;gap:6px;margin-bottom:12px">
-      <button class="btn btn-sm" style="width:44px;justify-content:center;flex-shrink:0" title="Back to previous box" onclick="prevBox('${w.id}')"><i class="ri-arrow-left-line"></i></button>
-      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="nextBox('${w.id}')"><i class="ri-inbox-archive-line"></i> Finish box, start next</button>
+      <button class="btn btn-sm" style="width:44px;justify-content:center;flex-shrink:0" title="Back to previous ${unitWord(st.unitType)}" onclick="prevBox('${w.id}')"><i class="ri-arrow-left-line"></i></button>
+      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="nextBox('${w.id}')"><i class="ri-inbox-archive-line"></i> Finish ${unitWord(st.unitType)}, start next</button>
     </div>
 
     <div class="scan-input-row">
@@ -2641,7 +2656,8 @@ window.proceedToPrintOptions = function(wid){
   _pendingInspEnd[wid] = {
     rows, totalScanned, result, fullNote,
     maxBox: st.maxBox || 1,
-    boxScans: JSON.parse(JSON.stringify(st.boxScans || {}))
+    boxScans: JSON.parse(JSON.stringify(st.boxScans || {})),
+    unitType: st.unitType || 'box'
   };
   openPrintOptionsModal(wid);
 };
@@ -2649,12 +2665,13 @@ window.proceedToPrintOptions = function(wid){
 function openPrintOptionsModal(wid){
   const pend = _pendingInspEnd[wid]; if (!pend) return;
   const trackedBoxes = pend.maxBox || 1;
+  const uw = unitWord(pend.unitType), uwCap = unitWord(pend.unitType, true);
   openModal(`<div class="end-modal-inner" style="text-align:left">
     <div style="font-size:15px;font-weight:700;margin-bottom:14px;text-align:center"><i class="ri-printer-line"></i> Print packing slip</div>
 
     <label class="fl">Packing slip</label>
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px;cursor:pointer">
-      <input type="radio" name="slipMode_${wid}" value="box" ${trackedBoxes>1?'checked':''} style="width:auto"> Box breakdown (${trackedBoxes} box${trackedBoxes!==1?'es':''})
+      <input type="radio" name="slipMode_${wid}" value="box" ${trackedBoxes>1?'checked':''} style="width:auto"> ${uwCap} breakdown (${trackedBoxes} ${uw}${trackedBoxes!==1?'s':''})
     </label>
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:14px;cursor:pointer">
       <input type="radio" name="slipMode_${wid}" value="flat" ${trackedBoxes<=1?'checked':''} style="width:auto"> Flat list only
@@ -2662,14 +2679,14 @@ function openPrintOptionsModal(wid){
 
     <label class="fl">Print labels</label>
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px;cursor:pointer">
-      <input type="radio" name="labelMode_${wid}" value="auto" checked style="width:auto"> Auto — matches tracked boxes (${trackedBoxes})
+      <input type="radio" name="labelMode_${wid}" value="auto" checked style="width:auto"> Auto — matches tracked ${uw}s (${trackedBoxes})
     </label>
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px;cursor:pointer">
-      <input type="radio" name="labelMode_${wid}" value="manual" style="width:auto"> Manual — enter actual box count
+      <input type="radio" name="labelMode_${wid}" value="manual" style="width:auto"> Manual — enter actual ${uw} count
     </label>
     <div id="manualBoxRow_${wid}" style="display:none;align-items:center;gap:8px;margin:0 0 10px 26px">
       <input class="fi" type="number" id="manualBoxCount_${wid}" min="1" value="${trackedBoxes}" style="width:80px">
-      <span style="font-size:12px;color:var(--t3)">boxes</span>
+      <span style="font-size:12px;color:var(--t3)">${uw}s</span>
     </div>
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:16px;cursor:pointer">
       <input type="radio" name="labelMode_${wid}" value="none" style="width:auto"> Don't print labels now
@@ -2702,10 +2719,10 @@ window.finalizeInspEnd = function(wid){
   clearScanState(wid);
   doEndWork(wid, null, { scannedQty:pend.totalScanned, inspResult:pend.result, inspNote:pend.fullNote });
 
-  const meta = { result: pend.result, worker: WS ? WS.worker : CW };
+  const meta = { result: pend.result, worker: WS ? WS.worker : CW, unitType: pend.unitType };
   printPackingSlip(w, pend.rows, meta, pend.boxScans, slipMode);
   if (labelMode !== 'none') printLabels(w, meta, labelCount);
-  logInspectionResultsToServer(wid, w.oid, pend.rows, pend.result, pend.boxScans);
+  logInspectionResultsToServer(wid, w.oid, pend.rows, pend.result, pend.boxScans, pend.unitType);
   delete _pendingInspEnd[wid];
 };
 
@@ -2733,18 +2750,21 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
     ${issueRows.map(r => `<tr><td>${r.issue.type}</td><td>${r.name||r.sku||''}</td><td style="text-align:center">${r.issue.qty||0}</td><td>${r.issue.note||''}</td></tr>`).join('')}
     </tbody></table>` : '';
 
-  // Box / pallet breakdown — which SKUs (and how many) went into each box,
-  // built from the scan-time box tracking. Only shown when slipMode==='box'.
+  // Box / pallet breakdown — which SKUs (and how many) went into each
+  // box or pallet, built from scan-time tracking. Only shown when
+  // slipMode==='box'. Wording follows the unit chosen during scanning
+  // (Box for parcel carriers like UPS, Pallet for freight like TK).
   let boxHtml = '';
+  const uwCap = unitWord(meta.unitType, true);
   if (slipMode === 'box' && boxScans && Object.keys(boxScans).length) {
     const nameByKey = {};
     rows.forEach(r => { nameByKey[r.barcode || r.sku] = r.name || r.sku || ''; });
     const boxNums = Object.keys(boxScans).map(Number).sort((a,b) => a-b);
-    boxHtml = `<h4 class="issues-h4">Box / pallet breakdown</h4>` + boxNums.map(bn => {
+    boxHtml = `<h4 class="issues-h4">${uwCap} breakdown</h4>` + boxNums.map(bn => {
       const lines = Object.entries(boxScans[bn] || {})
         .map(([key, qty]) => `${nameByKey[key] || key} · ${qty}`)
         .join(', ');
-      return `<p class="box-line"><b>Box ${bn}</b> — ${lines || '(no items recorded)'}</p>`;
+      return `<p class="box-line"><b>${uwCap} ${bn}</b> — ${lines || '(no items recorded)'}</p>`;
     }).join('');
   }
 
@@ -2820,10 +2840,11 @@ function printLabels(w, meta, count){
     .label-worker{font-size:13px; color:#555;}
   `;
   const pages = [];
+  const uwCap = unitWord(meta.unitType, true);
   for (let i = 1; i <= n; i++) {
     pages.push(`<div class="label-page">
       <div class="label-logo">StyleKorean</div>
-      <div class="label-box">Box ${i}/${n}</div>
+      <div class="label-box">${uwCap} ${i}/${n}</div>
       <div class="label-cust">${o?.ch||''} · ${o?.cu||''}</div>
       <div class="label-order">${w.oid}</div>
       <div class="label-worker">${worker} · ${printedAt}</div>
@@ -2840,7 +2861,7 @@ function printLabels(w, meta, count){
 
 // Reuses the same adaptive byte-length chunking as pick-list import, since
 // this goes over the same JSONP URL-length-limited transport.
-async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans){
+async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans, unitType){
   const payload = rows.map(r => ({
     sku:r.sku, barcode:r.barcode, name:r.name, reqQty:r.req,
     packedQty: r.got,
@@ -2866,6 +2887,7 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
   for (let ci = 0; ci < chunks.length; ci++) {
     const out = await apiOp('logInspectionResults', {
       entryId: wid, orderId, result, rows: chunks[ci], replace: ci === 0,
+      unitType: unitType || 'box',
       worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
     });
     if (!out.net || !out.res.ok) {
@@ -4169,7 +4191,8 @@ window.reprintPackingSlip = async function(wid){
     boxScans[r.boxNum][key] = (boxScans[r.boxNum][key] || 0) + (r.packedQty || 0);
   });
   const slipMode = Object.keys(boxScans).length ? 'box' : 'flat';
-  printPackingSlip(w, rows, { result: w.inspResult || '', worker: w.w }, boxScans, slipMode);
+  const unitType = out.res.rows[0]?.unitType || 'box';
+  printPackingSlip(w, rows, { result: w.inspResult || '', worker: w.w, unitType }, boxScans, slipMode);
 };
 
 window.editEntryModal = function(wid){
