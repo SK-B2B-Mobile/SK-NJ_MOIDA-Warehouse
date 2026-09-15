@@ -1165,13 +1165,13 @@ function isSLA(o){
 function orderProgressBar(oid){
   const a = orderStageSummary(oid);
   let score = 0;
-  const segs = ['PICK','INSP','PALL'].map(s => {
+  const segs = ['PICK','INSP'].map(s => {
     const ws = a[s];
     if (!ws.length) return `<div class="prog-seg" title="${s}: not started"></div>`;
     if (ws.some(w => !w.endT)) { score += .5; return `<div class="prog-seg" title="${s}: in progress" style="background:${SCOL[s]};opacity:.45"></div>`; }
     score += 1; return `<div class="prog-seg" title="${s}: done" style="background:${SCOL[s]}"></div>`;
   }).join('');
-  const pct = Math.round(score / 3 * 100);
+  const pct = Math.round(score / 2 * 100);
   return `<div class="prog"><div class="prog-segs">${segs}</div><span class="prog-pct">${pct}%</span></div>`;
 }
 
@@ -1192,9 +1192,9 @@ R.dash = function(){
     else if (a.PICK.some(w => !w.endT)) pickA++;
   });
 
-  document.getElementById('dashMetrics').innerHTML = `<div class="g7">
+  document.getElementById('dashMetrics').innerHTML = `<div class="g6">
     ${[{l:'Waiting',v:wait,c:'am'},{l:'Picking',v:pickA,c:'bl'},{l:'Inspection',v:inspA,c:'pu'},
-       {l:'Palletizing',v:pallA,c:'tl'},{l:'Completed',v:done,c:'gr'},
+       {l:'Completed',v:done,c:'gr'},
        {l:'SLA risk',v:slaN,c:'rd',alert:slaN>0},{l:'Total',v:S.orders.length,c:'cy'}]
     .map(m => `<div class="mc ${m.c}${m.alert?' alert':''}"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${{am:'amber',bl:'blue',pu:'purple',tl:'teal',gr:'green',cy:'cyan',rd:'red'}[m.c]})">${m.v}</div></div>`).join('')}</div>`;
   renderLiveNow();
