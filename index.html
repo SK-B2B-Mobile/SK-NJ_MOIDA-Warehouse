@@ -1612,7 +1612,6 @@ window.saveQtyEdit = function(wid, key){
 };
 
 function renderSkuChecklistUI(w, items, st){
-  const mults = [1,6,12,24];
   const pageSizes = [10,20,30,40];
   const ui = skuUI(w.id);
   const others = _liveBaseline[w.id] || {};
@@ -1637,15 +1636,11 @@ function renderSkuChecklistUI(w, items, st){
 
   return `
   <div class="scan-counter-wrap" style="text-align:left">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+    <div style="margin-bottom:8px">
       <span id="skuDoneCount_${w.id}" style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase">SKU checklist · ${doneCount}/${items.length} complete
         ${Object.keys(others).length ? `<span style="color:var(--blue);text-transform:none;font-weight:600;margin-left:4px"><i class="ri-refresh-line"></i> live-synced</span>` : ''}
       </span>
-      <span style="font-size:11px;color:var(--t3)">Qty/scan:
-        ${mults.map(m => `<button type="button" class="scan-mult-btn${st.mult===m?' on':''}" style="margin-left:3px" onclick="setScanMult('${w.id}',${m})">${m}</button>`).join('')}
-      </span>
     </div>
-
     <div style="display:flex;gap:6px;margin-bottom:8px">
       <button type="button" class="scan-mult-btn${st.unitType!=='pallet'?' on':''}" style="flex:1" onclick="setUnitType('${w.id}','box')"><i class="ri-archive-2-line"></i> Box</button>
       <button type="button" class="scan-mult-btn${st.unitType==='pallet'?' on':''}" style="flex:1" onclick="setUnitType('${w.id}','pallet')"><i class="ri-truck-line"></i> Pallet</button>
@@ -2035,6 +2030,7 @@ function orderStageStatusTag(o, stage){
   return '';
 }
 
+let _scanFocusedOnce = {};
 function renderStageContent(){
   const container = document.getElementById('stageContent'); if (!container) return;
   updateTabStatus();
@@ -2229,8 +2225,15 @@ function renderStageContent(){
   // Auto-focus the scan input for hardware (Bluetooth/USB) barcode
   // scanners on desktop. Skipped on mobile — autofocus there just
   // pops the on-screen keyboard unnecessarily when no scanner is attached.
+  // Only once per session — re-focusing on every background re-render
+  // (30s auto-refresh, live-sync polling, etc.) was yanking the page
+  // back to the top of the scroll every time it fired.
   if (s === 'INSP' && mySessions.length === 1 && !isMobileDevice()) {
-    setTimeout(() => document.getElementById('scanIn_' + mySessions[0].id)?.focus(), 80);
+    const soleId = mySessions[0].id;
+    if (!_scanFocusedOnce[soleId]) {
+      _scanFocusedOnce[soleId] = true;
+      setTimeout(() => document.getElementById('scanIn_' + soleId)?.focus({ preventScroll:true }), 80);
+    }
   }
 }
 
@@ -2530,8 +2533,14 @@ function doStartWork(oid, items, qty, pageFrom, pageTo){
   S.works.push(entry);
   const reqData = { orderId:oid, worker:CW, wpin:(WS&&WS.wpin)||'', stage:CS, items, qty, pageFrom, pageTo };
 
+  // Clear the picker's selection so the just-started order doesn't linger
+  // there looking like it still needs starting — the new session already
+  // shows up in "My active sessions" above.
+  const resetPicker = () => { const sel = document.getElementById('workOrder'); if (sel) sel.value = ''; };
+
   const finish = () => {
     clearTimeout(lockTimer); _startLock = false;
+    resetPicker();
     updateBadges(); renderStageContent();
   };
 
@@ -2544,6 +2553,7 @@ function doStartWork(oid, items, qty, pageFrom, pageTo){
 
   _pending[tid] = true;
   toast(`✓ ${CS} started!`, 'ok');
+  resetPicker();
   updateBadges(); renderStageContent();
 
   apiOp('startWork', reqData).then(out => {
