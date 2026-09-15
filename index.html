@@ -2040,6 +2040,16 @@ function renderStageContent(){
   updateTabStatus();
   const s = CS, col = SCOL[s], bdcl = SBGCLS[s], icon = SICON[s];
 
+  // Preserve whatever the worker currently has selected/typed in the
+  // start form — a background re-render (30s auto-refresh, live-sync
+  // polling, etc.) must never silently wipe an in-progress order pick.
+  const _preserved = {
+    oid: document.getElementById('workOrder')?.value || '',
+    pageFrom: document.getElementById('wPageFrom')?.value || '',
+    pageTo: document.getElementById('wPageTo')?.value || '',
+    singlePage: document.getElementById('wSinglePage')?.checked || false
+  };
+
   const mySessions = S.works.filter(w => w.w === CW && w.stage === s && !w.endT);
 
   let activeSect = '';
@@ -2202,6 +2212,19 @@ function renderStageContent(){
 
   container.innerHTML = activeSect + startSect;
   startSessionTimer();
+
+  // Restore whatever the worker had selected/typed before this re-render.
+  if (_preserved.oid) {
+    const sel = document.getElementById('workOrder');
+    if (sel && [...sel.options].some(o => o.value === _preserved.oid)) {
+      sel.value = _preserved.oid;
+      onOrderChange();
+      const pf = document.getElementById('wPageFrom'); if (pf) pf.value = _preserved.pageFrom;
+      const pt = document.getElementById('wPageTo');   if (pt) pt.value = _preserved.pageTo;
+      const sp = document.getElementById('wSinglePage');
+      if (sp) { sp.checked = _preserved.singlePage; if (pt) pt.disabled = _preserved.singlePage; }
+    }
+  }
 
   // Auto-focus the scan input for hardware (Bluetooth/USB) barcode
   // scanners on desktop. Skipped on mobile — autofocus there just
