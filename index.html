@@ -1655,9 +1655,8 @@ function renderSkuChecklistUI(w, items, st){
     </div>
 
     <div class="scan-input-row">
-      <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off"
+      <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
-      <button class="btn btn-purple" onclick="scanHit('${w.id}')" title="Add"><i class="ri-add-line"></i></button>
     </div>
     <div style="display:flex;gap:6px;margin-top:8px;margin-bottom:14px">
       <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="openCameraCount('${w.id}')"><i class="ri-camera-line"></i> Camera scan</button>
@@ -1709,7 +1708,6 @@ function renderAggScanUI(w, st){
     <div class="scan-input-row" style="margin-top:10px">
       <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
-      <button class="btn btn-purple" onclick="scanHit('${w.id}')" title="Add" style="flex-shrink:0"><i class="ri-add-line"></i></button>
     </div>
     <div style="display:flex;gap:6px;margin-top:6px">
       <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="openCameraCount('${w.id}')"><i class="ri-camera-line"></i> Camera scan</button>
