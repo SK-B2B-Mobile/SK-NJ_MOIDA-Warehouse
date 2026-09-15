@@ -903,12 +903,14 @@ function expectedForOrder(oid){
 let _scanState = {};
 function loadScanState(wid){
   if (_scanState[wid]) return _scanState[wid];
-  let st = { mode:'agg', count:0, mult:1, skuCounts:{}, unknown:0, skuIssues:{}, currentBox:1, maxBox:1, boxScans:{}, unitType:'box' };
+  let st = { mode:'agg', count:0, mult:1, skuCounts:{}, unknown:0, skuIssues:{}, currentBox:1, maxBox:1, boxScans:{}, unitType:'box', skuTouchOrder:{}, skuTouchSeq:0 };
   try { const raw = localStorage.getItem('wms_scan_' + wid); if (raw) st = Object.assign(st, JSON.parse(raw)); } catch(_){}
   if (!st.currentBox) st.currentBox = 1;
   if (!st.maxBox) st.maxBox = 1;
   if (!st.boxScans) st.boxScans = {};
   if (!st.unitType) st.unitType = 'box';
+  if (!st.skuTouchOrder) st.skuTouchOrder = {};
+  if (!st.skuTouchSeq) st.skuTouchSeq = 0;
   _scanState[wid] = st;
   return st;
 }
@@ -1401,15 +1403,33 @@ function skuUI(wid){
   if (!_skuUI[wid]) _skuUI[wid] = { q:'', page:0, size:20 };
   return _skuUI[wid];
 }
-function filterSkuItems(items, q){
-  if (!q) return items;
-  const s = q.trim().toLowerCase();
-  return items.filter(it =>
-    (it.sku||'').toLowerCase().includes(s) ||
-    (it.name||'').toLowerCase().includes(s) ||
-    (it.barcode||'').toLowerCase().includes(s) ||
-    (it.rack||'').toLowerCase().includes(s)
-  );
+function filterSkuItems(items, q, touchOrder){
+  let out = items;
+  if (q) {
+    const s = q.trim().toLowerCase();
+    out = out.filter(it =>
+      (it.sku||'').toLowerCase().includes(s) ||
+      (it.name||'').toLowerCase().includes(s) ||
+      (it.barcode||'').toLowerCase().includes(s) ||
+      (it.rack||'').toLowerCase().includes(s)
+    );
+  }
+  if (touchOrder && Object.keys(touchOrder).length) {
+    out = [...out].sort((a, b) => {
+      const ka = a.barcode || a.sku, kb = b.barcode || b.sku;
+      const ta = touchOrder[ka], tb = touchOrder[kb];
+      if (ta !== undefined && tb !== undefined) return tb - ta; // most recently touched first
+      if (ta !== undefined) return -1;
+      if (tb !== undefined) return 1;
+      return 0; // neither touched — keep original order (stable sort)
+    });
+  }
+  return out;
+}
+function touchSkuOrder(st, key){
+  st.skuTouchSeq = (st.skuTouchSeq || 0) + 1;
+  st.skuTouchOrder = st.skuTouchOrder || {};
+  st.skuTouchOrder[key] = st.skuTouchSeq;
 }
 function skuRowHtml(it, st, wid){
   const key = it.barcode || it.sku;
@@ -1442,7 +1462,7 @@ window.updateSkuListView = function(wid){
   const items = _orderItemsCache[w.oid] || [];
   const st = loadScanState(wid);
   const ui = skuUI(wid);
-  const filtered = filterSkuItems(items, ui.q);
+  const filtered = filterSkuItems(items, ui.q, st.skuTouchOrder);
   const totalPages = Math.max(1, Math.ceil(filtered.length / ui.size));
   if (ui.page >= totalPages) ui.page = totalPages - 1;
   if (ui.page < 0) ui.page = 0;
@@ -1552,6 +1572,7 @@ window.saveSkuIssue = async function(wid, key){
   const st = loadScanState(wid);
   st.skuIssues = st.skuIssues || {};
   st.skuIssues[key] = { type, qty, note };
+  touchSkuOrder(st, key);
   saveScanState(wid, st);
 
   closeModal();
@@ -1612,6 +1633,7 @@ window.saveQtyEdit = function(wid, key){
   if (isNaN(val) || val < 0) { toast('Enter a valid quantity', 'err'); return; }
   const st = loadScanState(wid);
   st.skuCounts[key] = Math.round(val);
+  touchSkuOrder(st, key);
   saveScanState(wid, st);
   closeModal();
   toast('Quantity updated', 'ok');
@@ -1631,7 +1653,7 @@ function renderSkuChecklistUI(w, items, st){
     if (issue || (it.reqQty > 0 && got >= it.reqQty)) doneCount++;
   });
 
-  const filtered = filterSkuItems(items, ui.q);
+  const filtered = filterSkuItems(items, ui.q, st.skuTouchOrder);
   const totalPages = Math.max(1, Math.ceil(filtered.length / ui.size));
   if (ui.page >= totalPages) ui.page = totalPages - 1;
   if (ui.page < 0) ui.page = 0;
@@ -1799,6 +1821,7 @@ function registerSkuScan(wid, code){
   }
 
   st.skuCounts[key] = mineBefore + mult;
+  touchSkuOrder(st, key);
   const b = st.currentBox || 1;
   st.boxScans[b] = st.boxScans[b] || {};
   st.boxScans[b][key] = (st.boxScans[b][key] || 0) + mult;
