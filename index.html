@@ -2104,8 +2104,8 @@ function renderStageContent(){
         <button class="btn btn-green btn-block btn-lg" onclick="endWork('${w.id}','${s}')" ${inf?'disabled':''}>
           <i class="ri-checkbox-circle-line"></i> ${SELABEL[s]}
         </button>
-        ${s==='INSP' ? `<button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:6px;color:var(--t3)" onclick="cancelInspSession('${w.id}')" ${inf?'disabled':''}>
-          <i class="ri-close-circle-line"></i> Leave without finishing
+        ${s==='INSP' ? `<button class="btn" style="width:100%;justify-content:center;margin-top:8px;padding:11px;font-size:13px;font-weight:600;color:var(--red);border-color:var(--red-bd);background:var(--red-bg)" onclick="cancelInspSession('${w.id}')" ${inf?'disabled':''}>
+          <i class="ri-close-circle-line" style="font-size:15px"></i> Leave without finishing
         </button>` : ''}
       </div>`;
     }).join('');
