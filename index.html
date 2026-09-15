@@ -1698,22 +1698,23 @@ function renderAggScanUI(w, st){
   const color = cls === 'match' ? 'var(--green)' : cls === 'over' ? 'var(--red)' : 'var(--amber)';
   const pct = hasExp ? Math.min(100, Math.round(st.count / exp.qty * 100)) : 0;
   return `
-  <div class="scan-counter-wrap">
-    <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px">
+  <div class="scan-counter-wrap" style="padding:12px 14px">
+    <div style="font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px">
       Expected · ${exp.items || '—'} items · ${exp.qty || '—'} QTY (from picking) · <span style="color:var(--t2)">no pick list imported</span>
     </div>
-    <div class="scan-counter-big ${cls}" id="scanCount_${w.id}">${st.count}</div>
-    <div class="scan-counter-sub">${hasExp ? 'of ' + exp.qty + ' scanned' : 'scanned so far'}</div>
-    <div class="scan-progress"><div class="scan-progress-fill" id="scanBar_${w.id}" style="width:${pct}%;background:${color}"></div></div>
-    <div class="scan-input-row">
-      <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off"
+    <div class="scan-counter-big ${cls}" id="scanCount_${w.id}" style="font-size:32px;line-height:1.1">${st.count}</div>
+    <div class="scan-counter-sub" style="margin-top:0">${hasExp ? 'of ' + exp.qty + ' scanned' : 'scanned so far'}</div>
+    <div class="scan-progress" style="margin-top:6px"><div class="scan-progress-fill" id="scanBar_${w.id}" style="width:${pct}%;background:${color}"></div></div>
+    <div class="scan-input-row" style="margin-top:10px">
+      <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
-      <button class="btn btn-purple" onclick="scanHit('${w.id}')" title="Add"><i class="ri-add-line"></i></button>
-      <button class="btn" onclick="scanAdjust('${w.id}',-1)" title="Remove one"><i class="ri-subtract-line"></i></button>
+      <button class="btn btn-purple" onclick="scanHit('${w.id}')" title="Add" style="flex-shrink:0"><i class="ri-add-line"></i></button>
     </div>
-    <div style="display:flex;gap:6px;margin-top:8px">
-      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="openCameraCount('${w.id}')"><i class="ri-camera-line"></i> Camera scan</button>
-      <button class="btn btn-sm" style="flex:1;justify-content:center;color:var(--t3)" onclick="resetScanCount('${w.id}')"><i class="ri-restart-line"></i> Reset</button>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="document.getElementById('scanIn_${w.id}').focus()"><i class="ri-keyboard-line"></i> Enter manually</button>
+      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="openCameraCount('${w.id}')"><i class="ri-camera-line"></i> Camera</button>
+      <button class="btn btn-sm" style="flex-shrink:0;padding:0 12px" onclick="scanAdjust('${w.id}',-1)" title="Remove one"><i class="ri-subtract-line"></i></button>
+      <button class="btn btn-sm" style="flex-shrink:0;padding:0 12px;color:var(--t3)" onclick="resetScanCount('${w.id}')" title="Reset"><i class="ri-restart-line"></i></button>
     </div>
   </div>`;
 }
@@ -2145,10 +2146,10 @@ function renderStageContent(){
   if (pickActive && s !== 'PICK') {
     blockers = [pickActive];
     blockMsg = 'Picking is exclusive — finish it before starting other work.';
-  } else if (s === 'PICK' && myActiveAll.length > 0) {
-    blockers = myActiveAll;
-    blockMsg = 'Finish your active session' + (myActiveAll.length>1?'s':'') + ' before picking. (Picking is one task at a time.)';
   }
+  // s === 'PICK' with an active PICK session needs no separate blocker
+  // panel — the active session card above (with its own End button)
+  // already shows everything; a duplicate reminder card was pure noise.
   // v10.9 — INSP has no self-exclusivity: never show the "one INSP at a
   // time" block, even if this worker already has active INSP sessions.
   if (s === 'INSP') blockers = pickActive ? blockers : null;
@@ -2566,13 +2567,16 @@ function doStartWork(oid, items, qty, pageFrom, pageTo){
   if (!navigator.onLine) {
     enqueueOp('startWork', reqData, { tempId:tid, local:entry });
     toast('Offline — ' + CS + ' start saved to queue', '');
-    finish(); return;
+    finish();
+    setTimeout(() => document.getElementById('sc_' + tid)?.scrollIntoView({ behavior:'smooth', block:'start' }), 60);
+    return;
   }
 
   _pending[tid] = true;
   toast(`✓ ${CS} started!`, 'ok');
   resetPicker();
   updateBadges(); renderStageContent();
+  setTimeout(() => document.getElementById('sc_' + tid)?.scrollIntoView({ behavior:'smooth', block:'start' }), 60);
 
   apiOp('startWork', reqData).then(out => {
     delete _pending[tid];
