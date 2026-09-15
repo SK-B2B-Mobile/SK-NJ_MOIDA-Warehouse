@@ -1427,7 +1427,7 @@ function skuRowHtml(it, st, wid){
   return `<div class="sku-row ${cls}">
     <div class="sku-check ${issue?'issue':(ok?'ok':'')}">${issue ? '<i class="ri-flag-2-fill"></i>' : (ok ? '<i class="ri-check-line"></i>' : '')}</div>
     <div class="sku-row-name">
-      <div class="sku-row-sku">${it.sku||'—'}</div>
+      <div class="sku-row-sku">${it.sku||'—'}${it.barcode?` <span style="color:var(--t3);font-weight:500">· ${it.barcode}</span>`:''}</div>
       <div class="sku-row-nm">${it.name||''}${it.rack?' · '+it.rack:''}</div>
     </div>
     <div class="sku-row-qty" style="color:${issue?'var(--red)':ok?'var(--green)':got>0?'var(--amber)':'var(--t3)'}">${qtyHtml}</div>
@@ -1642,6 +1642,16 @@ function renderSkuChecklistUI(w, items, st){
 
   const unknownLine = st.unknown ? `<div style="font-size:11px;color:var(--red);margin-top:6px"><i class="ri-error-warning-line"></i> ${st.unknown} scan${st.unknown>1?'s':''} didn't match any item on this order's list</div>` : '';
 
+  const ls = _lastScanned[w.id];
+  const lastScanHtml = (ls && Date.now() - ls.at < 2500) ? `
+    <div class="last-scanned-banner" style="display:flex;justify-content:space-between;align-items:center;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:8px 12px;margin-top:8px">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--green)">${ls.sku||'—'}${ls.barcode?` · ${ls.barcode}`:''}</div>
+        <div style="font-size:11px;color:var(--t3)">${ls.name||''}</div>
+      </div>
+      <div style="font-family:var(--mono);font-weight:800;color:var(--green)">${ls.qty}/${ls.req||0}</div>
+    </div>` : '';
+
   return `
   <div class="scan-counter-wrap" style="text-align:left">
     <div style="margin-bottom:8px">
@@ -1666,10 +1676,7 @@ function renderSkuChecklistUI(w, items, st){
       <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
     </div>
-    <div style="display:flex;gap:6px;margin-top:8px;margin-bottom:14px">
-      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="openCameraCount('${w.id}')"><i class="ri-camera-line"></i> Camera scan</button>
-      <button class="btn btn-sm" style="flex:1;justify-content:center;color:var(--t3)" onclick="resetScanCount('${w.id}')"><i class="ri-restart-line"></i> Reset</button>
-    </div>
+    ${lastScanHtml}
 
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
       <div style="position:relative;flex:1;min-width:140px">
@@ -1716,10 +1723,6 @@ function renderAggScanUI(w, st){
     <div class="scan-input-row" style="margin-top:10px">
       <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
-    </div>
-    <div style="display:flex;gap:6px;margin-top:6px">
-      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="openCameraCount('${w.id}')"><i class="ri-camera-line"></i> Camera scan</button>
-      <button class="btn btn-sm" style="flex-shrink:0;padding:0 12px;color:var(--t3)" onclick="resetScanCount('${w.id}')" title="Reset"><i class="ri-restart-line"></i></button>
     </div>
   </div>`;
 }
@@ -1800,10 +1803,15 @@ function registerSkuScan(wid, code){
   st.boxScans[b] = st.boxScans[b] || {};
   st.boxScans[b][key] = (st.boxScans[b][key] || 0) + mult;
   saveScanState(wid, st);
+  _lastScanned[wid] = { sku: match.sku, barcode: match.barcode, name: match.name, qty: mineBefore + mult, req: reqQty, at: Date.now() };
   if (navigator.vibrate) try { navigator.vibrate(25); } catch(_){}
   renderStageContent();
   pushMyLiveScan(wid);
+  setTimeout(() => {
+    if (_lastScanned[wid] && Date.now() - _lastScanned[wid].at >= 2400) renderStageContent();
+  }, 2500);
 }
+let _lastScanned = {}; // wid -> { sku, barcode, name, qty, req, at } — for the "just scanned" banner
 
 // ── Live scan sync — v11.0 ────────────────────────────────────────
 // Fast, best-effort, non-blocking: scanning never waits on this. Every
