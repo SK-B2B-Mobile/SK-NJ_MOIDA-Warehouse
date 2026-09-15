@@ -3695,16 +3695,25 @@ function renderKPI(){
   const totItems = done.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
   const totQty   = done.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
   const totPall  = done.filter(w => w.stage === 'INSP').reduce((s,w)=>s+(w.pallets||0),0);
+  // v12.4 — "Items/QTY picked" now shown as a fraction of everything that
+  // came in during this date range (orders created from→to), using the
+  // same manager-entered Items/QTY the numerator itself is built from —
+  // so the two numbers are always apples-to-apples, never drift apart.
+  const ordersInRange = S.orders.filter(o => { const d = (o.at||'').slice(0,10); return d && d >= from && d <= to; });
+  const ordItemsGoal = ordersInRange.reduce((s,o) => s + (o.items||0), 0);
+  const ordQtyGoal   = ordersInRange.reduce((s,o) => s + (o.qty||0),   0);
+  const itemsFrac = ordItemsGoal ? `${totItems}/${ordItemsGoal} <span style="font-size:12px;opacity:.7">(${Math.round(totItems/ordItemsGoal*100)}%)</span>` : String(totItems);
+  const qtyFrac   = ordQtyGoal   ? `${totQty}/${ordQtyGoal} <span style="font-size:12px;opacity:.7">(${Math.round(totQty/ordQtyGoal*100)}%)</span>`     : String(totQty);
   // v8.3: true labor time — per-worker interval union, overlap counted once
   const laborBy = laborMinByWorker(done);
   const totMin  = Object.values(laborBy).reduce((s,v)=>s+v,0);
 
   let html = `<div style="font-size:12px;color:var(--t3);margin-bottom:14px;font-weight:600"><i class="ri-calendar-line"></i> ${label} — <strong style="color:var(--t2)">${done.length}</strong> completed sessions</div>
   <div class="g4" style="margin-bottom:18px">
-    ${[{l:'Sessions done',v:done.length,c:'gr'},{l:'Items picked',v:totItems,c:'pu'},
-       {l:'QTY picked',v:totQty,c:'tl'},{l:'Pallets (INSP)',v:fmtPallets(totPall),c:'am'}]
+    ${[{l:'Sessions done',v:done.length,c:'gr'},{l:'Items picked',v:itemsFrac,c:'pu'},
+       {l:'QTY picked',v:qtyFrac,c:'tl'},{l:'Boxes/Pallets',v:fmtPallets(totPall),c:'am'}]
     .map(m=>`<div class="kmc ${m.c}"><div class="kmc-l">${m.l}</div><div class="kmc-v" style="color:var(--${{gr:'green',pu:'purple',tl:'teal',am:'amber'}[m.c]})">${m.v}</div></div>`).join('')}</div>
-  <div class="kmc bl" style="margin-bottom:18px"><div class="kmc-l">Total labor time — 08:30–17:30, lunch excluded · pallet counts from inspection</div><div class="kmc-v" style="color:var(--blue)">${fmtMin(totMin)}</div></div>`;
+  <div class="kmc bl" style="margin-bottom:18px"><div class="kmc-l">Total labor time — 08:30–17:30, lunch excluded · pallet counts from inspection${ordersInRange.length ? '' : ' · no orders created in this range to compare against, so items/QTY show as plain counts'}</div><div class="kmc-v" style="color:var(--blue)">${fmtMin(totMin)}</div></div>`;
 
   // ── v8: daily productivity trend ──
   html += renderTrendChartHTML(done);
@@ -3755,7 +3764,7 @@ function renderKPI(){
   // Worker totals
   html += `<div class="section">Worker totals</div>
   <div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)"><table class="kpi-tbl" style="min-width:580px">
-  <thead><tr><th>Worker</th><th>Sessions</th><th>Items picked</th><th>Pallets (INSP)</th><th>Labor time*</th><th>Performance</th></tr></thead><tbody>`;
+  <thead><tr><th>Worker</th><th>Sessions</th><th>Items picked</th><th>Boxes/Pallets</th><th>Labor time*</th><th>Performance</th></tr></thead><tbody>`;
   const maxI = Math.max(...workerTotals.map(x => x.tI), 1);
   workerTotals.sort((a,b)=>b.tI-a.tI).forEach(({wk,totN,tI,tQ,tP,tM}) => {
     const bar = Math.round(tI/maxI*100);
@@ -3883,6 +3892,11 @@ window.openDailyReport = function(){
   const totQty   = done.filter(w=>w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
   const totPall  = done.filter(w => w.stage === 'INSP').reduce((s,w)=>s+(w.pallets||0),0);
   const totMin   = Object.values(laborMinByWorker(done)).reduce((s,v)=>s+v,0);  // v8.3 union
+  const ordersInRangeD = S.orders.filter(o => (o.at||'').slice(0,10) === d);
+  const ordItemsGoalD = ordersInRangeD.reduce((s,o) => s + (o.items||0), 0);
+  const ordQtyGoalD   = ordersInRangeD.reduce((s,o) => s + (o.qty||0),   0);
+  const itemsFracD = ordItemsGoalD ? `${totItems}/${ordItemsGoalD} (${Math.round(totItems/ordItemsGoalD*100)}%)` : String(totItems);
+  const qtyFracD   = ordQtyGoalD   ? `${totQty}/${ordQtyGoalD} (${Math.round(totQty/ordQtyGoalD*100)}%)`         : String(totQty);
 
   // by worker — v8.3: labor time = interval union (overlap once)
   const laborR = laborMinByWorker(done);
@@ -3911,7 +3925,7 @@ window.openDailyReport = function(){
   // plain-text version (for copy)
   let txt = `══ DAILY CLOSING REPORT ══\n`;
   txt += `Date: ${d} (${wdName})\nGenerated: ${todayStr()} ${nowHHmm()} · STYLEKOREAN_NJ / MOIDA\n\n`;
-  txt += `SUMMARY\n- Completed sessions: ${done.length}\n- Items picked: ${totItems} (QTY ${totQty})\n- Pallets (INSP): ${fmtPallets(totPall)}\n- Net work time: ${fmtMin(totMin)}\n\n`;
+  txt += `SUMMARY\n- Completed sessions: ${done.length}\n- Items picked: ${itemsFracD}\n- QTY picked: ${qtyFracD}\n- Boxes/Pallets: ${fmtPallets(totPall)}\n- Net work time: ${fmtMin(totMin)}\n\n`;
   txt += `BY WORKER\n` + (Object.keys(byW).length
     ? Object.entries(byW).sort((a,b)=>b[1].min-a[1].min).map(([wk,v]) =>
         `- ${wk}: ${v.n} sessions · ${v.items} items · ${fmtPallets(v.pallets)} pallets · ${fmtMin(v.min)}`).join('\n')
