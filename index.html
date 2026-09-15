@@ -643,6 +643,7 @@ let _startLock = false;
 let _loginSel = '';
 let _orderItemsCache = {};    // oid -> [{sku,name,barcode,reqQty,rack}]
 let _orderItemsLoading = {};  // oid -> true while fetching
+let _orderItemsFailed = {};   // oid -> true if the last fetch attempt failed
 
 // ═══════════════════════════════════════════════
 // OFFLINE QUEUE — saves survive network loss
@@ -930,12 +931,15 @@ function ensureOrderItems(oid){
   if (_orderItemsCache[oid]) return _orderItemsCache[oid];
   if (!_orderItemsLoading[oid]) {
     _orderItemsLoading[oid] = true;
+    delete _orderItemsFailed[oid];
     apiOp('getOrderItems', { oid }).then(out => {
       _orderItemsLoading[oid] = false;
       if (out.net && out.res.ok) {
         _orderItemsCache[oid] = out.res.items || [];
-        if (curPage() === 'work' && CS === 'INSP') renderStageContent();
+      } else {
+        _orderItemsFailed[oid] = true;
       }
+      if (curPage() === 'work' && CS === 'INSP') renderStageContent();
     });
   }
   return null;
@@ -1371,6 +1375,10 @@ function renderScanUI(w){
   const st = loadScanState(w.id);
 
   if (items === null) {
+    if (_orderItemsFailed[w.oid]) {
+      return `<div class="scan-counter-wrap"><div style="color:var(--red);font-size:12px;margin-bottom:8px"><i class="ri-error-warning-line"></i> Could not load pick list — check connection</div>
+        <button class="btn btn-sm" onclick="delete _orderItemsFailed['${w.oid}']; ensureOrderItems('${w.oid}'); renderStageContent();"><i class="ri-refresh-line"></i> Retry</button></div>`;
+    }
     return `<div class="scan-counter-wrap"><div style="color:var(--t3);font-size:12px"><i class="ri-loader-4-line"></i> Loading pick list...</div></div>`;
   }
   if (items.length > 0) {
@@ -2070,7 +2078,6 @@ function orderStageStatusTag(o, stage){
   return '';
 }
 
-let _scanFocusedOnce = {};
 function renderStageContent(){
   const container = document.getElementById('stageContent'); if (!container) return;
   updateTabStatus();
@@ -2235,9 +2242,11 @@ function renderStageContent(){
       <div id="inspScanStartWrap">
         <div style="font-size:12px;color:var(--t3);text-align:center;padding:10px 0">Select an order above to begin</div>
       </div>` : `
-      <button class="btn ${SBTN[s]} btn-block btn-lg" id="btnStartWork" onclick="startWork()" style="font-size:15px;padding:14px">
-        <i class="ri-play-circle-line"></i> ${SLABEL[s]}
-      </button>`}
+      <div id="pickStartBtnWrap">
+        <button class="btn ${SBTN[s]} btn-block btn-lg" id="btnStartWork" onclick="startWork()" style="font-size:15px;padding:14px">
+          <i class="ri-play-circle-line"></i> ${SLABEL[s]}
+        </button>
+      </div>`}
     </div>`;
   }
 
@@ -2258,19 +2267,31 @@ function renderStageContent(){
   }
 
   // Auto-focus the scan input for hardware (Bluetooth/USB) barcode
-  // scanners on desktop. Skipped on mobile — autofocus there just
-  // pops the on-screen keyboard unnecessarily when no scanner is attached.
-  // Only once per session — re-focusing on every background re-render
-  // (30s auto-refresh, live-sync polling, etc.) was yanking the page
-  // back to the top of the scroll every time it fired.
+  // scanners on desktop. Skipped on mobile — autofocus there just pops
+  // the on-screen keyboard unnecessarily when no scanner is attached.
+  // preventScroll:true stops this from yanking the page back to the top
+  // of the scroll (the original bug) — that alone was the fix; there's
+  // no need to limit how often this runs, and doing so previously meant
+  // that once focus left the scan input for ANY reason, it never came
+  // back, so the scanner would beep (successful read) but nothing
+  // happened because the keystrokes had nowhere to land.
   if (s === 'INSP' && mySessions.length === 1 && !isMobileDevice()) {
     const soleId = mySessions[0].id;
-    if (!_scanFocusedOnce[soleId]) {
-      _scanFocusedOnce[soleId] = true;
-      setTimeout(() => document.getElementById('scanIn_' + soleId)?.focus({ preventScroll:true }), 80);
-    }
+    setTimeout(() => document.getElementById('scanIn_' + soleId)?.focus({ preventScroll:true }), 80);
   }
 }
+
+// Safety net: if the scan input loses focus to nothing in particular
+// (not another real text field the worker is deliberately using), pull
+// focus back after a short delay so the next scanner beep isn't lost.
+document.addEventListener('focusout', e => {
+  if (!e.target || !e.target.id || !e.target.id.startsWith('scanIn_')) return;
+  const lostId = e.target.id;
+  setTimeout(() => {
+    const stillGone = document.activeElement === document.body || !document.activeElement;
+    if (stillGone) document.getElementById(lostId)?.focus({ preventScroll:true });
+  }, 250);
+});
 
 function isMobileDevice(){
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -2297,6 +2318,12 @@ function liveElapsed(w){
   } catch(_) { return ''; }
 }
 
+function resetPickStartBtn(){
+  const wrap = document.getElementById('pickStartBtnWrap'); if (!wrap) return;
+  wrap.innerHTML = `<button class="btn ${SBTN[CS]} btn-block btn-lg" id="btnStartWork" onclick="startWork()" style="font-size:15px;padding:14px"><i class="ri-play-circle-line"></i> ${SLABEL[CS]}</button>`;
+}
+window.revealPickStartBtn = function(){ resetPickStartBtn(); };
+
 function onOrderChange(){
   const oid = document.getElementById('workOrder')?.value;
   const el = document.getElementById('workOrderInfo'); if (!el) return;
@@ -2305,6 +2332,7 @@ function onOrderChange(){
     const pi = document.getElementById('pickOrderInfo'); if (pi) pi.innerHTML = '';
     const sw = document.getElementById('inspScanStartWrap');
     if (sw) sw.innerHTML = `<div style="font-size:12px;color:var(--t3);text-align:center;padding:10px 0">Select an order above to begin</div>`;
+    resetPickStartBtn();
     return;
   }
   const o = S.orders.find(x => x.id === oid);
@@ -2320,6 +2348,21 @@ function onOrderChange(){
   const myActiveHere = ws.filter(w => w.w===CW && !w.endT);
   const myHere = myActiveHere.length;
   const col = SCOL[CS];
+
+  if (CS === 'PICK') {
+    const myDoneHere = ws.some(w => w.w === CW && w.endT);
+    const wrap = document.getElementById('pickStartBtnWrap');
+    if (wrap) {
+      wrap.innerHTML = myDoneHere ? `
+        <div style="text-align:center;padding:8px 0">
+          <div style="font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px"><i class="ri-checkbox-circle-line"></i> You already picked this order</div>
+          <button class="btn btn-sm" style="color:var(--t3)" onclick="revealPickStartBtn()"><i class="ri-add-line"></i> Pick more pages anyway</button>
+        </div>` : `
+        <button class="btn ${SBTN[CS]} btn-block btn-lg" id="btnStartWork" onclick="startWork()" style="font-size:15px;padding:14px">
+          <i class="ri-play-circle-line"></i> ${SLABEL[CS]}
+        </button>`;
+    }
+  }
 
   if (CS === 'INSP') {
     ensureOrderItems(oid);
@@ -2423,7 +2466,14 @@ function renderInspScanStart(oid){
   const wrap = document.getElementById('inspScanStartWrap'); if (!wrap) return;
   const items = _orderItemsCache[oid];
   if (items === undefined || items === null) {
-    wrap.innerHTML = `<div style="font-size:12px;color:var(--t3);text-align:center;padding:10px 0"><i class="ri-loader-4-line"></i> Checking pick list...</div>`;
+    if (_orderItemsFailed[oid]) {
+      wrap.innerHTML = `<div style="text-align:center;padding:8px 0">
+        <div style="font-size:12px;color:var(--red);margin-bottom:8px"><i class="ri-error-warning-line"></i> Could not check pick list — check connection</div>
+        <button class="btn btn-sm" onclick="delete _orderItemsFailed['${oid}']; ensureOrderItems('${oid}'); renderInspScanStart('${oid}');"><i class="ri-refresh-line"></i> Retry</button>
+      </div>`;
+    } else {
+      wrap.innerHTML = `<div style="font-size:12px;color:var(--t3);text-align:center;padding:10px 0"><i class="ri-loader-4-line"></i> Checking pick list...</div>`;
+    }
     return;
   }
   wrap.innerHTML = `
@@ -2757,7 +2807,6 @@ function migrateWidKeyedState(oldId, newId){
   if (_liveBaseline[oldId])     { _liveBaseline[newId] = _liveBaseline[oldId]; delete _liveBaseline[oldId]; }
   if (_liveContributors[oldId]) { _liveContributors[newId] = _liveContributors[oldId]; delete _liveContributors[oldId]; }
   if (_livePollTimers[oldId])   { _livePollTimers[newId] = _livePollTimers[oldId]; delete _livePollTimers[oldId]; }
-  if (_scanFocusedOnce[oldId])  { _scanFocusedOnce[newId] = true; delete _scanFocusedOnce[oldId]; }
 }
 
 // ══════════════════════════════════════════════════════
