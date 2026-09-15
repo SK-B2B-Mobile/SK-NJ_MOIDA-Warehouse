@@ -536,6 +536,19 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
           <input type="hidden" id="newOrderCu">
         </div>
 
+        <div class="frow">
+          <div class="fg" style="margin-bottom:0">
+            <label class="fl"><i class="ri-box-3-line"></i> Items (SKU types)</label>
+            <input class="fi" type="number" id="newOrderItems" placeholder="e.g. 34" min="1">
+          </div>
+          <div class="fg" style="margin-bottom:0">
+            <label class="fl"><i class="ri-stack-line"></i> Total QTY</label>
+            <input class="fi" type="number" id="newOrderQty" placeholder="e.g. 600" min="1">
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--t3);margin:-6px 0 12px"><i class="ri-information-line"></i> Set once here from the invoice — workers picking this order never type these numbers themselves.</div>
+
+
         <div id="orderPreview" style="display:none;background:var(--bg3);border:1px solid var(--blue-bd);border-radius:var(--r);padding:10px 14px;margin-bottom:12px;font-size:13px">
           <span style="color:var(--t3);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Preview</span>
           <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap">
@@ -1362,6 +1375,7 @@ function renderScanUI(w){
   }
   if (items.length > 0) {
     if (st.mode !== 'sku') { st.mode = 'sku'; st.skuCounts = st.skuCounts || {}; saveScanState(w.id, st); }
+    startLivePoll(w.id);
     return renderSkuChecklistUI(w, items, st);
   }
   if (st.mode !== 'agg') { st.mode = 'agg'; saveScanState(w.id, st); }
@@ -1391,14 +1405,17 @@ function filterSkuItems(items, q){
 }
 function skuRowHtml(it, st, wid){
   const key = it.barcode || it.sku;
-  const got = st.skuCounts[key] || 0;
+  const mine = st.skuCounts[key] || 0;
+  const others = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const got = mine + others;
   const issue = (st.skuIssues || {})[key] || null;
   const ok = issue ? true : (it.reqQty > 0 && got >= it.reqQty);
   const cls = issue ? 'issue' : (ok ? 'ok' : (got > 0 ? 'warn' : ''));
   const keyEsc = String(key).replace(/'/g, "\\'");
+  const othersNote = others > 0 ? `<div style="font-size:9px;color:var(--blue)">you: ${mine} · others: ${others}</div>` : '';
   const qtyHtml = issue
     ? `<span style="color:var(--red);font-size:11px;font-weight:800">${issue.type}${issue.qty?(' ×'+issue.qty):''}</span>`
-    : `<span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" title="Tap to correct this quantity" onclick="event.stopPropagation();openQtyEditModal('${wid}','${keyEsc}')">${got}/${it.reqQty||0}</span>`;
+    : `<span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" title="Tap to correct YOUR scanned quantity" onclick="event.stopPropagation();openQtyEditModal('${wid}','${keyEsc}')">${got}/${it.reqQty||0}</span>${othersNote}`;
   return `<div class="sku-row ${cls}">
     <div class="sku-check ${issue?'issue':(ok?'ok':'')}">${issue ? '<i class="ri-flag-2-fill"></i>' : (ok ? '<i class="ri-check-line"></i>' : '')}</div>
     <div class="sku-row-name">
@@ -1591,16 +1608,18 @@ window.saveQtyEdit = function(wid, key){
   closeModal();
   toast('Quantity updated', 'ok');
   renderStageContent();
+  pushMyLiveScan(wid);
 };
 
 function renderSkuChecklistUI(w, items, st){
   const mults = [1,6,12,24];
   const pageSizes = [10,20,30,40];
   const ui = skuUI(w.id);
+  const others = _liveBaseline[w.id] || {};
   let doneCount = 0;
   items.forEach(it => {
     const key = it.barcode || it.sku;
-    const got = st.skuCounts[key] || 0;
+    const got = (st.skuCounts[key] || 0) + (others[key] || 0);
     const issue = (st.skuIssues || {})[key];
     if (issue || (it.reqQty > 0 && got >= it.reqQty)) doneCount++;
   });
@@ -1619,7 +1638,9 @@ function renderSkuChecklistUI(w, items, st){
   return `
   <div class="scan-counter-wrap" style="text-align:left">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
-      <span style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase">SKU checklist · ${doneCount}/${items.length} complete</span>
+      <span style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase">SKU checklist · ${doneCount}/${items.length} complete
+        ${Object.keys(others).length ? `<span style="color:var(--blue);text-transform:none;font-weight:600;margin-left:4px"><i class="ri-refresh-line"></i> live-synced</span>` : ''}
+      </span>
       <span style="font-size:11px;color:var(--t3)">Qty/scan:
         ${mults.map(m => `<button type="button" class="scan-mult-btn${st.mult===m?' on':''}" style="margin-left:3px" onclick="setScanMult('${w.id}',${m})">${m}</button>`).join('')}
       </span>
@@ -1743,13 +1764,98 @@ function registerSkuScan(wid, code){
   }
   const key = match.barcode || match.sku;
   const mult = st.mult || 1;
-  st.skuCounts[key] = (st.skuCounts[key] || 0) + mult;
+
+  // v11.0 — warn (not block) if others already covered this item, using
+  // the live baseline last synced from the server. Doesn't block the
+  // scan itself — a worker might be intentionally re-verifying — but
+  // makes a likely duplicate impossible to miss.
+  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const reqQty = match.reqQty || 0;
+  const mineBefore = st.skuCounts[key] || 0;
+  if (reqQty > 0 && (othersQty + mineBefore) >= reqQty) {
+    const who = liveContributorNames(wid, key);
+    toast(`⚠ ${match.sku} already fully covered${who ? ' by '+who : ' by another worker'} — check before continuing`, 'err');
+    if (navigator.vibrate) try { navigator.vibrate([50,50,50,50]); } catch(_){}
+  }
+
+  st.skuCounts[key] = mineBefore + mult;
   const b = st.currentBox || 1;
   st.boxScans[b] = st.boxScans[b] || {};
   st.boxScans[b][key] = (st.boxScans[b][key] || 0) + mult;
   saveScanState(wid, st);
   if (navigator.vibrate) try { navigator.vibrate(25); } catch(_){}
   renderStageContent();
+  pushMyLiveScan(wid);
+}
+
+// ── Live scan sync — v11.0 ────────────────────────────────────────
+// Fast, best-effort, non-blocking: scanning never waits on this. Every
+// scan pushes my current tally (debounced) and every few seconds I pull
+// everyone else's, merged into a baseline used purely to warn about
+// likely duplicates and to fold already-covered SKUs into "done".
+let _liveBaseline = {};      // wid -> { key: combinedQtyFromOthers }
+let _liveContributors = {};  // wid -> [{ worker, skuCounts }, ...] — raw, for naming who covered what
+let _livePollTimers = {};    // wid -> intervalId
+let _livePushTimers = {};    // wid -> debounce timeoutId
+
+function liveContributorNames(wid, key){
+  const list = _liveContributors[wid] || [];
+  const names = list.filter(c => (c.skuCounts||{})[key] > 0).map(c => c.worker);
+  return names.length ? names.join(', ') : '';
+}
+
+function pushMyLiveScan(wid){
+  clearTimeout(_livePushTimers[wid]);
+  _livePushTimers[wid] = setTimeout(async () => {
+    const w = S.works.find(x => x.id === wid); if (!w || w.endT) return;
+    const st = loadScanState(wid);
+    await apiOp('pushLiveScan', {
+      orderId: w.oid, entryId: wid, skuCounts: st.skuCounts || {},
+      worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
+    });
+  }, 700);
+}
+
+async function refreshLiveBaseline(wid){
+  const w = S.works.find(x => x.id === wid); if (!w || w.endT) return;
+  const [liveOut, endedOut] = await Promise.all([
+    apiOp('getLiveScans', { orderId: w.oid }),
+    apiOp('getOrderProgress', { oid: w.oid })
+  ]);
+  const baseline = {};
+  const rawLive = [];
+  if (liveOut.net && liveOut.res.ok) {
+    (liveOut.res.live || []).forEach(entry => {
+      if (entry.entryId === wid) return; // exclude my own live entry
+      rawLive.push(entry);
+      Object.entries(entry.skuCounts || {}).forEach(([key, qty]) => {
+        baseline[key] = (baseline[key] || 0) + (Number(qty) || 0);
+      });
+    });
+  }
+  _liveContributors[wid] = rawLive;
+  if (endedOut.net && endedOut.res.ok) {
+    (endedOut.res.skus || []).forEach(s => {
+      const key = s.barcode || s.sku;
+      baseline[key] = (baseline[key] || 0) + (s.packedQty||0) + (s.issueQty||0);
+    });
+  }
+  _liveBaseline[wid] = baseline;
+  renderStageContent();
+}
+
+function startLivePoll(wid){
+  if (_livePollTimers[wid]) return;
+  refreshLiveBaseline(wid);
+  _livePollTimers[wid] = setInterval(() => refreshLiveBaseline(wid), 5000);
+}
+function stopLivePoll(wid){
+  clearInterval(_livePollTimers[wid]);
+  delete _livePollTimers[wid];
+  delete _liveBaseline[wid];
+  delete _liveContributors[wid];
+  clearTimeout(_livePushTimers[wid]);
+  delete _livePushTimers[wid];
 }
 
 window.nextBox = function(wid){
@@ -1964,20 +2070,14 @@ function renderStageContent(){
   };
 
   const pickFields = s === 'PICK' ? `
-    <div class="frow" style="margin-bottom:12px">
-      <div class="fg" style="margin-bottom:0">
-        <label class="fl"><i class="ri-box-3-line"></i> Items (SKU types)</label>
-        <input class="fi" type="number" id="wItems" placeholder="e.g. 15" min="1" style="font-size:15px;padding:11px 14px">
-      </div>
-      <div class="fg" style="margin-bottom:0">
-        <label class="fl"><i class="ri-stack-line"></i> Total QTY</label>
-        <input class="fi" type="number" id="wQty" placeholder="e.g. 120" min="1" style="font-size:15px;padding:11px 14px">
-      </div>
-    </div>
+    <div id="pickOrderInfo" style="font-size:12px;color:var(--t3);margin-bottom:12px"></div>
+    <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-bottom:10px;cursor:pointer">
+      <input type="checkbox" id="wSinglePage" style="width:auto" onchange="document.getElementById('wPageTo').disabled=this.checked; if(this.checked) document.getElementById('wPageTo').value=document.getElementById('wPageFrom').value;"> I'm only taking one page
+    </label>
     <div class="frow" style="margin-bottom:12px">
       <div class="fg" style="margin-bottom:0">
         <label class="fl"><i class="ri-file-list-3-line"></i> Page from</label>
-        <input class="fi" type="number" id="wPageFrom" placeholder="e.g. 1" min="1" style="font-size:15px;padding:11px 14px">
+        <input class="fi" type="number" id="wPageFrom" placeholder="e.g. 1" min="1" style="font-size:15px;padding:11px 14px" oninput="if(document.getElementById('wSinglePage').checked) document.getElementById('wPageTo').value=this.value;">
       </div>
       <div class="fg" style="margin-bottom:0">
         <label class="fl"><i class="ri-file-list-3-line"></i> Page to</label>
@@ -2003,6 +2103,9 @@ function renderStageContent(){
     blockers = myActiveAll;
     blockMsg = 'Finish your active session' + (myActiveAll.length>1?'s':'') + ' before picking. (Picking is one task at a time.)';
   }
+  // v10.9 — INSP has no self-exclusivity: never show the "one INSP at a
+  // time" block, even if this worker already has active INSP sessions.
+  if (s === 'INSP') blockers = pickActive ? blockers : null;
 
   let startSect;
   if (blockers) {
@@ -2030,10 +2133,10 @@ function renderStageContent(){
         }).join('')}
       </div>
     </div>`;
-  } else if (sameStage.length > 0) {
+  } else if (sameStage.length > 0 && s !== 'INSP') {
     // already running this stage — End button is in the card above;
     // INSP & PALL pairing remains available on the other tab.
-    const other = s === 'INSP' ? 'PALL' : s === 'PALL' ? 'INSP' : '';
+    const other = s === 'PALL' ? 'INSP' : '';
     startSect = `
     <div class="card" style="border-style:dashed;text-align:center;padding:16px 18px">
       <div style="font-size:12px;color:var(--t3)">
@@ -2114,9 +2217,15 @@ function liveElapsed(w){
 function onOrderChange(){
   const oid = document.getElementById('workOrder')?.value;
   const el = document.getElementById('workOrderInfo'); if (!el) return;
-  if (!oid) { el.innerHTML = ''; return; }
-  if (CS === 'INSP') ensureOrderItems(oid);   // prefetch pick list so it's ready when INSP starts
+  if (!oid) { el.innerHTML = ''; const pi = document.getElementById('pickOrderInfo'); if (pi) pi.innerHTML = ''; return; }
+  if (CS === 'INSP') { ensureOrderItems(oid); loadOrderProgressPreview(oid); }   // prefetch pick list + combined progress
   const o = S.orders.find(x => x.id === oid);
+  if (CS === 'PICK') {
+    const pi = document.getElementById('pickOrderInfo');
+    if (pi) pi.innerHTML = (o && o.items && o.qty)
+      ? `<i class="ri-information-line"></i> This order: <b style="color:var(--t)">${o.items} items · ${o.qty} QTY total</b> (set by manager)`
+      : `<span style="color:var(--red)"><i class="ri-error-warning-line"></i> No Items/QTY set for this order yet — ask a manager to add it</span>`;
+  }
   const ws = S.works.filter(w => w.oid===oid && w.stage===CS);
   const active = ws.filter(w => !w.endT).length;
   const done = ws.filter(w => w.endT).length;
@@ -2166,10 +2275,36 @@ function onOrderChange(){
       ${myHere ? `<span style="color:var(--amber);font-weight:600;margin-left:4px">⚡ You have ${myHere} active here</span>` : ''}
       ${isSLA(o) ? `<span class="badge b-sla" style="font-size:10px;margin-left:4px">SLA ${fmtAge(orderAgeH(o))}</span>` : ''}
     </div>
+    ${CS === 'INSP' ? `<div id="orderProgressPreview" style="margin-bottom:12px"></div>` : ''}
     ${feedRows ? `<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:10px 14px;margin-bottom:12px">
       <div style="font-size:10px;font-weight:700;color:${col};letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px"><i class="${SICON[CS]}"></i> ${CS} — ${oid}</div>
       ${feedRows}
     </div>` : ''}`;
+}
+
+// Fetches and renders combined SKU/qty progress for the currently
+// selected order in the INSP picker — so a worker can see whether it's
+// already done (and print it) before ever starting a scan session.
+async function loadOrderProgressPreview(oid){
+  const el = document.getElementById('orderProgressPreview'); if (!el) return;
+  el.innerHTML = '<div style="font-size:11px;color:var(--t3);padding:4px 0">Checking progress…</div>';
+  const out = await apiOp('getOrderProgress', { oid });
+  const liveEl = document.getElementById('orderProgressPreview'); if (!liveEl) return; // order may have changed since
+  if (!out.net || !out.res.ok) { liveEl.innerHTML = ''; return; }
+  const p = out.res;
+  if (!p.skuTotal) { liveEl.innerHTML = ''; return; } // no pick list imported — nothing to aggregate
+  const skuPct = Math.round(p.skuDone / p.skuTotal * 100);
+  const qtyPct = p.qtyTotal ? Math.round(p.qtyDone / p.qtyTotal * 100) : 0;
+  liveEl.innerHTML = `<div style="background:var(--bg3);border:1px solid ${p.ready?'var(--green)':'var(--bd)'};border-radius:var(--r);padding:10px 12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:11px;font-weight:700;color:${p.ready?'var(--green)':'var(--t3)'}">${p.ready ? '✓ Ready to print' : 'SKU / Qty progress'}</span>
+      ${p.ready ? `<button class="btn btn-sm" style="padding:3px 8px" onclick="printAggregateSlip('${oid}')"><i class="ri-printer-line"></i> Print</button>` : ''}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+      <div>SKU ${p.skuDone}/${p.skuTotal}<div style="background:var(--bg4);border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${skuPct}%"></div></div></div>
+      <div>Qty ${p.qtyDone}/${p.qtyTotal}<div style="background:var(--bg4);border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${qtyPct}%"></div></div></div>
+    </div>
+  </div>`;
 }
 
 function renderMyActive(){ renderStageContent(); }
@@ -2185,15 +2320,33 @@ window.startWork = function(){
 
   let items = null, qty = null, pageFrom = null, pageTo = null;
   if (CS === 'PICK') {
-    items = parseInt(document.getElementById('wItems')?.value);
-    qty   = parseInt(document.getElementById('wQty')?.value);
-    pageFrom = parseInt(document.getElementById('wPageFrom')?.value);
-    pageTo   = parseInt(document.getElementById('wPageTo')?.value);
-    if (!items || items < 1) { toast('Enter item count', 'err'); return; }
-    if (!qty   || qty   < 1) { toast('Enter total QTY', 'err'); return; }
+    const o = S.orders.find(x => x.id === oid);
+    items = o ? o.items : null;
+    qty   = o ? o.qty   : null;
+    if (!items || !qty) { toast('This order has no Items/QTY set — ask a manager to add it first', 'err'); return; }
+    pageFrom = document.getElementById('wSinglePage')?.checked
+      ? parseInt(document.getElementById('wPageFrom')?.value)
+      : parseInt(document.getElementById('wPageFrom')?.value);
+    pageTo = document.getElementById('wSinglePage')?.checked
+      ? pageFrom
+      : parseInt(document.getElementById('wPageTo')?.value);
     if (!pageFrom || pageFrom < 1) { toast('Enter starting page', 'err'); return; }
     if (!pageTo   || pageTo   < 1) { toast('Enter ending page', 'err'); return; }
     if (pageTo < pageFrom) { toast('End page must be ≥ start page', 'err'); return; }
+  }
+
+  // v10.9 — INSP has no exclusivity: joining an order I'm already actively
+  // inspecting just resumes that session instead of starting a duplicate.
+  if (CS === 'INSP') {
+    const already = S.works.find(w => w.w===CW && w.oid===oid && w.stage==='INSP' && !w.endT);
+    if (already) {
+      toast('Resuming your session on ' + oid, '');
+      const el = document.getElementById('sc_' + already.id);
+      if (el) el.scrollIntoView({ behavior:'smooth', block:'center' });
+      return;
+    }
+    doStartWork(oid, items, qty, pageFrom, pageTo);
+    return;
   }
 
   const activeDupe = S.works.filter(w => w.w===CW && w.oid===oid && w.stage===CS && !w.endT);
@@ -2667,17 +2820,9 @@ function openPrintOptionsModal(wid){
   const trackedBoxes = pend.maxBox || 1;
   const uw = unitWord(pend.unitType), uwCap = unitWord(pend.unitType, true);
   openModal(`<div class="end-modal-inner" style="text-align:left">
-    <div style="font-size:15px;font-weight:700;margin-bottom:14px;text-align:center"><i class="ri-printer-line"></i> Print packing slip</div>
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px;text-align:center"><i class="ri-printer-line"></i> Print your ${uw} labels?</div>
+    <div style="font-size:11px;color:var(--t3);text-align:center;margin-bottom:14px">The packing slip prints separately once the whole order is complete — you'll see that next.</div>
 
-    <label class="fl">Packing slip</label>
-    <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px;cursor:pointer">
-      <input type="radio" name="slipMode_${wid}" value="box" ${trackedBoxes>1?'checked':''} style="width:auto"> ${uwCap} breakdown (${trackedBoxes} ${uw}${trackedBoxes!==1?'s':''})
-    </label>
-    <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:14px;cursor:pointer">
-      <input type="radio" name="slipMode_${wid}" value="flat" ${trackedBoxes<=1?'checked':''} style="width:auto"> Flat list only
-    </label>
-
-    <label class="fl">Print labels</label>
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px;cursor:pointer">
       <input type="radio" name="labelMode_${wid}" value="auto" checked style="width:auto"> Auto — matches tracked ${uw}s (${trackedBoxes})
     </label>
@@ -2693,9 +2838,8 @@ function openPrintOptionsModal(wid){
     </label>
 
     <div style="display:flex;gap:8px;justify-content:center">
-      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
       <button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="finalizeInspEnd('${wid}')">
-        <i class="ri-printer-line"></i> Print & finish
+        <i class="ri-checkbox-circle-line"></i> Finish
       </button>
     </div>
   </div>`, { wide:true });
@@ -2707,23 +2851,92 @@ function openPrintOptionsModal(wid){
   });
 }
 
-window.finalizeInspEnd = function(wid){
+window.finalizeInspEnd = async function(wid){
   const pend = _pendingInspEnd[wid]; if (!pend) return;
   const w = S.works.find(x => x.id === wid); if (!w) return;
-  const slipMode = document.querySelector(`input[name="slipMode_${wid}"]:checked`)?.value || 'flat';
   const labelMode = document.querySelector(`input[name="labelMode_${wid}"]:checked`)?.value || 'none';
   const manualCount = Math.max(1, parseInt(document.getElementById(`manualBoxCount_${wid}`)?.value) || 1);
   const labelCount = labelMode === 'manual' ? manualCount : (pend.maxBox || 1);
+  const unitType = pend.unitType;
 
+  const oidForClear = w.oid;
   closeModal();
   clearScanState(wid);
+  stopLivePoll(wid);
+  apiOp('clearLiveScan', { orderId: oidForClear, entryId: wid });
   doEndWork(wid, null, { scannedQty:pend.totalScanned, inspResult:pend.result, inspNote:pend.fullNote });
 
-  const meta = { result: pend.result, worker: WS ? WS.worker : CW, unitType: pend.unitType };
-  printPackingSlip(w, pend.rows, meta, pend.boxScans, slipMode);
+  const meta = { result: pend.result, worker: WS ? WS.worker : CW, unitType };
+  // Still print MY OWN box labels right away if I tracked boxes this
+  // session — labels are per-physical-box regardless of who else worked
+  // the order, so there's no need to wait on the combined view for those.
   if (labelMode !== 'none') printLabels(w, meta, labelCount);
-  logInspectionResultsToServer(wid, w.oid, pend.rows, pend.result, pend.boxScans, pend.unitType);
+
+  toast('Saving your contribution...', '');
+  await logInspectionResultsToServer(wid, w.oid, pend.rows, pend.result, pend.boxScans, unitType);
   delete _pendingInspEnd[wid];
+
+  showOrderProgressResult(w.oid);
+};
+
+// ── Order-level combined progress — shown after any worker ends their
+// portion. The packing slip only unlocks once every SKU is accounted for
+// across ALL contributors, matching the "whoever notices it's done prints
+// it" workflow. ─────────────────────────────────────────────────────
+window.showOrderProgressResult = async function(oid){
+  toast('Checking order progress...', '');
+  const out = await apiOp('getOrderProgress', { oid });
+  if (!out.net || !out.res.ok) { toast('⚠ Could not load order progress', 'err'); return; }
+  renderOrderProgressModal(out.res);
+};
+
+function renderOrderProgressModal(p){
+  const skuPct = p.skuTotal ? Math.round(p.skuDone / p.skuTotal * 100) : 0;
+  const qtyPct = p.qtyTotal ? Math.round(p.qtyDone / p.qtyTotal * 100) : 0;
+  const contributorsHtml = p.contributors.length
+    ? p.contributors.sort((a,b) => a.lastAt < b.lastAt ? 1 : -1).map(c =>
+        `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0"><span>${c.worker}</span><span style="color:var(--t3)">${c.qty} units · ${c.lastAt.slice(11,16)}</span></div>`
+      ).join('')
+    : '<div style="font-size:12px;color:var(--t3)">No contributions logged yet</div>';
+
+  openModal(`<div class="end-modal-inner" style="text-align:left">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px;text-align:center">${p.orderId}</div>
+    <div style="text-align:center;font-size:12px;color:${p.ready?'var(--green)':'var(--t3)'};font-weight:700;margin-bottom:14px">
+      ${p.ready ? '<i class="ri-checkbox-circle-fill"></i> Fully accounted for — ready to print' : 'Still in progress — more scanning needed'}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div style="background:var(--bg3);border-radius:var(--r);padding:10px">
+        <div style="font-size:11px;color:var(--t3);margin-bottom:4px">SKU progress</div>
+        <div style="font-size:16px;font-weight:800;margin-bottom:6px">${p.skuDone} / ${p.skuTotal}</div>
+        <div style="background:var(--bg4);border-radius:5px;height:6px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${skuPct}%"></div></div>
+      </div>
+      <div style="background:var(--bg3);border-radius:var(--r);padding:10px">
+        <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Qty progress</div>
+        <div style="font-size:16px;font-weight:800;margin-bottom:6px">${p.qtyDone} / ${p.qtyTotal}</div>
+        <div style="background:var(--bg4);border-radius:5px;height:6px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${qtyPct}%"></div></div>
+      </div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Scanned by</div>
+    <div style="background:var(--bg3);border-radius:var(--r);padding:8px 12px;margin-bottom:16px">${contributorsHtml}</div>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="btn btn-sm" onclick="closeModal()">Close</button>
+      ${p.ready ? `<button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="printAggregateSlip('${p.orderId}')"><i class="ri-printer-line"></i> Print packing slip</button>` : ''}
+    </div>
+  </div>`, { wide:true });
+}
+
+window.printAggregateSlip = async function(oid){
+  const out = await apiOp('getOrderProgress', { oid });
+  if (!out.net || !out.res.ok) { toast('⚠ Could not load order data', 'err'); return; }
+  const p = out.res;
+  const w = { oid: p.orderId, w: '' };
+  const rows = p.skus.map(s => ({
+    sku:s.sku, name:s.name, barcode:s.barcode, req:s.reqQty, got:s.packedQty,
+    hasIssue: !!s.issueType, issue: s.issueType ? { type:s.issueType, qty:s.issueQty, note:s.issueNote } : null
+  }));
+  const contributorNames = p.contributors.map(c => `${c.worker} (${c.qty})`).join(', ');
+  closeModal();
+  printPackingSlip(w, rows, { result: p.skuDone===p.skuTotal ? 'PASS' : 'ISSUE', worker: contributorNames || CW }, {}, 'flat');
 };
 
 // ── Packing slip — printed the moment inspection ends ───────────────
@@ -3608,20 +3821,24 @@ window.addOrder = function(){
   const id = document.getElementById('newOrderId')?.value.trim();
   const ch = document.getElementById('newOrderCh')?.value;
   const cu = document.getElementById('newOrderCu')?.value;
+  const items = document.getElementById('newOrderItems')?.value;
+  const qty   = document.getElementById('newOrderQty')?.value;
   if (!id) { toast('Enter order number', 'err'); return; }
   if (!ch) { toast('Select a channel', 'err'); return; }
   if (!cu) { toast('Select a customer', 'err'); return; }
   if (S.orders.find(o => o.id === id)) { toast('Order already exists', 'err'); return; }
 
-  S.orders.push({ id, ch, cu, at: todayStr() + ' ' + nowHHmm() + ':00' });
+  S.orders.push({ id, ch, cu, at: todayStr() + ' ' + nowHHmm() + ':00', items: items?Number(items):null, qty: qty?Number(qty):null });
   toast(`${id} added ✓`, 'ok');
   document.getElementById('newOrderId').value = '';
   document.getElementById('newOrderCh').value = '';
   document.getElementById('newOrderCu').value = '';
+  document.getElementById('newOrderItems').value = '';
+  document.getElementById('newOrderQty').value = '';
   document.querySelectorAll('#chGroup .chip-opt, #cuGroup .chip-opt').forEach(b => b.classList.remove('selected'));
   updateOrderPreview(); R.mgr();
 
-  mgrOp('upsertOrder', { id, ch, cu }).then(out => {
+  mgrOp('upsertOrder', { id, ch, cu, items, qty }).then(out => {
     if (!out.net || !out.res.ok) {
       S.orders = S.orders.filter(o => o.id !== id);
       toast('⚠ Save failed', 'err'); R.mgr();
@@ -3668,6 +3885,16 @@ window.editOrder = function(oid){
       <div class="chip-group" id="editCuGroup">${chips('editCuGroup',cuOptions,o.cu)}</div>
       <input type="hidden" id="eoCu" value="${o.cu}">
     </div>
+    <div class="frow">
+      <div class="fg" style="margin-bottom:0">
+        <label class="fl">Items (SKU types)</label>
+        <input class="fi" type="number" id="eoItems" min="1" value="${o.items!=null?o.items:''}">
+      </div>
+      <div class="fg" style="margin-bottom:0">
+        <label class="fl">Total QTY</label>
+        <input class="fi" type="number" id="eoQty" min="1" value="${o.qty!=null?o.qty:''}">
+      </div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
       <button class="btn btn-blue" onclick="saveOrder('${oid}')" style="padding:10px 20px;font-weight:700">
@@ -3679,12 +3906,14 @@ window.saveOrder = function(orig){
   const newId = document.getElementById('eoId').value.trim();
   const ch = document.getElementById('eoCh').value.trim();
   const cu = document.getElementById('eoCu').value.trim();
+  const items = document.getElementById('eoItems')?.value;
+  const qty   = document.getElementById('eoQty')?.value;
   if (!newId) { toast('Order # required', 'err'); return; }
   const bkO = JSON.parse(JSON.stringify(S.orders)), bkW = JSON.parse(JSON.stringify(S.works));
-  const o = S.orders.find(x => x.id === orig); if (o) { o.id = newId; o.ch = ch; o.cu = cu; }
+  const o = S.orders.find(x => x.id === orig); if (o) { o.id = newId; o.ch = ch; o.cu = cu; o.items = items?Number(items):null; o.qty = qty?Number(qty):null; }
   S.works.filter(w => w.oid === orig).forEach(w => w.oid = newId);
   toast('Updated', 'ok'); closeModal(); R.mgr();
-  mgrOp('upsertOrder', { id:orig, newId:newId!==orig?newId:undefined, ch, cu }).then(out => {
+  mgrOp('upsertOrder', { id:orig, newId:newId!==orig?newId:undefined, ch, cu, items, qty }).then(out => {
     if (!out.net || !out.res.ok) { S.orders = bkO; S.works = bkW; toast('⚠ Save failed', 'err'); R.mgr(); }
   });
 };
