@@ -1638,7 +1638,7 @@ function renderSkuChecklistUI(w, items, st){
   return `
   <div class="scan-counter-wrap" style="text-align:left">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
-      <span style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase">SKU checklist · ${doneCount}/${items.length} complete
+      <span id="skuDoneCount_${w.id}" style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase">SKU checklist · ${doneCount}/${items.length} complete
         ${Object.keys(others).length ? `<span style="color:var(--blue);text-transform:none;font-weight:600;margin-left:4px"><i class="ri-refresh-line"></i> live-synced</span>` : ''}
       </span>
       <span style="font-size:11px;color:var(--t3)">Qty/scan:
@@ -1841,7 +1841,29 @@ async function refreshLiveBaseline(wid){
     });
   }
   _liveBaseline[wid] = baseline;
-  renderStageContent();
+  updateSkuChecklistLive(wid);
+}
+
+// Targeted refresh for exactly one session's checklist — deliberately
+// does NOT call renderStageContent(), which rebuilds the entire tab
+// (including the order picker's <select>) and was wiping whatever the
+// worker had selected there, on every 5s poll tick, on every tab.
+function updateSkuChecklistLive(wid){
+  const w = S.works.find(x => x.id === wid); if (!w || w.endT) return;
+  const items = _orderItemsCache[w.oid] || [];
+  const st = loadScanState(wid);
+  const others = _liveBaseline[wid] || {};
+  let doneCount = 0;
+  items.forEach(it => {
+    const key = it.barcode || it.sku;
+    const got = (st.skuCounts[key]||0) + (others[key]||0);
+    const issue = (st.skuIssues||{})[key];
+    if (issue || (it.reqQty>0 && got>=it.reqQty)) doneCount++;
+  });
+  const headerEl = document.getElementById('skuDoneCount_' + wid);
+  if (headerEl) headerEl.innerHTML = `SKU checklist · ${doneCount}/${items.length} complete
+    ${Object.keys(others).length ? `<span style="color:var(--blue);text-transform:none;font-weight:600;margin-left:4px"><i class="ri-refresh-line"></i> live-synced</span>` : ''}`;
+  updateSkuListView(wid);
 }
 
 function startLivePoll(wid){
