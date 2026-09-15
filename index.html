@@ -1697,7 +1697,6 @@ function renderAggScanUI(w, st){
   const cls = !hasExp ? '' : st.count === exp.qty ? 'match' : st.count < exp.qty ? 'short' : 'over';
   const color = cls === 'match' ? 'var(--green)' : cls === 'over' ? 'var(--red)' : 'var(--amber)';
   const pct = hasExp ? Math.min(100, Math.round(st.count / exp.qty * 100)) : 0;
-  const mults = [1,6,12,24];
   return `
   <div class="scan-counter-wrap">
     <div style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px">
@@ -1706,10 +1705,6 @@ function renderAggScanUI(w, st){
     <div class="scan-counter-big ${cls}" id="scanCount_${w.id}">${st.count}</div>
     <div class="scan-counter-sub">${hasExp ? 'of ' + exp.qty + ' scanned' : 'scanned so far'}</div>
     <div class="scan-progress"><div class="scan-progress-fill" id="scanBar_${w.id}" style="width:${pct}%;background:${color}"></div></div>
-    <div class="scan-mult-row">
-      <span style="font-size:11px;color:var(--t3);font-weight:600;margin-right:2px">Qty per scan:</span>
-      ${mults.map(m => `<button type="button" class="scan-mult-btn${st.mult===m?' on':''}" onclick="setScanMult('${w.id}',${m})">${m}</button>`).join('')}
-    </div>
     <div class="scan-input-row">
       <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
@@ -1723,12 +1718,6 @@ function renderAggScanUI(w, st){
   </div>`;
 }
 
-window.setScanMult = function(wid, m){
-  const st = loadScanState(wid);
-  st.mult = m; saveScanState(wid, st);
-  renderStageContent();
-};
-
 window.scanHit = function(wid){
   const inp = document.getElementById('scanIn_' + wid);
   const raw = inp ? inp.value.trim() : '';
@@ -1738,7 +1727,7 @@ window.scanHit = function(wid){
     if (!raw) { toast('Scan a barcode first', 'err'); return; }
     registerSkuScan(wid, raw);
   } else {
-    scanAdjust(wid, st.mult || 1);
+    scanAdjust(wid, 1);
   }
 };
 
