@@ -131,7 +131,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .prog-pct{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--t2);width:34px;text-align:right;flex-shrink:0}
 
 /* Stage tabs */
-.stabs{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:16px}
+.stabs{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-bottom:16px}
 .stab{padding:14px 8px;border-radius:var(--r2);border:1px solid var(--bd2);background:var(--bg3);color:var(--t3);font-weight:700;cursor:pointer;text-align:center;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;position:relative;font-size:13px}
 .stab:hover{border-color:var(--t3);color:var(--t2)}
 .stab.pick.on{background:var(--blue-bg);border-color:var(--blue-bd);color:var(--blue);box-shadow:0 0 0 1px var(--blue-bd)}
@@ -472,12 +472,6 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
           <div class="stab-status" id="stabStatus_INSP" style="font-size:10px;font-weight:400;opacity:.7"></div>
         </div>
       </div>
-      <div class="stab pall" onclick="selStage('PALL')">
-        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;width:100%">
-          <div style="display:flex;align-items:center;gap:5px;font-size:13px"><i class="ri-stack-line"></i> PALLETIZING</div>
-          <div class="stab-status" id="stabStatus_PALL" style="font-size:10px;font-weight:400;opacity:.7"></div>
-        </div>
-      </div>
     </div>
     <div id="stageContent"></div>
   </div>
@@ -584,7 +578,10 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
       </div>
       <div id="importStatus" style="font-size:12px;color:var(--t3);margin-top:8px"></div>
       <div id="importPreview"></div>
-      <div class="section" style="margin-top:16px">Import history</div>
+      <div class="section" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <span>Import history <span id="importLogCount" style="font-weight:400;color:var(--t3)"></span></span>
+        <input class="fi" id="importLogSearch" placeholder="Search order #" oninput="renderImportLogView()" style="max-width:220px;font-size:12px;padding:6px 10px">
+      </div>
       <div id="importLog" style="font-size:12px;color:var(--t3)">Loading…</div>
     </div>
     <div class="card" style="border-color:var(--red-bd)">
@@ -2242,7 +2239,7 @@ function renderStageContent(){
               <div style="font-size:11px;color:var(--t3)">Started ${w.startT||'—'}${e?` · <span style="color:var(--amber)">${e}</span>`:''}</div>
             </div>
             <div style="display:flex;gap:5px;flex-shrink:0">
-              <button class="btn btn-sm" onclick="selStage('${w.stage}')" title="Go to ${w.stage} tab"><i class="ri-arrow-right-line"></i></button>
+              ${w.stage !== 'PALL' ? `<button class="btn btn-sm" onclick="selStage('${w.stage}')" title="Go to ${w.stage} tab"><i class="ri-arrow-right-line"></i></button>` : ''}
               <button class="btn btn-green btn-sm" style="font-weight:700" onclick="endWork('${w.id}','${w.stage}')">
                 <i class="ri-checkbox-circle-line"></i> End now</button>
             </div>
@@ -2251,14 +2248,11 @@ function renderStageContent(){
       </div>
     </div>`;
   } else if (sameStage.length > 0 && s !== 'INSP') {
-    // already running this stage — End button is in the card above;
-    // INSP & PALL pairing remains available on the other tab.
-    const other = s === 'PALL' ? 'INSP' : '';
+    // already running this stage — End button is in the card above.
     startSect = `
     <div class="card" style="border-style:dashed;text-align:center;padding:16px 18px">
       <div style="font-size:12px;color:var(--t3)">
         <i class="ri-information-line"></i> One ${s} at a time — finish the session above to start another.
-        ${other ? `<br>INSP &amp; PALL can run together: <button class="btn btn-sm" style="margin-top:8px;border-color:${SCOL[other]}66" onclick="selStage('${other}')"><i class="${SICON[other]}" style="color:${SCOL[other]}"></i> Start ${other} alongside</button>` : ''}
       </div>
     </div>`;
   } else {
@@ -4654,21 +4648,44 @@ async function importOneEntry(entryId, btn){
 }
 
 // ── Import history (server-recorded — survives refresh / other devices) ──
+let _importLogCache = [];
 async function renderImportLog(){
   const el = document.getElementById('importLog'); if (!el) return;
+  el.innerHTML = 'Loading…';
   const out = await apiOp('getImportLog');
   if (!out.net || !out.res.ok) { el.innerHTML = '<span style="color:var(--red)">Failed to load import history</span>'; return; }
-  const rows = out.res.log || [];
+  _importLogCache = out.res.log || [];
+  renderImportLogView();
+}
+window.renderImportLogView = function(){
+  const el = document.getElementById('importLog'); if (!el) return;
+  const q = (document.getElementById('importLogSearch')?.value || '').trim().toUpperCase();
+  const rows = q ? _importLogCache.filter(r => (r.orderId||'').toUpperCase().includes(q)) : _importLogCache;
+  const countEl = document.getElementById('importLogCount');
+  if (countEl) countEl.textContent = _importLogCache.length ? `(${rows.length} of ${_importLogCache.length})` : '';
   el.innerHTML = rows.length
-    ? `<table class="mgr-tbl"><thead><tr><th>Order</th><th>Items</th><th>Date / time</th></tr></thead><tbody>${
+    ? `<table class="mgr-tbl"><thead><tr><th>Order</th><th>Items</th><th>Date / time</th><th></th></tr></thead><tbody>${
         rows.map(r => `<tr>
           <td class="mono" style="font-weight:700">${r.orderId}</td>
           <td class="mono">${r.itemCount}</td>
           <td class="mono" style="color:var(--t2)">${r.importedAt}</td>
+          <td style="text-align:right"><button class="btn btn-sm" style="padding:3px 8px;color:var(--red)" title="Remove this history entry (does not affect the order's pick list)" onclick="deleteImportLogEntry('${r.id}')"><i class="ri-delete-bin-line"></i></button></td>
         </tr>`).join('')
       }</tbody></table>`
-    : '<div style="padding:6px 0">No imports recorded yet</div>';
-}
+    : (q ? '<div style="padding:6px 0">No matches</div>' : '<div style="padding:6px 0">No imports recorded yet</div>');
+};
+window.deleteImportLogEntry = async function(id){
+  if (!id) return;
+  if (!confirm('Remove this import history entry? This only clears the log line — the order\'s pick list itself is unaffected.')) return;
+  const out = await mgrOp('deleteImportLog', { id });
+  if (out.net && out.res.ok) {
+    _importLogCache = _importLogCache.filter(r => r.id !== id);
+    renderImportLogView();
+    toast('Removed', 'ok');
+  } else {
+    toast('⚠ Could not remove: ' + ((out.res && out.res.error) || 'network'), 'err');
+  }
+};
 
 // ── Reported issues (EXP/NF/OOS/DAMAGE/OTHER) — server-recorded, cross-device ──
 let _issueLogCache = [];
