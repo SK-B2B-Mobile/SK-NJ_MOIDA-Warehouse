@@ -193,10 +193,10 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 @media(max-width:440px){.frow{grid-template-columns:1fr}}
 
 /* Session cards */
-.session-card{background:var(--bg2);border-radius:var(--r2);padding:18px 20px;margin-bottom:12px;border-left:4px solid var(--bd2)}
-.session-card.pick{border-left-color:var(--blue);background:linear-gradient(135deg,rgba(59,130,246,.04),var(--bg2))}
-.session-card.insp{border-left-color:var(--purple);background:linear-gradient(135deg,rgba(168,85,247,.04),var(--bg2))}
-.session-card.pall{border-left-color:var(--teal);background:linear-gradient(135deg,rgba(20,184,166,.04),var(--bg2))}
+.session-card{background:var(--bg2);border-radius:var(--r2);padding:18px 20px;margin-bottom:12px}
+.session-card.pick{background:linear-gradient(135deg,rgba(59,130,246,.04),var(--bg2))}
+.session-card.insp{background:linear-gradient(135deg,rgba(168,85,247,.04),var(--bg2))}
+.session-card.pall{background:linear-gradient(135deg,rgba(20,184,166,.04),var(--bg2))}
 .session-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
 .session-title{font-family:var(--mono);font-weight:800;font-size:17px}
 .session-sub{font-size:13px;color:var(--t2);margin-top:3px}
@@ -1700,7 +1700,10 @@ function renderAggScanUI(w, st){
   return `
   <div class="scan-counter-wrap" style="padding:10px 14px">
     <div style="font-size:10px;color:var(--t3);font-weight:600;margin-bottom:2px">${hasExp ? `Expected ${exp.qty} QTY (${exp.items} items) — no pick list` : 'No pick list imported'}</div>
-    <div class="scan-counter-big ${cls}" id="scanCount_${w.id}" style="font-size:30px;line-height:1.1;cursor:pointer;text-decoration:underline dotted;text-underline-offset:4px" onclick="openAggCountEditModal('${w.id}')" title="Tap to correct the count">${st.count}</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer" onclick="openAggCountEditModal('${w.id}')" title="Tap to correct the count">
+      <div class="scan-counter-big ${cls}" id="scanCount_${w.id}" style="font-size:30px;line-height:1.1">${st.count}</div>
+      <i class="ri-pencil-line" style="font-size:14px;color:var(--t3)"></i>
+    </div>
     <div class="scan-counter-sub" style="margin-top:0">${hasExp ? 'of ' + exp.qty + ' scanned' : 'scanned so far'}</div>
     <div class="scan-progress" style="margin-top:6px"><div class="scan-progress-fill" id="scanBar_${w.id}" style="width:${pct}%;background:${color}"></div></div>
     <div class="scan-input-row" style="margin-top:10px">
@@ -2306,7 +2309,6 @@ function onOrderChange(){
     if (sw) sw.innerHTML = `<div style="font-size:12px;color:var(--t3);text-align:center;padding:10px 0">Select an order above to begin</div>`;
     return;
   }
-  if (CS === 'INSP') { ensureOrderItems(oid); loadOrderProgressPreview(oid); renderInspScanStart(oid); }   // prefetch pick list + combined progress
   const o = S.orders.find(x => x.id === oid);
   if (CS === 'PICK') {
     const pi = document.getElementById('pickOrderInfo');
@@ -2317,10 +2319,44 @@ function onOrderChange(){
   const ws = S.works.filter(w => w.oid===oid && w.stage===CS);
   const active = ws.filter(w => !w.endT).length;
   const done = ws.filter(w => w.endT).length;
-  const myHere = ws.filter(w => w.w===CW && !w.endT).length;
+  const myActiveHere = ws.filter(w => w.w===CW && !w.endT);
+  const myHere = myActiveHere.length;
   const col = SCOL[CS];
 
-  const feedRows = ws.map(w => {
+  if (CS === 'INSP') {
+    ensureOrderItems(oid);
+    loadOrderProgressPreview(oid);
+    const sw = document.getElementById('inspScanStartWrap');
+    if (myHere > 0) {
+      // Already have a live session here — the real scan UI is right
+      // below in "My active sessions"; showing a second scan input up
+      // here too was pure duplication.
+      if (sw) sw.innerHTML = `<button class="btn btn-sm btn-block" style="justify-content:center;padding:10px" onclick="document.getElementById('sc_${myActiveHere[0].id}')?.scrollIntoView({behavior:'smooth',block:'start'})"><i class="ri-arrow-down-line"></i> Already active on this order — scroll to it</button>`;
+    } else {
+      renderInspScanStart(oid);
+    }
+  }
+
+  const otherActiveEntries = ws.filter(w => !w.endT && w.w !== CW);
+
+  const otherActiveBox = !otherActiveEntries.length ? '' :
+    CS === 'PICK'
+      ? `<div style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;background:var(--blue-bg,rgba(59,130,246,.1));border:1px solid var(--blue-bd,rgba(59,130,246,.35));border-radius:var(--r);margin-bottom:10px;font-size:12px;color:var(--t2)">
+          <i class="ri-team-line" style="font-size:16px;color:var(--blue);flex-shrink:0;margin-top:1px"></i>
+          <div>
+            <div style="font-weight:700;color:var(--blue);margin-bottom:3px">Already being picked by others — pick a different page range</div>
+            ${otherActiveEntries.map(w => `<div>${w.w}${w.pageFrom?` — p.${w.pageFrom}${w.pageTo&&w.pageTo!==w.pageFrom?'–'+w.pageTo:''}`:' — (no page range recorded)'}</div>`).join('')}
+          </div>
+        </div>`
+      : `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--red-bg);border:1px solid var(--red-bd);border-radius:var(--r);margin-bottom:10px;font-size:12px;color:var(--red);font-weight:700">
+          <i class="ri-error-warning-fill" style="font-size:16px"></i> ${[...new Set(otherActiveEntries.map(w=>w.w))].join(', ')} ${otherActiveEntries.length>1?'are':'is'} already doing ${CS} on this order right now — starting will conflict.
+        </div>`;
+
+  // For INSP, once I already have an active session here, the detail
+  // feed below (who's working it, live/done status) is redundant with
+  // the session card itself — skip it to avoid showing the same info twice.
+  const showFeed = CS !== 'INSP' || myHere === 0;
+  const feedRows = !showFeed ? '' : ws.map(w => {
     const isDone = !!w.endT;
     const isMe = w.w === CW;
     const detail = CS==='PICK'
@@ -2340,30 +2376,15 @@ function onOrderChange(){
     </div>`;
   }).join('');
 
-  const otherActiveEntries = ws.filter(w => !w.endT && w.w !== CW);
-
-  const otherActiveBox = !otherActiveEntries.length ? '' :
-    CS === 'PICK'
-      ? `<div style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;background:var(--blue-bg,rgba(59,130,246,.1));border:1px solid var(--blue-bd,rgba(59,130,246,.35));border-radius:var(--r);margin-bottom:10px;font-size:12px;color:var(--t2)">
-          <i class="ri-team-line" style="font-size:16px;color:var(--blue);flex-shrink:0;margin-top:1px"></i>
-          <div>
-            <div style="font-weight:700;color:var(--blue);margin-bottom:3px">Already being picked by others — pick a different page range</div>
-            ${otherActiveEntries.map(w => `<div>${w.w}${w.pageFrom?` — p.${w.pageFrom}${w.pageTo&&w.pageTo!==w.pageFrom?'–'+w.pageTo:''}`:' — (no page range recorded)'}</div>`).join('')}
-          </div>
-        </div>`
-      : `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--red-bg);border:1px solid var(--red-bd);border-radius:var(--r);margin-bottom:10px;font-size:12px;color:var(--red);font-weight:700">
-          <i class="ri-error-warning-fill" style="font-size:16px"></i> ${[...new Set(otherActiveEntries.map(w=>w.w))].join(', ')} ${otherActiveEntries.length>1?'are':'is'} already doing ${CS} on this order right now — starting will conflict.
-        </div>`;
-
   el.innerHTML = `
     ${otherActiveBox}
     <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);margin-bottom:12px;font-size:12px;flex-wrap:wrap">
       <span style="font-weight:700">${o.ch} · ${o.cu}</span>
       <span style="color:${col};margin-left:4px">${CS}: ${active} active · ${done} done</span>
-      ${myHere ? `<span style="color:var(--amber);font-weight:600;margin-left:4px">⚡ You have ${myHere} active here</span>` : ''}
+      ${myHere && CS !== 'INSP' ? `<span style="color:var(--amber);font-weight:600;margin-left:4px">⚡ You have ${myHere} active here</span>` : ''}
       ${isSLA(o) ? `<span class="badge b-sla" style="font-size:10px;margin-left:4px">SLA ${fmtAge(orderAgeH(o))}</span>` : ''}
     </div>
-    ${CS === 'INSP' ? `<div id="orderProgressPreview" style="margin-bottom:12px"></div>` : ''}
+    ${CS === 'INSP' && myHere === 0 ? `<div id="orderProgressPreview" style="margin-bottom:12px"></div>` : ''}
     ${feedRows ? `<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:10px 14px;margin-bottom:12px">
       <div style="font-size:10px;font-weight:700;color:${col};letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px"><i class="${SICON[CS]}"></i> ${CS} — ${oid}</div>
       ${feedRows}
