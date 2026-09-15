@@ -1875,6 +1875,32 @@ function stopLivePoll(wid){
   delete _livePushTimers[wid];
 }
 
+// v11.1 — self-service exit from a session a worker doesn't want to
+// continue (stuck test data, picked the wrong order, changed their mind).
+// Nothing about it gets recorded — this is a full discard, not an end.
+window.cancelInspSession = async function(wid){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  if (!confirm(`Leave this ${w.stage} session on ${w.oid}? Nothing scanned in it will be saved.`)) return;
+
+  stopLivePoll(wid);
+  apiOp('clearLiveScan', { orderId: w.oid, entryId: wid });
+  clearScanState(wid);
+  toast('Leaving session...', '');
+
+  const out = await apiOp('cancelWork', { entryId: wid, worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : '' });
+  if (out.net && out.res.ok) {
+    S.works = S.works.filter(x => x.id !== wid);
+    toast('Session left', 'ok');
+    updateBadges(); renderStageContent();
+  } else if (out.net && out.res.error === 'already_ended') {
+    // race: it got ended (by us or someone else) right as we tried to cancel — just refresh
+    toast('This session was already finished', '');
+    await loadData(); updateBadges(); renderStageContent();
+  } else {
+    toast('⚠ Could not leave session: ' + ((out.res && out.res.error) || 'network'), 'err');
+  }
+};
+
 window.nextBox = function(wid){
   const st = loadScanState(wid);
   st.currentBox = (st.currentBox || 1) + 1;
@@ -2078,6 +2104,9 @@ function renderStageContent(){
         <button class="btn btn-green btn-block btn-lg" onclick="endWork('${w.id}','${s}')" ${inf?'disabled':''}>
           <i class="ri-checkbox-circle-line"></i> ${SELABEL[s]}
         </button>
+        ${s==='INSP' ? `<button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:6px;color:var(--t3)" onclick="cancelInspSession('${w.id}')" ${inf?'disabled':''}>
+          <i class="ri-close-circle-line"></i> Leave without finishing
+        </button>` : ''}
       </div>`;
     }).join('');
     activeSect = `<div style="margin-bottom:6px">
@@ -2206,7 +2235,7 @@ function renderStageContent(){
     </div>`;
   }
 
-  container.innerHTML = activeSect + startSect;
+  container.innerHTML = s === 'INSP' ? (startSect + activeSect) : (activeSect + startSect);
   startSessionTimer();
 
   // Restore whatever the worker had selected/typed before this re-render.
