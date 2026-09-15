@@ -2457,8 +2457,20 @@ window.startInspectionByScan = function(){
     return;
   }
 
+  // Lock the picker's own scan-start controls immediately — the picker
+  // re-renders to "Already active..." once the session exists, but that
+  // takes a beat, and this closes the gap in between so a fast repeat
+  // scan/tap can't slip through as a second, genuinely duplicate start.
+  if (inp) inp.disabled = true;
+  const wrap = document.getElementById('inspScanStartWrap');
+  wrap?.querySelectorAll('button').forEach(b => b.disabled = true);
+
   const tid = doStartWork(oid, null, null, null, null);
-  if (!tid) return; // e.g. a start was already in flight — doStartWork's own lock handled the message
+  if (!tid) {
+    if (inp) inp.disabled = false;
+    wrap?.querySelectorAll('button').forEach(b => b.disabled = false);
+    return; // e.g. a start was already in flight — doStartWork's own lock handled the message
+  }
   applyFirstScan(tid, oid, code);
 };
 
@@ -4320,11 +4332,13 @@ window.handleImportFile = async function(ev){
 // successfully-parsed result to the batch as its own reviewable card.
 async function processImportFiles(files){
   const statusEl = document.getElementById('importStatus');
-  let ok = 0, failed = [];
+  const zone = document.getElementById('importDropZone');
+  if (zone) { zone.style.opacity = '.5'; zone.style.pointerEvents = 'none'; }
+  let ok = 0, failed = [], skipped = [];
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     const isPdf = /\.pdf$/i.test(file.name);
-    statusEl.innerHTML = `<i class="ri-loader-4-line"></i> Parsing file ${i+1}/${files.length}: ${file.name}` +
+    statusEl.innerHTML = `<i class="ri-loader-4-line"></i> Uploading &amp; parsing file ${i+1}/${files.length}: ${file.name}` +
       (isPdf ? ' (server pdfplumber — first request can take ~20-30s if idle)' : '');
     try {
       const ext = file.name.split('.').pop().toLowerCase();
@@ -4335,6 +4349,30 @@ async function processImportFiles(files){
       else { failed.push(file.name + ' (unsupported type)'); continue; }
 
       if (!parsed.items.length) { failed.push(file.name + ' (no items found)'); continue; }
+
+      // v12.0 — catch accidental double-imports (same file dropped twice,
+      // or a worker/manager re-uploading a list already handled) before
+      // they ever reach the review table, not just at confirm time.
+      if (parsed.orderId) {
+        const inBatch = _importBatch.find(e => e.parsed.orderId === parsed.orderId);
+        if (inBatch) {
+          if (!confirm(`${parsed.orderId} is already in this batch (from "${inBatch.fileName}"). Add "${file.name}" anyway as a second copy?`)) {
+            skipped.push(file.name + ' (already in batch for ' + parsed.orderId + ')');
+            continue;
+          }
+        } else {
+          statusEl.innerHTML = `<i class="ri-loader-4-line"></i> Checking import history for ${parsed.orderId}...`;
+          const logOut = await apiOp('getImportLog');
+          const prior = logOut.net && logOut.res.ok ? (logOut.res.log || []).find(r => r.orderId === parsed.orderId) : null;
+          if (prior) {
+            if (!confirm(`${parsed.orderId} was already imported on ${prior.importedAt} (${prior.itemCount} items). Import "${file.name}" again anyway?`)) {
+              skipped.push(file.name + ' (already imported ' + prior.importedAt + ')');
+              continue;
+            }
+          }
+        }
+      }
+
       _importBatch.push({ id: 'imp' + Date.now() + Math.floor(Math.random()*10000), fileName: file.name, parsed });
       ok++;
     } catch(err) {
@@ -4343,9 +4381,11 @@ async function processImportFiles(files){
     }
   }
   statusEl.innerHTML = ok
-    ? `<span style="color:var(--green)"><i class="ri-checkbox-circle-line"></i> Parsed ${ok} file${ok>1?'s':''}</span>` + (failed.length ? ` · <span style="color:var(--red)">${failed.length} failed</span>` : '')
-    : `<span style="color:var(--red)">All files failed to parse</span>`;
+    ? `<span style="color:var(--green)"><i class="ri-checkbox-circle-line"></i> Parsed ${ok} file${ok>1?'s':''}</span>` + (failed.length ? ` · <span style="color:var(--red)">${failed.length} failed</span>` : '') + (skipped.length ? ` · <span style="color:var(--amber)">${skipped.length} skipped as duplicate</span>` : '')
+    : (skipped.length ? `<span style="color:var(--amber)">${skipped.length} file${skipped.length>1?'s':''} skipped as duplicate</span>` : `<span style="color:var(--red)">All files failed to parse</span>`);
   if (failed.length) console.warn('Import parse failures:', failed);
+  if (skipped.length) console.warn('Import skipped as duplicate:', skipped);
+  if (zone) { zone.style.opacity = '1'; zone.style.pointerEvents = ''; }
   renderImportBatch();
 }
 
