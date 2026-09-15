@@ -111,6 +111,8 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .b-pass{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)}
 .b-issue{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.ready-to-finish{animation:readyGlow 1.4s ease-in-out infinite}
+@keyframes readyGlow{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}50%{box-shadow:0 0 0 8px rgba(34,197,94,0)}}
 
 /* Stage pills */
 .srow{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
@@ -1437,13 +1439,15 @@ function skuRowHtml(it, st, wid){
   const others = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
   const got = mine + others;
   const issue = (st.skuIssues || {})[key] || null;
+  const isMC = !!(st.skuMasterCase || {})[key];
   const ok = issue ? true : (it.reqQty > 0 && got >= it.reqQty);
   const cls = issue ? 'issue' : (ok ? 'ok' : (got > 0 ? 'warn' : ''));
   const keyEsc = String(key).replace(/'/g, "\\'");
   const othersNote = others > 0 ? `<div style="font-size:9px;color:var(--blue)">you: ${mine} · others: ${others}</div>` : '';
+  const mcBadge = isMC ? `<span style="font-size:8px;font-weight:800;color:var(--amber);border:1px solid var(--amber-bd);border-radius:4px;padding:1px 4px;margin-left:4px" title="Confirmed as one master case, not scanned unit-by-unit">MC</span>` : '';
   const qtyHtml = issue
     ? `<span style="color:var(--red);font-size:11px;font-weight:800">${issue.type}${issue.qty?(' ×'+issue.qty):''}</span>`
-    : `<span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" title="Tap to correct YOUR scanned quantity" onclick="event.stopPropagation();openQtyEditModal('${wid}','${keyEsc}')">${got}/${it.reqQty||0}</span>${othersNote}`;
+    : `<span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" title="Tap to correct YOUR scanned quantity" onclick="event.stopPropagation();openQtyEditModal('${wid}','${keyEsc}')">${got}/${it.reqQty||0}</span>${mcBadge}${othersNote}`;
   return `<div class="sku-row ${cls}">
     <div class="sku-check ${issue?'issue':(ok?'ok':'')}">${issue ? '<i class="ri-flag-2-fill"></i>' : (ok ? '<i class="ri-check-line"></i>' : '')}</div>
     <div class="sku-row-name">
@@ -1610,6 +1614,7 @@ window.openQtyEditModal = function(wid, key){
   const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
   const st = loadScanState(wid);
   const got = st.skuCounts[key] || 0;
+  const isMC = !!(st.skuMasterCase || {})[key];
   const keyEsc = String(key).replace(/'/g, "\\'");
   openModal(`
     <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
@@ -1620,6 +1625,11 @@ window.openQtyEditModal = function(wid, key){
       <label class="fl">Actual scanned qty</label>
       <input class="fi" type="number" min="0" id="qtyEditVal" value="${got}" style="font-size:18px;text-align:center;font-weight:700" autofocus>
     </div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px;cursor:pointer">
+      <input type="checkbox" id="qtyEditMC" style="width:auto" ${isMC?'checked':''}
+        onchange="if(this.checked) document.getElementById('qtyEditVal').value='${it.reqQty||0}';">
+      Master case — one case barcode covers the full quantity, not scanned unit-by-unit
+    </label>
     <div style="display:flex;gap:8px;margin-top:10px">
       <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
       <div style="flex:1"></div>
@@ -1631,12 +1641,15 @@ window.openQtyEditModal = function(wid, key){
 window.saveQtyEdit = function(wid, key){
   const val = Number(document.getElementById('qtyEditVal')?.value);
   if (isNaN(val) || val < 0) { toast('Enter a valid quantity', 'err'); return; }
+  const isMC = !!document.getElementById('qtyEditMC')?.checked;
   const st = loadScanState(wid);
   st.skuCounts[key] = Math.round(val);
+  st.skuMasterCase = st.skuMasterCase || {};
+  if (isMC) st.skuMasterCase[key] = true; else delete st.skuMasterCase[key];
   touchSkuOrder(st, key);
   saveScanState(wid, st);
   closeModal();
-  toast('Quantity updated', 'ok');
+  toast(isMC ? 'Marked as master case' : 'Quantity updated', 'ok');
   renderStageContent();
   pushMyLiveScan(wid);
 };
@@ -2070,10 +2083,11 @@ function skuChecklistReadyInfo(w){
   if (!items || !items.length) return null;
   const st = loadScanState(w.id);
   if (st.mode !== 'sku') return null;
+  const others = _liveBaseline[w.id] || {};
   let done = 0;
   items.forEach(it => {
     const key = it.barcode || it.sku;
-    const got = st.skuCounts[key] || 0;
+    const got = (st.skuCounts[key] || 0) + (others[key] || 0);
     const issue = (st.skuIssues || {})[key];
     if (issue || (it.reqQty > 0 && got >= it.reqQty)) done++;
   });
@@ -2151,9 +2165,9 @@ function renderStageContent(){
         </div>
         ${s==='INSP' ? renderScanUI(w) : ''}
         ${(() => { const r = skuChecklistReadyInfo(w); return r && r.ready
-            ? `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px"><i class="ri-checkbox-circle-fill"></i> All ${r.total} items accounted for — tap below to finish</div>`
+            ? `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px"><i class="ri-checkbox-circle-fill"></i> This order is fully accounted for (${r.total}/${r.total}, combining everyone's scans) — press finish below</div>`
             : ''; })()}
-        <button class="btn btn-green btn-block btn-lg" onclick="endWork('${w.id}','${s}')" ${inf?'disabled':''}>
+        <button class="btn btn-green btn-block btn-lg${(() => { const r = skuChecklistReadyInfo(w); return r && r.ready ? ' ready-to-finish' : ''; })()}" onclick="endWork('${w.id}','${s}')" ${inf?'disabled':''}>
           <i class="ri-checkbox-circle-line"></i> ${SELABEL[s]}
         </button>
         ${s==='INSP' ? `<button class="btn" style="width:100%;justify-content:center;margin-top:8px;padding:11px;font-size:13px;font-weight:600;color:var(--red);border-color:var(--red-bd);background:var(--red-bg)" onclick="cancelInspSession('${w.id}')" ${inf?'disabled':''}>
@@ -3084,8 +3098,9 @@ window.proceedToPrintOptions = function(wid){
     const key = it.barcode || it.sku;
     const got = st.skuCounts[key] || 0;
     const issue = (st.skuIssues || {})[key] || null;
+    const isMC = !!(st.skuMasterCase || {})[key];
     const fullyScanned = it.reqQty > 0 && got >= it.reqQty;
-    return { sku:it.sku, name:it.name, barcode:it.barcode, got, req:it.reqQty||0, issue, ok: fullyScanned && !issue, hasIssue: !!issue };
+    return { sku:it.sku, name:it.name, barcode:it.barcode, got, req:it.reqQty||0, issue, ok: fullyScanned && !issue, hasIssue: !!issue, mc: isMC };
   });
   const shortRows = rows.filter(r => !r.ok && !r.hasIssue);
   const issueRows = rows.filter(r => r.hasIssue);
@@ -3234,7 +3249,8 @@ window.printAggregateSlip = async function(oid){
   const w = { oid: p.orderId, w: '' };
   const rows = p.skus.map(s => ({
     sku:s.sku, name:s.name, barcode:s.barcode, req:s.reqQty, got:s.packedQty,
-    hasIssue: !!s.issueType, issue: s.issueType ? { type:s.issueType, qty:s.issueQty, note:s.issueNote } : null
+    hasIssue: !!s.issueType, issue: s.issueType ? { type:s.issueType, qty:s.issueQty, note:s.issueNote } : null,
+    mc: !!s.masterCase
   }));
   const contributorNames = p.contributors.map(c => `${c.worker} (${c.qty})`).join(', ');
   closeModal();
@@ -3250,7 +3266,7 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
 
   const rowsHtml = rows.map(r => `<tr>
       <td>${r.barcode||''}</td>
-      <td>${r.name||''}</td>
+      <td>${r.name||''}${r.mc ? ' <span style="font-size:10px;font-weight:700;color:#92400e;border:1px solid #d97706;border-radius:4px;padding:1px 4px">MC</span>' : ''}</td>
       <td style="text-align:center">${r.req}</td>
       <td style="text-align:center">${r.hasIssue ? (r.issue.qty||0) : 0}</td>
       <td style="text-align:center;font-weight:700">${r.got}</td>
@@ -3264,6 +3280,8 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
     <table class="slip-table"><thead><tr><th>Type</th><th>Product</th><th style="text-align:center">Qty</th><th>Note</th></tr></thead><tbody>
     ${issueRows.map(r => `<tr><td>${r.issue.type}</td><td>${r.name||r.sku||''}</td><td style="text-align:center">${r.issue.qty||0}</td><td>${r.issue.note||''}</td></tr>`).join('')}
     </tbody></table>` : '';
+  const mcNote = rows.some(r => r.mc)
+    ? `<p style="font-size:11px;color:#92400e;margin-top:10px"><b>MC</b> = confirmed as one full master case via the case's own barcode, not scanned unit-by-unit.</p>` : '';
 
   // Box / pallet breakdown — which SKUs (and how many) went into each
   // box or pallet, built from scan-time tracking. Only shown when
@@ -3325,6 +3343,7 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
     <tfoot><tr class="slip-total-row"><td colspan="2"><b>TOTAL — ${rows.length} SKU${rows.length===1?'':'s'}</b></td><td style="text-align:center"><b>${totalOrdered}</b></td><td style="text-align:center"><b>${totalIssue}</b></td><td style="text-align:center"><b>${totalPacked}</b></td></tr></tfoot>
     </table>
     ${issuesHtml}
+    ${mcNote}
     <div class="verify-badge ${badgeClass}">${badgeText}</div>
     <div class="slip-footer"><span>Verified by: ${worker} · ${printedAt}</span><span>StyleKorean NJ/MOIDA Warehouse System</span></div>
   </body></html>`;
@@ -3382,7 +3401,8 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
     packedQty: r.got,
     issueType: r.hasIssue ? r.issue.type : '',
     issueQty:  r.hasIssue ? (r.issue.qty||0) : 0,
-    issueNote: r.hasIssue ? (r.issue.note||'') : ''
+    issueNote: r.hasIssue ? (r.issue.note||'') : '',
+    masterCase: !!r.mc
   }));
   // Box-detail rows (boxNum set, no reqQty/issue — those live on the
   // summary row above) — lets a reprint reconstruct the box breakdown.
@@ -4741,7 +4761,8 @@ window.reprintPackingSlip = async function(wid){
   const rows = summaryRows.map(r => ({
     sku:r.sku, name:r.name, barcode:r.barcode, req:r.reqQty, got:r.packedQty,
     hasIssue: !!r.issueType,
-    issue: r.issueType ? { type:r.issueType, qty:r.issueQty, note:r.issueNote } : null
+    issue: r.issueType ? { type:r.issueType, qty:r.issueQty, note:r.issueNote } : null,
+    mc: !!r.masterCase
   }));
   const boxScans = {};
   boxDetailRows.forEach(r => {
