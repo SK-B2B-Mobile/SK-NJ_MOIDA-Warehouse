@@ -1698,11 +1698,9 @@ function renderAggScanUI(w, st){
   const color = cls === 'match' ? 'var(--green)' : cls === 'over' ? 'var(--red)' : 'var(--amber)';
   const pct = hasExp ? Math.min(100, Math.round(st.count / exp.qty * 100)) : 0;
   return `
-  <div class="scan-counter-wrap" style="padding:12px 14px">
-    <div style="font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px">
-      Expected · ${exp.items || '—'} items · ${exp.qty || '—'} QTY (from picking) · <span style="color:var(--t2)">no pick list imported</span>
-    </div>
-    <div class="scan-counter-big ${cls}" id="scanCount_${w.id}" style="font-size:32px;line-height:1.1">${st.count}</div>
+  <div class="scan-counter-wrap" style="padding:10px 14px">
+    <div style="font-size:10px;color:var(--t3);font-weight:600;margin-bottom:2px">${hasExp ? `Expected ${exp.qty} QTY (${exp.items} items) — no pick list` : 'No pick list imported'}</div>
+    <div class="scan-counter-big ${cls}" id="scanCount_${w.id}" style="font-size:30px;line-height:1.1;cursor:pointer;text-decoration:underline dotted;text-underline-offset:4px" onclick="openAggCountEditModal('${w.id}')" title="Tap to correct the count">${st.count}</div>
     <div class="scan-counter-sub" style="margin-top:0">${hasExp ? 'of ' + exp.qty + ' scanned' : 'scanned so far'}</div>
     <div class="scan-progress" style="margin-top:6px"><div class="scan-progress-fill" id="scanBar_${w.id}" style="width:${pct}%;background:${color}"></div></div>
     <div class="scan-input-row" style="margin-top:10px">
@@ -1711,13 +1709,38 @@ function renderAggScanUI(w, st){
       <button class="btn btn-purple" onclick="scanHit('${w.id}')" title="Add" style="flex-shrink:0"><i class="ri-add-line"></i></button>
     </div>
     <div style="display:flex;gap:6px;margin-top:6px">
-      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="document.getElementById('scanIn_${w.id}').focus()"><i class="ri-keyboard-line"></i> Enter manually</button>
-      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="openCameraCount('${w.id}')"><i class="ri-camera-line"></i> Camera</button>
-      <button class="btn btn-sm" style="flex-shrink:0;padding:0 12px" onclick="scanAdjust('${w.id}',-1)" title="Remove one"><i class="ri-subtract-line"></i></button>
+      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="openCameraCount('${w.id}')"><i class="ri-camera-line"></i> Camera scan</button>
       <button class="btn btn-sm" style="flex-shrink:0;padding:0 12px;color:var(--t3)" onclick="resetScanCount('${w.id}')" title="Reset"><i class="ri-restart-line"></i></button>
     </div>
   </div>`;
 }
+
+window.openAggCountEditModal = function(wid){
+  const st = loadScanState(wid);
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
+      <i class="ri-pencil-line" style="color:var(--purple)"></i> Correct scanned count
+    </div>
+    <div class="fg" style="margin-top:12px">
+      <input class="fi" type="number" min="0" id="aggCountEditVal" value="${st.count}" style="font-size:18px;text-align:center;font-weight:700" autofocus>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-purple btn-sm" onclick="saveAggCountEdit('${wid}')"><i class="ri-check-line"></i> Save</button>
+    </div>
+  `);
+};
+window.saveAggCountEdit = function(wid){
+  const val = Number(document.getElementById('aggCountEditVal')?.value);
+  if (isNaN(val) || val < 0) { toast('Enter a valid quantity', 'err'); return; }
+  const st = loadScanState(wid);
+  st.count = Math.round(val);
+  saveScanState(wid, st);
+  closeModal();
+  toast('Count updated', 'ok');
+  renderStageContent();
+};
 
 window.scanHit = function(wid){
   const inp = document.getElementById('scanIn_' + wid);
@@ -2110,12 +2133,6 @@ function renderStageContent(){
     return `<option value="${o.id}">${o.id} (${o.ch}·${o.cu})${orderStageStatusTag(o, s)}${myHere?' ⚡ Active':''}${isSLA(o)?' ⚠ SLA':''}</option>`;
   }).join('');
 
-  const instrMap = {
-    PICK: 'Enter item count + quantity, then start picking.',
-    INSP: 'Select order and start. Scan items to verify against picked quantity.',
-    PALL: 'Select order and start. Enter pallet count when done.'
-  };
-
   const pickFields = s === 'PICK' ? `
     <div id="pickOrderInfo" style="font-size:12px;color:var(--t3);margin-bottom:12px"></div>
     <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-bottom:10px;cursor:pointer">
@@ -2194,17 +2211,11 @@ function renderStageContent(){
   } else {
     startSect = `
     <div class="start-card ${bdcl}">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-        <div style="width:36px;height:36px;border-radius:50%;background:${col}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <i class="${icon}" style="color:${col};font-size:18px"></i>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="width:30px;height:30px;border-radius:50%;background:${col}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="${icon}" style="color:${col};font-size:16px"></i>
         </div>
-        <div style="flex:1">
-          <div style="font-weight:700;font-size:15px">${SLABEL[s]}</div>
-          <div style="font-size:11px;color:var(--t3);margin-top:1px">${instrMap[s]}</div>
-        </div>
-        <button class="btn btn-sm" onclick="openScan('work')" title="Scan order barcode / QR">
-          <i class="ri-qr-scan-2-line"></i> Scan
-        </button>
+        <div style="font-weight:700;font-size:15px">${SLABEL[s]}</div>
       </div>
       ${companion ? `<div style="display:flex;align-items:center;gap:7px;background:${SCOL[companion.stage]}12;border:1px solid ${SCOL[companion.stage]}44;border-radius:var(--r);padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--t2)">
         <i class="${SICON[companion.stage]}" style="color:${SCOL[companion.stage]}"></i>
@@ -2219,9 +2230,13 @@ function renderStageContent(){
       </div>
       <div id="workOrderInfo"></div>
       ${pickFields}
+      ${s === 'INSP' ? `
+      <div id="inspScanStartWrap">
+        <div style="font-size:12px;color:var(--t3);text-align:center;padding:10px 0">Select an order above to begin</div>
+      </div>` : `
       <button class="btn ${SBTN[s]} btn-block btn-lg" id="btnStartWork" onclick="startWork()" style="font-size:15px;padding:14px">
         <i class="ri-play-circle-line"></i> ${SLABEL[s]}
-      </button>
+      </button>`}
     </div>`;
   }
 
@@ -2284,8 +2299,14 @@ function liveElapsed(w){
 function onOrderChange(){
   const oid = document.getElementById('workOrder')?.value;
   const el = document.getElementById('workOrderInfo'); if (!el) return;
-  if (!oid) { el.innerHTML = ''; const pi = document.getElementById('pickOrderInfo'); if (pi) pi.innerHTML = ''; return; }
-  if (CS === 'INSP') { ensureOrderItems(oid); loadOrderProgressPreview(oid); }   // prefetch pick list + combined progress
+  if (!oid) {
+    el.innerHTML = '';
+    const pi = document.getElementById('pickOrderInfo'); if (pi) pi.innerHTML = '';
+    const sw = document.getElementById('inspScanStartWrap');
+    if (sw) sw.innerHTML = `<div style="font-size:12px;color:var(--t3);text-align:center;padding:10px 0">Select an order above to begin</div>`;
+    return;
+  }
+  if (CS === 'INSP') { ensureOrderItems(oid); loadOrderProgressPreview(oid); renderInspScanStart(oid); }   // prefetch pick list + combined progress
   const o = S.orders.find(x => x.id === oid);
   if (CS === 'PICK') {
     const pi = document.getElementById('pickOrderInfo');
@@ -2372,6 +2393,72 @@ async function loadOrderProgressPreview(oid){
       <div>Qty ${p.qtyDone}/${p.qtyTotal}<div style="background:var(--bg4);border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${qtyPct}%"></div></div></div>
     </div>
   </div>`;
+}
+
+// Scan-to-start — replaces a separate "Start Inspection" click: scanning
+// something IS the deliberate signal to begin, so the session starts the
+// moment a real scan happens rather than needing a button tapped first.
+// (Just selecting an order in the dropdown does NOT start anything, since
+// that can happen by accident while browsing — only an actual scan does.)
+function renderInspScanStart(oid){
+  const wrap = document.getElementById('inspScanStartWrap'); if (!wrap) return;
+  const items = _orderItemsCache[oid];
+  if (items === undefined || items === null) {
+    wrap.innerHTML = `<div style="font-size:12px;color:var(--t3);text-align:center;padding:10px 0"><i class="ri-loader-4-line"></i> Checking pick list...</div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <div class="scan-input-row">
+      <input class="fi" type="text" id="pickerScanIn" placeholder="Scan barcode to begin inspection" autocomplete="off" style="flex:1;font-size:15px;padding:12px 14px"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();startInspectionByScan()}">
+      <button class="btn btn-purple" onclick="startInspectionByScan()" title="Begin"><i class="ri-play-circle-line"></i></button>
+    </div>
+    <div style="text-align:center;margin-top:8px">
+      <button class="btn btn-sm" style="color:var(--t3)" onclick="startWork()"><i class="ri-play-circle-line"></i> Or start without scanning</button>
+    </div>`;
+  if (!isMobileDevice()) setTimeout(() => document.getElementById('pickerScanIn')?.focus(), 60);
+}
+
+window.startInspectionByScan = function(){
+  const oid = document.getElementById('workOrder')?.value;
+  if (!oid) { toast('Select an order first', 'err'); return; }
+  const inp = document.getElementById('pickerScanIn');
+  const code = inp ? inp.value.trim() : '';
+  if (!code) { toast('Scan a barcode to begin', 'err'); return; }
+  if (inp) inp.value = '';
+
+  // Already have an active INSP session on this order? Feed the scan into
+  // that one instead of starting a duplicate — same resume behavior as
+  // the manual "Start Inspection" path.
+  const already = S.works.find(w => w.w===CW && w.oid===oid && w.stage==='INSP' && !w.endT);
+  if (already) {
+    applyFirstScan(already.id, oid, code);
+    const el = document.getElementById('sc_' + already.id);
+    if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+    return;
+  }
+
+  const tid = doStartWork(oid, null, null, null, null);
+  if (!tid) return; // e.g. a start was already in flight — doStartWork's own lock handled the message
+  applyFirstScan(tid, oid, code);
+};
+
+// Applies the scan that started the session as its first real scan — not
+// just a marker. Whether that means a SKU-checklist hit or a plain +1
+// depends on whether a pick list was imported for this order, exactly
+// like every scan after it.
+function applyFirstScan(wid, oid, code){
+  const items = _orderItemsCache[oid];
+  const st = loadScanState(wid);
+  if (items && items.length > 0) {
+    st.mode = 'sku'; st.skuCounts = st.skuCounts || {};
+    saveScanState(wid, st);
+    registerSkuScan(wid, code);
+  } else {
+    st.mode = 'agg';
+    saveScanState(wid, st);
+    scanAdjust(wid, 1);
+  }
 }
 
 function renderMyActive(){ renderStageContent(); }
@@ -2538,7 +2625,10 @@ function doStartWork(oid, items, qty, pageFrom, pageTo){
 
   document.querySelectorAll('[id="btnStartWork"]').forEach(btn => {
     btn.disabled = true;
-    btn.innerHTML = '<i class="ri-loader-4-line"></i> Starting...';
+    btn.style.background = 'var(--bg4)';
+    btn.style.borderColor = 'var(--bd2)';
+    btn.style.color = 'var(--t2)';
+    btn.innerHTML = '<i class="ri-loader-4-line" style="animation:spin .8s linear infinite"></i> Starting...';
   });
   const startCard = document.querySelector('.start-card');
   if (startCard) startCard.style.opacity = '.5';
@@ -2569,7 +2659,7 @@ function doStartWork(oid, items, qty, pageFrom, pageTo){
     toast('Offline — ' + CS + ' start saved to queue', '');
     finish();
     setTimeout(() => document.getElementById('sc_' + tid)?.scrollIntoView({ behavior:'smooth', block:'start' }), 60);
-    return;
+    return tid;
   }
 
   _pending[tid] = true;
@@ -2607,12 +2697,36 @@ function doStartWork(oid, items, qty, pageFrom, pageTo){
     }
     const idx = S.works.findIndex(w => w.id === tid);
     if (idx >= 0) {
-      if (res.entryId)  S.works[idx].id = res.entryId;
+      if (res.entryId && res.entryId !== tid) {
+        migrateWidKeyedState(tid, res.entryId);
+        S.works[idx].id = res.entryId;
+      }
       if (res.startTime) S.works[idx].startT = res.startTime;
       if (res.startISO)  S.works[idx].startISO = res.startISO;
     }
     finish();
   });
+  return tid;
+}
+
+// The optimistic tempId becomes the server's real entryId once startWork
+// confirms — everything keyed by wid (scan progress, live-sync bookkeeping,
+// the "focused once" flag) has to move with it, or work done in that
+// window (which can now include the very first scan that started the
+// session) would silently disappear from the UI the moment the swap happens.
+function migrateWidKeyedState(oldId, newId){
+  if (_scanState[oldId]) {
+    _scanState[newId] = _scanState[oldId];
+    delete _scanState[oldId];
+    try {
+      localStorage.setItem('wms_scan_' + newId, JSON.stringify(_scanState[newId]));
+      localStorage.removeItem('wms_scan_' + oldId);
+    } catch(_){}
+  }
+  if (_liveBaseline[oldId])     { _liveBaseline[newId] = _liveBaseline[oldId]; delete _liveBaseline[oldId]; }
+  if (_liveContributors[oldId]) { _liveContributors[newId] = _liveContributors[oldId]; delete _liveContributors[oldId]; }
+  if (_livePollTimers[oldId])   { _livePollTimers[newId] = _livePollTimers[oldId]; delete _livePollTimers[oldId]; }
+  if (_scanFocusedOnce[oldId])  { _scanFocusedOnce[newId] = true; delete _scanFocusedOnce[oldId]; }
 }
 
 // ══════════════════════════════════════════════════════
