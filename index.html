@@ -2485,7 +2485,15 @@ function onOrderChange(){
 async function loadOrderProgressPreview(oid){
   const el = document.getElementById('orderProgressPreview'); if (!el) return;
   el.innerHTML = '<div style="font-size:11px;color:var(--t3);padding:4px 0">Checking progress…</div>';
-  const p = await getPrintReadyProgress(oid);
+  let p;
+  try {
+    p = await getPrintReadyProgress(oid);
+  } catch (e) {
+    console.warn('loadOrderProgressPreview failed', e);
+    const errEl = document.getElementById('orderProgressPreview');
+    if (errEl) errEl.innerHTML = '';
+    return;
+  }
   const liveEl = document.getElementById('orderProgressPreview'); if (!liveEl) return; // order may have changed since
   if (!p) { liveEl.innerHTML = ''; return; }
   if (!p.skuTotal) { liveEl.innerHTML = ''; return; } // no pick list imported — nothing to aggregate
@@ -3260,6 +3268,18 @@ window.finalizeInspEnd = async function(wid){
 // if the live call fails, we silently fall back to saved-only rather than
 // blocking printing.
 async function getPrintReadyProgress(oid){
+  // If nobody is currently, actively scanning this order (the common case
+  // once an order is fully done), there is nothing live to merge — skip
+  // the getLiveScans call entirely and behave exactly like the original
+  // single-call getOrderProgress path. This is both faster for the normal
+  // "order is already finished" case and removes any risk of the new
+  // live-merge logic interfering with it.
+  const hasActiveInsp = S.works.some(w => w.oid === oid && w.stage === 'INSP' && !w.endT);
+  if (!hasActiveInsp) {
+    const endedOnly = await apiOp('getOrderProgress', { oid });
+    return (endedOnly.net && endedOnly.res.ok) ? endedOnly.res : null;
+  }
+
   const [liveOut, endedOut] = await Promise.all([
     apiOp('getLiveScans', { orderId: oid }),
     apiOp('getOrderProgress', { oid })
@@ -3348,7 +3368,14 @@ async function getOrderBoxGroups(oid){
 // it" workflow. ─────────────────────────────────────────────────────
 window.showOrderProgressResult = async function(oid){
   toast('Checking order progress...', '');
-  const p = await getPrintReadyProgress(oid);
+  let p;
+  try {
+    p = await getPrintReadyProgress(oid);
+  } catch (e) {
+    console.warn('showOrderProgressResult failed', e);
+    toast('⚠ Could not load order progress', 'err');
+    return;
+  }
   if (!p) { toast('⚠ Could not load order progress', 'err'); return; }
   renderOrderProgressModal(p);
 };
@@ -3423,7 +3450,14 @@ window.printLabelsForOrder = function(oid){
 // checklist, no matter who has or hasn't pressed End Inspection yet.
 window.printOrderPackingSlip = async function(oid, mode){
   toast('Preparing packing slip...', '');
-  const p = await getPrintReadyProgress(oid);
+  let p;
+  try {
+    p = await getPrintReadyProgress(oid);
+  } catch (e) {
+    console.warn('printOrderPackingSlip failed', e);
+    toast('⚠ Could not load order data', 'err');
+    return;
+  }
   if (!p) { toast('⚠ Could not load order data', 'err'); return; }
   const w = { oid: p.orderId, w: '' };
   const rows = p.skus.map(s => ({
@@ -3436,9 +3470,14 @@ window.printOrderPackingSlip = async function(oid, mode){
 
   let boxGroups = null;
   if (mode === 'box') {
-    const bg = await getOrderBoxGroups(oid);
-    boxGroups = bg.groups;
-    meta.unitType = bg.unitType;
+    try {
+      const bg = await getOrderBoxGroups(oid);
+      boxGroups = bg.groups;
+      meta.unitType = bg.unitType;
+    } catch (e) {
+      console.warn('getOrderBoxGroups failed', e);
+      boxGroups = [];
+    }
   }
   closeModal();
   printPackingSlip(w, rows, meta, mode === 'box' ? boxGroups : {}, mode === 'box' ? 'box' : 'flat');
