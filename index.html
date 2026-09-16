@@ -809,6 +809,39 @@ function toast(m, c){
   t.className = 'toast show' + (c ? ' ' + c : '');
   clearTimeout(t._t); t._t = setTimeout(() => t.className = 'toast', 2800);
 }
+
+// v13.1 — audible scan confirmation, requested so a worker gets an
+// unmistakable "that registered" signal without watching the screen.
+// Generated with the Web Audio API directly rather than an audio file, so
+// there's nothing to host or cache and it still works offline. A short
+// high beep = good scan; a low double-buzz = the code didn't match
+// anything on this order's list.
+let _audioCtx = null;
+function _getAudioCtx(){
+  if (!_audioCtx) {
+    try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(_) { return null; }
+  }
+  if (_audioCtx.state === 'suspended') { try { _audioCtx.resume(); } catch(_){} }
+  return _audioCtx;
+}
+function playScanBeep(kind){
+  const ctx = _getAudioCtx(); if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+    const tone = (freq, start, dur, type) => {
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = type || 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now + start);
+      gain.gain.exponentialRampToValueAtTime(0.28, now + start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + start + dur);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(now + start); osc.stop(now + start + dur + 0.02);
+    };
+    if (kind === 'error') { tone(220, 0, 0.09, 'square'); tone(220, 0.12, 0.09, 'square'); }
+    else tone(1568, 0, 0.11, 'sine');
+  } catch(_){}
+}
 function closeModal(){
   stopScanHardware();
   document.getElementById('modalBg').classList.remove('show');
@@ -927,6 +960,35 @@ function saveScanState(wid, st){ _scanState[wid] = st; try { localStorage.setIte
 function clearScanState(wid){ delete _scanState[wid]; try { localStorage.removeItem('wms_scan_' + wid); } catch(_){} }
 
 /** Returns cached SKU-level pick list for an order, or null while it's still loading (fetch kicked off in background). */
+// v13.1 — root cause of "checklist says 87/87 but the packing slip says
+// 85 SKUs": a pick-list import occasionally produces two separate
+// OrderItems rows for the exact same SKU/barcode (its required qty split
+// across rows instead of merged into one). Scanning already keyed by
+// barcode so both rows tracked the same combined count — but the
+// checklist rendered TWO rows for one physical product (each compared
+// against its own partial reqQty), while the server's print aggregation
+// already groups by unique SKU. Merging duplicates here, once, on load
+// makes the checklist, the "ready to finish" count, and the printed slip
+// all agree on the same number of unique SKUs.
+function mergeDuplicateOrderItems(items){
+  const byKey = new Map();
+  const order = [];
+  (items || []).forEach(it => {
+    const key = it.barcode || it.sku;
+    if (byKey.has(key)) {
+      const existing = byKey.get(key);
+      existing.reqQty = (existing.reqQty || 0) + (it.reqQty || 0);
+      if (it.rack && existing.rack && !existing.rack.includes(it.rack)) existing.rack += ', ' + it.rack;
+      else if (it.rack && !existing.rack) existing.rack = it.rack;
+    } else {
+      const copy = Object.assign({}, it);
+      byKey.set(key, copy);
+      order.push(copy);
+    }
+  });
+  return order;
+}
+
 function ensureOrderItems(oid){
   if (!oid) return [];
   if (_orderItemsCache[oid]) return _orderItemsCache[oid];
@@ -936,7 +998,7 @@ function ensureOrderItems(oid){
     apiOp('getOrderItems', { oid }).then(out => {
       _orderItemsLoading[oid] = false;
       if (out.net && out.res.ok) {
-        _orderItemsCache[oid] = out.res.items || [];
+        _orderItemsCache[oid] = mergeDuplicateOrderItems(out.res.items || []);
       } else {
         _orderItemsFailed[oid] = true;
       }
@@ -1402,7 +1464,13 @@ function skuUI(wid){
   if (!_skuUI[wid]) _skuUI[wid] = { q:'', page:0, size:20 };
   return _skuUI[wid];
 }
-function filterSkuItems(items, q, touchOrder){
+// v13.1 — reordered per worker feedback: not-yet-scanned items must always
+// sit at the top (right under the scan box) so a worker can see at a
+// glance what's left, with already-scanned items stacking below in
+// most-recently-scanned-first order. Previously "touched" items (scanned
+// OR just-corrected) jumped to the top regardless of done/not-done, which
+// could bury an unscanned item under a pile of already-finished ones.
+function filterSkuItems(items, q, st, wid){
   let out = items;
   if (q) {
     const s = q.trim().toLowerCase();
@@ -1413,16 +1481,25 @@ function filterSkuItems(items, q, touchOrder){
       (it.rack||'').toLowerCase().includes(s)
     );
   }
-  if (touchOrder && Object.keys(touchOrder).length) {
-    out = [...out].sort((a, b) => {
-      const ka = a.barcode || a.sku, kb = b.barcode || b.sku;
-      const ta = touchOrder[ka], tb = touchOrder[kb];
-      if (ta !== undefined && tb !== undefined) return tb - ta; // most recently touched first
-      if (ta !== undefined) return -1;
-      if (tb !== undefined) return 1;
-      return 0; // neither touched — keep original order (stable sort)
-    });
-  }
+  const touchOrder = (st && st.skuTouchOrder) || {};
+  const mine = (st && st.skuCounts) || {};
+  const others = (wid && _liveBaseline[wid]) || {};
+  const issues = (st && st.skuIssues) || {};
+  out = [...out].sort((a, b) => {
+    const ka = a.barcode || a.sku, kb = b.barcode || b.sku;
+    const gotA = (mine[ka]||0) + (others[ka]||0);
+    const gotB = (mine[kb]||0) + (others[kb]||0);
+    const doneA = !!issues[ka] || (a.reqQty||0) <= 0 || gotA >= (a.reqQty||0);
+    const doneB = !!issues[kb] || (b.reqQty||0) <= 0 || gotB >= (b.reqQty||0);
+    if (doneA !== doneB) return doneA ? 1 : -1; // not-done items float to the top
+    if (!doneA) return 0; // both still open — keep the original pick-list order
+    // both done: most recently scanned/touched first
+    const ta = touchOrder[ka], tb = touchOrder[kb];
+    if (ta !== undefined && tb !== undefined) return tb - ta;
+    if (ta !== undefined) return -1;
+    if (tb !== undefined) return 1;
+    return 0;
+  });
   return out;
 }
 function touchSkuOrder(st, key){
@@ -1465,7 +1542,7 @@ window.updateSkuListView = function(wid){
   const items = _orderItemsCache[w.oid] || [];
   const st = loadScanState(wid);
   const ui = skuUI(wid);
-  const filtered = filterSkuItems(items, ui.q, st.skuTouchOrder);
+  const filtered = filterSkuItems(items, ui.q, st, wid);
   const totalPages = Math.max(1, Math.ceil(filtered.length / ui.size));
   if (ui.page >= totalPages) ui.page = totalPages - 1;
   if (ui.page < 0) ui.page = 0;
@@ -1665,7 +1742,7 @@ function renderSkuChecklistUI(w, items, st){
     if (issue || it.reqQty <= 0 || got >= it.reqQty) doneCount++;
   });
 
-  const filtered = filterSkuItems(items, ui.q, st.skuTouchOrder);
+  const filtered = filterSkuItems(items, ui.q, st, w.id);
   const totalPages = Math.max(1, Math.ceil(filtered.length / ui.size));
   if (ui.page >= totalPages) ui.page = totalPages - 1;
   if (ui.page < 0) ui.page = 0;
@@ -1812,6 +1889,7 @@ function registerSkuScan(wid, code){
     st.unknown = (st.unknown || 0) + 1;
     saveScanState(wid, st);
     toast('⚠ Not on this order\'s list: ' + code, 'err');
+    playScanBeep('error');
     if (navigator.vibrate) try { navigator.vibrate([40,40,40]); } catch(_){}
     renderStageContent();
     return;
@@ -1839,6 +1917,7 @@ function registerSkuScan(wid, code){
   st.boxScans[b][key] = (st.boxScans[b][key] || 0) + mult;
   saveScanState(wid, st);
   _lastScanned[wid] = { sku: match.sku, barcode: match.barcode, name: match.name, qty: mineBefore + mult, req: reqQty, at: Date.now() };
+  playScanBeep('ok');
   if (navigator.vibrate) try { navigator.vibrate(25); } catch(_){}
   renderStageContent();
   pushMyLiveScan(wid);
@@ -1985,6 +2064,7 @@ window.scanAdjust = function(wid, delta){
   const st = loadScanState(wid);
   st.count = Math.max(0, (st.count || 0) + delta);
   saveScanState(wid, st);
+  if (delta > 0) playScanBeep('ok');
   if (navigator.vibrate) try { navigator.vibrate(25); } catch(_){}
   updateScanDisplay(wid);
   const inp = document.getElementById('scanIn_' + wid);
@@ -2147,6 +2227,15 @@ function renderStageContent(){
       const inf = !!_pending[w.id];
       const queued = isTempQueued(w.id);
       const elapsed = liveElapsed(w);
+      // v13.1 — computed once and reused by both the "fully accounted for"
+      // banner and the End Inspection button below, so they can never
+      // disagree with each other.
+      const readyInfo = skuChecklistReadyInfo(w);
+      // Only SKU-checklist INSP sessions are gated — an aggregate-mode
+      // session (no pick list imported) has no checklist to finish against,
+      // so it stays exactly as before (always clickable).
+      const gated = s === 'INSP' && !!readyInfo;
+      const notReadyYet = gated && !readyInfo.ready;
       return `
       <div class="session-card ${bdcl}" id="sc_${w.id}" style="margin-bottom:10px">
         <div class="session-top">
@@ -2164,16 +2253,19 @@ function renderStageContent(){
           ${elapsed ? `<span class="chip hi" id="elapsed_${w.id}"><i class="ri-timer-line"></i> ${elapsed}</span>` : `<span id="elapsed_${w.id}"></span>`}
         </div>
         ${s==='INSP' ? renderScanUI(w) : ''}
-        ${(() => { const r = skuChecklistReadyInfo(w); return r && r.ready
-            ? `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:8px 12px"><i class="ri-checkbox-circle-fill"></i> This order is fully accounted for (${r.total}/${r.total}, combining everyone's scans)</div>`
-            : ''; })()}
+        ${readyInfo && readyInfo.ready
+            ? `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:8px 12px"><i class="ri-checkbox-circle-fill"></i> This order is fully accounted for (${readyInfo.total}/${readyInfo.total}, combining everyone's scans)</div>`
+            : ''}
         ${s==='INSP' ? `<div style="display:flex;gap:6px;margin-bottom:8px">
           <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${w.oid}','box')" title="Per box/pallet breakdown"><i class="ri-printer-line"></i> Packing Slip</button>
           <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${w.oid}','flat')" title="Whole order, one combined list"><i class="ri-file-list-3-line"></i> Flat List</button>
           <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${w.oid}')" title="Progress + shipping labels"><i class="ri-price-tag-3-line"></i> Labels</button>
         </div>` : ''}
-        <button class="btn btn-green btn-block btn-lg${(() => { const r = skuChecklistReadyInfo(w); return r && r.ready ? ' ready-to-finish' : ''; })()}" onclick="endWork('${w.id}','${s}')" ${inf?'disabled':''}>
-          <i class="ri-checkbox-circle-line"></i> ${SELABEL[s]}
+        <button class="btn btn-green btn-block btn-lg${readyInfo && readyInfo.ready ? ' ready-to-finish' : ''}"
+          onclick="endWork('${w.id}','${s}')" ${(inf || notReadyYet) ? 'disabled' : ''}
+          ${notReadyYet ? 'style="opacity:.5;cursor:not-allowed"' : ''}
+          title="${notReadyYet ? 'Scan (or flag) every item first' : ''}">
+          <i class="ri-checkbox-circle-line"></i> ${notReadyYet ? `Scan all items to finish (${readyInfo.done}/${readyInfo.total})` : SELABEL[s]}
         </button>
         ${s==='INSP' ? `<button class="btn" style="width:100%;justify-content:center;margin-top:8px;padding:11px;font-size:13px;font-weight:600;color:var(--red);border-color:var(--red-bd);background:var(--red-bg)" onclick="cancelInspSession('${w.id}')" ${inf?'disabled':''}>
           <i class="ri-close-circle-line" style="font-size:15px"></i> Leave without finishing
@@ -3555,25 +3647,31 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   const badgeText = result === 'PASS' ? '✓ INSPECTION PASSED — ALL ITEMS VERIFIED' : '⚠ INSPECTION COMPLETE — WITH ISSUES';
 
   const css = `
-    @page{ size: letter; margin: 12mm; }
-    body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; padding:36px; max-width:760px; margin:0 auto; font-size:13px;}
-    .slip-head{display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #111; padding-bottom:16px; margin-bottom:20px;}
-    .slip-logo{font-size:26px; font-weight:800; letter-spacing:-0.02em;}
-    .slip-addr{font-size:12px; color:#555; margin-top:4px; line-height:1.5;}
-    .slip-title{font-size:20px; font-weight:800; text-align:right;}
-    .slip-meta{font-size:12px; color:#555; text-align:right; margin-top:4px;}
-    .slip-info{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; font-size:13px;}
-    .slip-info div b{display:block; font-size:11px; color:#777; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:2px;}
-    table.slip-table{width:100%; border-collapse:collapse; font-size:13px; margin-top:8px;}
-    table.slip-table th{background:#111; color:#fff; padding:8px 10px; text-align:left; font-size:11px; text-transform:uppercase;}
-    table.slip-table td{padding:8px 10px; border-bottom:1px solid #ddd;}
-    .slip-total-row td{border-top:2px solid #111; border-bottom:none; padding-top:10px; background:#f7f7f7;}
-    .issues-h4{margin-top:18px; font-size:13px; text-transform:uppercase; color:#555;}
-    .box-line{font-size:13px; margin:6px 0;}
-    .verify-badge{display:inline-block; padding:6px 14px; border-radius:6px; font-weight:800; font-size:13px; margin-top:18px;}
+    @page{ size: letter; margin: 16mm 15mm; }
+    *{box-sizing:border-box;}
+    body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; padding:0; max-width:100%; margin:0; font-size:12.5px;}
+    .slip-head{display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #111; padding-bottom:14px; margin-bottom:18px;}
+    .slip-logo{font-size:24px; font-weight:800; letter-spacing:-0.02em;}
+    .slip-addr{font-size:11px; color:#555; margin-top:4px; line-height:1.5;}
+    .slip-title{font-size:18px; font-weight:800; text-align:right;}
+    .slip-meta{font-size:11px; color:#555; text-align:right; margin-top:4px;}
+    .slip-info{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px; font-size:12.5px;}
+    .slip-info div b{display:block; font-size:10.5px; color:#777; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:2px;}
+    table.slip-table{width:100%; border-collapse:collapse; font-size:12px; margin-top:8px;}
+    table.slip-table th{background:#111; color:#fff; padding:7px 9px; text-align:left; font-size:10.5px; text-transform:uppercase;}
+    table.slip-table td{padding:6px 9px; border-bottom:1px solid #ddd;}
+    table.slip-table tbody tr, table.slip-table tfoot tr{page-break-inside:avoid; break-inside:avoid;}
+    .slip-total-row td{border-top:2px solid #111; border-bottom:none; padding-top:9px; background:#f7f7f7;}
+    .issues-h4{margin-top:16px; font-size:12.5px; text-transform:uppercase; color:#555;}
+    .box-line{font-size:12.5px; margin:6px 0; page-break-inside:avoid; break-inside:avoid;}
+    .verify-badge{display:inline-block; padding:6px 14px; border-radius:6px; font-weight:800; font-size:12.5px; margin-top:16px; page-break-inside:avoid; break-inside:avoid;}
     .verify-ok{background:#ede9fe; color:#5b21b6; border:1px solid #8b5cf6;}
     .verify-bad{background:#fee2e2; color:#991b1b; border:1px solid #dc2626;}
-    .slip-footer{margin-top:28px; padding-top:14px; border-top:1px solid #ccc; font-size:11px; color:#777; display:flex; justify-content:space-between;}
+    .slip-footer{margin-top:22px; padding-top:12px; border-top:1px solid #ccc; font-size:10.5px; color:#777; display:flex; justify-content:space-between; page-break-inside:avoid; break-inside:avoid;}
+    /* Keep the total row + badge + footer together as one unbreakable
+       block whenever possible, so a page break can't land in the middle
+       of the numbers a customer would actually check. */
+    .slip-closing{page-break-inside:avoid; break-inside:avoid;}
   `;
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Packing Slip · ${w.oid}</title><style>${css}</style></head><body>
@@ -3595,8 +3693,10 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
     ${issuesHtml}
     ${mcNote}
     ${fcNote}
-    <div class="verify-badge ${badgeClass}">${badgeText}</div>
-    <div class="slip-footer"><span>Verified by: ${worker} · ${printedAt}</span><span>StyleKorean NJ/MOIDA Warehouse System</span></div>
+    <div class="slip-closing">
+      <div class="verify-badge ${badgeClass}">${badgeText}</div>
+      <div class="slip-footer"><span>Verified by: ${worker} · ${printedAt}</span><span>StyleKorean NJ/MOIDA Warehouse System</span></div>
+    </div>
   </body></html>`;
 
   const win = window.open('', '_blank', 'width=820,height=1000');
