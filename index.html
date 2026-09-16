@@ -1447,6 +1447,17 @@ function renderScanUI(w){
   if (items.length > 0) {
     if (st.mode !== 'sku') { st.mode = 'sku'; st.skuCounts = st.skuCounts || {}; saveScanState(w.id, st); }
     startLivePoll(w.id);
+    // v13.3 — show a plain "syncing" placeholder until the first live
+    // fetch resolves, instead of the checklist itself. Without this, the
+    // list briefly rendered from local-only data (which can be all-zero —
+    // e.g. right after a browser cache/site-data clear, or on a device
+    // that never had this session's local scans) before flipping to the
+    // real combined numbers a second later, which looked like the wrong
+    // order or a broken reset rather than what it actually was: still
+    // loading everyone else's already-saved progress.
+    if (!_liveSyncedOnce[w.id]) {
+      return `<div class="scan-counter-wrap"><div style="color:var(--t3);font-size:12px"><i class="ri-loader-4-line"></i> Syncing this order's progress...</div></div>`;
+    }
     return renderSkuChecklistUI(w, items, st);
   }
   if (st.mode !== 'agg') { st.mode = 'agg'; saveScanState(w.id, st); }
@@ -1699,14 +1710,26 @@ window.openQtyEditModal = function(wid, key){
   const reqQty = it.reqQty || 0;
   const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
   const maxMine = Math.max(0, reqQty - othersQty);
+  // v13.3 — this field REPLACES your recorded total, it does not add to
+  // it (typing "2" meaning "2 more" was a real mix-up that produced a
+  // wrong 6/20 instead of the intended 20/20). To make that unambiguous:
+  // show current/required/others as separate numbers, say plainly that
+  // this replaces the current value, and default the box to the exact
+  // number that finishes this item (maxMine) instead of the old value —
+  // that's the number a worker almost always wants when they open this.
   openModal(`
     <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
       <i class="ri-pencil-line" style="color:var(--purple)"></i> Correct scanned qty
     </div>
-    <div style="font-size:12px;color:var(--t3);margin-bottom:14px" class="mono">${it.sku||'—'} · ${(it.name||'').replace(/</g,'&lt;')} · needs ${reqQty}${othersQty ? ` (others already logged ${othersQty})` : ''}</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px" class="mono">${it.sku||'—'} · ${(it.name||'').replace(/</g,'&lt;')}</div>
+    <div style="display:flex;justify-content:space-between;gap:6px;font-size:11px;color:var(--t3);margin-bottom:14px;background:var(--bg3);border-radius:var(--r);padding:8px 10px;text-align:center">
+      <span style="flex:1">Required<br><b style="font-size:15px;color:var(--t)">${reqQty}</b></span>
+      <span style="flex:1">Others logged<br><b style="font-size:15px;color:var(--t)">${othersQty}</b></span>
+      <span style="flex:1">Yours now<br><b style="font-size:15px;color:var(--t)">${got}</b></span>
+    </div>
     <div class="fg">
-      <label class="fl">Actual scanned qty (yours)${reqQty ? ` — max ${maxMine}` : ''}</label>
-      <input class="fi" type="number" min="0" ${reqQty ? `max="${maxMine}"` : ''} id="qtyEditVal" value="${got}" style="font-size:18px;text-align:center;font-weight:700" autofocus>
+      <label class="fl">Set YOUR total to this number — <u>replaces</u> ${got}, does not add to it${reqQty ? ` (max ${maxMine} to reach ${reqQty} total)` : ''}</label>
+      <input class="fi" type="number" min="0" ${reqQty ? `max="${maxMine}"` : ''} id="qtyEditVal" value="${reqQty ? maxMine : got}" style="font-size:18px;text-align:center;font-weight:700" autofocus>
     </div>
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px;cursor:pointer">
       <input type="checkbox" id="qtyEditMC" style="width:auto" ${isMC?'checked':''}
@@ -1951,6 +1974,7 @@ let _lastScanned = {}; // wid -> { sku, barcode, name, qty, req, at } — for th
 // likely duplicates and to fold already-covered SKUs into "done".
 let _liveBaseline = {};      // wid -> { key: combinedQtyFromOthers }
 let _liveContributors = {};  // wid -> [{ worker, skuCounts }, ...] — raw, for naming who covered what
+let _liveSyncedOnce = {};    // wid -> true once the first live-baseline fetch has resolved
 let _livePollTimers = {};    // wid -> intervalId
 let _livePushTimers = {};    // wid -> debounce timeoutId
 
@@ -1998,7 +2022,16 @@ async function refreshLiveBaseline(wid){
     baseline[key] = (baseline[key] || 0) + (s.packedQty||0) + (s.issueQty||0);
   });
   _liveBaseline[wid] = baseline;
-  updateSkuChecklistLive(wid);
+  // v13.3 — the very first sync for a freshly-opened session needs a full
+  // re-render (to swap the "syncing..." placeholder for the real
+  // checklist below); every poll after that stays a targeted update so
+  // it doesn't wipe the order picker or search box mid-typing.
+  if (!_liveSyncedOnce[wid]) {
+    _liveSyncedOnce[wid] = true;
+    renderStageContent();
+  } else {
+    updateSkuChecklistLive(wid);
+  }
 }
 
 // Targeted refresh for exactly one session's checklist — deliberately
@@ -2033,6 +2066,7 @@ function stopLivePoll(wid){
   delete _livePollTimers[wid];
   delete _liveBaseline[wid];
   delete _liveContributors[wid];
+  delete _liveSyncedOnce[wid];
   clearTimeout(_livePushTimers[wid]);
   delete _livePushTimers[wid];
 }
