@@ -3461,7 +3461,15 @@ window.finalizeInspEnd = async function(wid){
   await logInspectionResultsToServer(wid, w.oid, pend.rows, pend.result, pend.boxScans, unitType);
   delete _pendingInspEnd[wid];
 
-  showOrderProgressResult(w.oid);
+  // v13.8 — used to force-open the Labels progress modal right here. Now
+  // that Packing Slip / Flat List / Labels are always-visible buttons on
+  // the order screen itself (decision #6), popping the same info up in a
+  // modal on top of that was pure duplication and left the worker unsure
+  // how to get back to the screen that already had everything they
+  // needed. The completion card above already confirms it's done; the
+  // order-selection screen (rendered by doEndWork's renderStageContent)
+  // now shows the print buttons directly, no extra popup needed.
+  toast('✓ Inspection saved — print buttons are on the order screen', 'ok');
 };
 
 // ── v13.0 fix — "checklist says 87/87 but the slip/label modal says
