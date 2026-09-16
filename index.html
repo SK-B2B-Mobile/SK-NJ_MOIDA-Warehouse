@@ -2165,14 +2165,12 @@ function renderStageContent(){
         </div>
         ${s==='INSP' ? renderScanUI(w) : ''}
         ${(() => { const r = skuChecklistReadyInfo(w); return r && r.ready
-            ? `<div style="background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">
-                <div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px"><i class="ri-checkbox-circle-fill"></i> This order is fully accounted for (${r.total}/${r.total}, combining everyone's scans)</div>
-                <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-                  <button class="btn btn-sm" onclick="printAggregateSlip('${w.oid}')"><i class="ri-printer-line"></i> Print packing slip</button>
-                  <button class="btn btn-sm" onclick="showOrderProgressResult('${w.oid}')"><i class="ri-price-tag-3-line"></i> Print labels</button>
-                </div>
-              </div>`
+            ? `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:8px 12px"><i class="ri-checkbox-circle-fill"></i> This order is fully accounted for (${r.total}/${r.total}, combining everyone's scans)</div>`
             : ''; })()}
+        ${s==='INSP' ? `<div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printAggregateSlip('${w.oid}')"><i class="ri-printer-line"></i> Print packing slip</button>
+          <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${w.oid}')"><i class="ri-price-tag-3-line"></i> Print labels</button>
+        </div>` : ''}
         <button class="btn btn-green btn-block btn-lg${(() => { const r = skuChecklistReadyInfo(w); return r && r.ready ? ' ready-to-finish' : ''; })()}" onclick="endWork('${w.id}','${s}')" ${inf?'disabled':''}>
           <i class="ri-checkbox-circle-line"></i> ${SELABEL[s]}
         </button>
@@ -2496,7 +2494,7 @@ async function loadOrderProgressPreview(oid){
   liveEl.innerHTML = `<div style="background:var(--bg3);border:1px solid ${p.ready?'var(--green)':'var(--bd)'};border-radius:var(--r);padding:10px 12px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <span style="font-size:11px;font-weight:700;color:${p.ready?'var(--green)':'var(--t3)'}">${p.ready ? '✓ Ready to print' : 'SKU / Qty progress'}</span>
-      ${p.ready ? `<span style="display:flex;gap:4px"><button class="btn btn-sm" style="padding:3px 8px" onclick="printAggregateSlip('${oid}')"><i class="ri-printer-line"></i> Print</button><button class="btn btn-sm" style="padding:3px 8px" onclick="showOrderProgressResult('${oid}')"><i class="ri-price-tag-3-line"></i> Labels</button></span>` : ''}
+      <span style="display:flex;gap:4px"><button class="btn btn-sm" style="padding:3px 8px" onclick="printAggregateSlip('${oid}')"><i class="ri-printer-line"></i> Print</button><button class="btn btn-sm" style="padding:3px 8px" onclick="showOrderProgressResult('${oid}')"><i class="ri-price-tag-3-line"></i> Labels</button></span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
       <div>SKU ${p.skuDone}/${p.skuTotal}<div style="background:var(--bg4);border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${skuPct}%"></div></div></div>
@@ -3283,7 +3281,6 @@ function renderOrderProgressModal(p){
     </div>
     <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Scanned by</div>
     <div style="background:var(--bg3);border-radius:var(--r);padding:8px 12px;margin-bottom:16px">${contributorsHtml}</div>
-    ${p.ready ? `
     <div style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:16px">
       <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Print labels</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -3294,10 +3291,10 @@ function renderOrderProgressModal(p){
         <input class="fi" type="number" id="orderLabelCount" min="1" value="1" style="width:70px;padding:8px 10px">
         <button class="btn btn-purple btn-sm" onclick="printLabelsForOrder('${p.orderId}')"><i class="ri-printer-line"></i> Print labels</button>
       </div>
-    </div>` : ''}
+    </div>
     <div style="display:flex;gap:8px;justify-content:center">
       <button class="btn btn-sm" onclick="closeModal()">Close</button>
-      ${p.ready ? `<button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="printAggregateSlip('${p.orderId}')"><i class="ri-printer-line"></i> Print packing slip</button>` : ''}
+      <button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="printAggregateSlip('${p.orderId}')"><i class="ri-printer-line"></i> Print packing slip</button>
     </div>
   </div>`, { wide:true });
 }
