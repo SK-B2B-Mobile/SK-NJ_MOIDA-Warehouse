@@ -1710,6 +1710,21 @@ window.openQtyEditModal = function(wid, key){
   const reqQty = it.reqQty || 0;
   const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
   const maxMine = Math.max(0, reqQty - othersQty);
+  // v13.4 — break down WHO the "others" qty belongs to, as far as the data
+  // allows: currently-active workers are named (their live scan feed
+  // carries a worker name); anything beyond that was already saved by a
+  // past, ended session, which isn't attributed per-SKU on this device, so
+  // it's labeled generically rather than guessed.
+  const liveParts = [];
+  let liveQty = 0;
+  (_liveContributors[wid] || []).forEach(c => {
+    const q = (c.skuCounts || {})[key] || 0;
+    if (q > 0) { liveParts.push(`${c.worker} (scanning now): ${q}`); liveQty += q; }
+  });
+  const savedQty = Math.max(0, othersQty - liveQty);
+  if (savedQty > 0) liveParts.push(`already saved: ${savedQty}`);
+  const othersWhoLine = othersQty > 0 && liveParts.length
+    ? `<div style="font-size:10.5px;color:var(--t3);margin-top:6px;text-align:center">${liveParts.join(' · ')}</div>` : '';
   // v13.3 — this field REPLACES your recorded total, it does not add to
   // it (typing "2" meaning "2 more" was a real mix-up that produced a
   // wrong 6/20 instead of the intended 20/20). To make that unambiguous:
@@ -1727,7 +1742,8 @@ window.openQtyEditModal = function(wid, key){
       <span style="flex:1">Others logged<br><b style="font-size:15px;color:var(--t)">${othersQty}</b></span>
       <span style="flex:1">Yours now<br><b style="font-size:15px;color:var(--t)">${got}</b></span>
     </div>
-    <div class="fg">
+    ${othersWhoLine}
+    <div class="fg" style="margin-top:10px">
       <label class="fl">Set YOUR total to this number — <u>replaces</u> ${got}, does not add to it${reqQty ? ` (max ${maxMine} to reach ${reqQty} total)` : ''}</label>
       <input class="fi" type="number" min="0" ${reqQty ? `max="${maxMine}"` : ''} id="qtyEditVal" value="${reqQty ? maxMine : got}" style="font-size:18px;text-align:center;font-weight:700" autofocus>
     </div>
@@ -3771,57 +3787,40 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
 }
 
 // ── Shipping/box labels — one page per box, printed right after the slip ──
-// v13.0 — rebuilt from scratch as a horizontal (landscape) label: a
-// standard 6in x 4in shipping-label sheet turned sideways, big box/pallet
-// number on the left where it's readable at a glance across a rack, order
-// details stacked on the right. Replaces the old 4in x 6in vertical stack.
+// v13.5 — rebuilt to match the B2B reference design the user approved:
+// a 6in x 4in landscape label, everything centered, no dividing lines —
+// StyleKorean header, huge "BOX N/Total", customer name, then a small
+// centered footer line (channel · order id · printed time). Replaces the
+// earlier two-column left/right layout from v13.0.
 function printLabels(w, meta, count){
   const o = S.orders.find(x => x.id === w.oid);
   const printedAt = new Date().toLocaleString('en-US');
-  const worker = meta.worker || '';
   const n = Math.max(1, count || 1);
   const uwCap = unitWord(meta.unitType, true);
 
   const css = `
-    @page{ size: 6in 4in; margin: 4mm; }
+    @page{ size: 6in 4in; margin: 0; }
     *{box-sizing:border-box;}
     body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; margin:0;}
-    .label-page{width:100%; height:3.82in; padding:14px 22px; display:flex; flex-direction:column; page-break-after:always;}
+    .label-page{width:6in; height:4in; padding:22px 30px; display:flex; flex-direction:column;
+      align-items:center; justify-content:center; text-align:center; page-break-after:always;}
     .label-page:last-child{page-break-after:auto;}
-    .label-top{display:flex; justify-content:space-between; align-items:baseline; border-bottom:3px solid #111; padding-bottom:8px; margin-bottom:12px;}
-    .label-logo{font-size:20px; font-weight:800; letter-spacing:-0.02em;}
-    .label-meta{font-size:11px; color:#666;}
-    .label-main{flex:1; display:flex; align-items:center; gap:26px; min-height:0;}
-    .label-boxnum{flex:0 0 auto; text-align:center; border-right:2px solid #111; padding-right:26px;}
-    .label-boxnum-big{font-size:96px; font-weight:800; line-height:1;}
-    .label-boxnum-total{font-size:38px; font-weight:700; color:#555;}
-    .label-boxnum-unit{font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#555; margin-top:4px;}
-    .label-info{flex:1; min-width:0;}
-    .label-order{font-size:30px; font-weight:800; margin-bottom:8px; word-break:break-all; line-height:1.15;}
-    .label-cust{font-size:16px; color:#333; margin-bottom:10px;}
-    .label-worker{font-size:12px; color:#555;}
-    .label-fc{display:inline-block; font-size:12px; font-weight:800; color:#991b1b; border:2px solid #dc2626; border-radius:6px; padding:4px 10px; margin-top:10px;}
+    .label-brand{font-size:30px; font-weight:800; letter-spacing:-0.02em; margin-bottom:14px;}
+    .label-boxnum{font-size:72px; font-weight:800; line-height:1; margin-bottom:16px;}
+    .label-cust{font-size:32px; font-weight:800; line-height:1.2; margin-bottom:18px; word-break:break-word; max-width:100%;}
+    .label-fc{display:inline-block; font-size:12px; font-weight:800; color:#991b1b; border:2px solid #dc2626; border-radius:6px; padding:4px 10px; margin-bottom:14px;}
+    .label-footer{font-size:13px; color:#333; letter-spacing:.01em;}
   `;
   const pages = [];
-  const fcLine = meta.forceCompleted ? `<div class="label-fc">⚠ FORCE COMPLETED — ${worker}</div>` : '';
+  const fcLine = meta.forceCompleted ? `<div class="label-fc">⚠ FORCE COMPLETED</div>` : '';
+  const custLine = [o?.ch, o?.cu].filter(Boolean).join(' · ');
   for (let i = 1; i <= n; i++) {
     pages.push(`<div class="label-page">
-      <div class="label-top">
-        <div class="label-logo">StyleKorean</div>
-        <div class="label-meta">NJ / MOIDA Warehouse · ${printedAt}</div>
-      </div>
-      <div class="label-main">
-        <div class="label-boxnum">
-          <div class="label-boxnum-big">${i}<span class="label-boxnum-total">/${n}</span></div>
-          <div class="label-boxnum-unit">${uwCap}</div>
-        </div>
-        <div class="label-info">
-          <div class="label-order">${w.oid}</div>
-          <div class="label-cust">${o?.ch||''} · ${o?.cu||''}</div>
-          <div class="label-worker">Packed by ${worker}</div>
-          ${fcLine}
-        </div>
-      </div>
+      <div class="label-brand">StyleKorean</div>
+      <div class="label-boxnum">${uwCap} ${i}/${n}</div>
+      ${custLine ? `<div class="label-cust">${custLine}</div>` : ''}
+      ${fcLine}
+      <div class="label-footer">${o?.ch||'—'} &nbsp;·&nbsp; ${w.oid} &nbsp;·&nbsp; ${printedAt}</div>
     </div>`);
   }
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Labels · ${w.oid}</title><style>${css}</style></head><body>${pages.join('')}</body></html>`;
