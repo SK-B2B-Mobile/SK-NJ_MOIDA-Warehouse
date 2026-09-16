@@ -1882,24 +1882,25 @@ async function refreshLiveBaseline(wid){
     apiOp('getLiveScans', { orderId: w.oid }),
     apiOp('getOrderProgress', { oid: w.oid })
   ]);
+  // v12.6 — if either call failed (flaky network), keep the last-known-good
+  // baseline instead of overwriting it with a partial/empty one. Without
+  // this, a single dropped request made completed items flicker back to
+  // "incomplete" and made the "ready to finish" state flap on and off.
+  if (!liveOut.net || !liveOut.res.ok || !endedOut.net || !endedOut.res.ok) return;
   const baseline = {};
   const rawLive = [];
-  if (liveOut.net && liveOut.res.ok) {
-    (liveOut.res.live || []).forEach(entry => {
-      if (entry.entryId === wid) return; // exclude my own live entry
-      rawLive.push(entry);
-      Object.entries(entry.skuCounts || {}).forEach(([key, qty]) => {
-        baseline[key] = (baseline[key] || 0) + (Number(qty) || 0);
-      });
+  (liveOut.res.live || []).forEach(entry => {
+    if (entry.entryId === wid) return; // exclude my own live entry
+    rawLive.push(entry);
+    Object.entries(entry.skuCounts || {}).forEach(([key, qty]) => {
+      baseline[key] = (baseline[key] || 0) + (Number(qty) || 0);
     });
-  }
+  });
   _liveContributors[wid] = rawLive;
-  if (endedOut.net && endedOut.res.ok) {
-    (endedOut.res.skus || []).forEach(s => {
-      const key = s.barcode || s.sku;
-      baseline[key] = (baseline[key] || 0) + (s.packedQty||0) + (s.issueQty||0);
-    });
-  }
+  (endedOut.res.skus || []).forEach(s => {
+    const key = s.barcode || s.sku;
+    baseline[key] = (baseline[key] || 0) + (s.packedQty||0) + (s.issueQty||0);
+  });
   _liveBaseline[wid] = baseline;
   updateSkuChecklistLive(wid);
 }
@@ -2489,7 +2490,7 @@ async function loadOrderProgressPreview(oid){
   liveEl.innerHTML = `<div style="background:var(--bg3);border:1px solid ${p.ready?'var(--green)':'var(--bd)'};border-radius:var(--r);padding:10px 12px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <span style="font-size:11px;font-weight:700;color:${p.ready?'var(--green)':'var(--t3)'}">${p.ready ? '✓ Ready to print' : 'SKU / Qty progress'}</span>
-      ${p.ready ? `<button class="btn btn-sm" style="padding:3px 8px" onclick="printAggregateSlip('${oid}')"><i class="ri-printer-line"></i> Print</button>` : ''}
+      ${p.ready ? `<span style="display:flex;gap:4px"><button class="btn btn-sm" style="padding:3px 8px" onclick="printAggregateSlip('${oid}')"><i class="ri-printer-line"></i> Print</button><button class="btn btn-sm" style="padding:3px 8px" onclick="showOrderProgressResult('${oid}')"><i class="ri-price-tag-3-line"></i> Labels</button></span>` : ''}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
       <div>SKU ${p.skuDone}/${p.skuTotal}<div style="background:var(--bg4);border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${skuPct}%"></div></div></div>
@@ -3266,12 +3267,34 @@ function renderOrderProgressModal(p){
     </div>
     <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Scanned by</div>
     <div style="background:var(--bg3);border-radius:var(--r);padding:8px 12px;margin-bottom:16px">${contributorsHtml}</div>
+    ${p.ready ? `
+    <div style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Print labels</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:4px">
+          <button type="button" id="ordLabelUnit_box" class="scan-mult-btn on" onclick="setOrderLabelUnit(this,'box')"><i class="ri-archive-2-line"></i> Box</button>
+          <button type="button" id="ordLabelUnit_pallet" class="scan-mult-btn" onclick="setOrderLabelUnit(this,'pallet')"><i class="ri-truck-line"></i> Pallet</button>
+        </div>
+        <input class="fi" type="number" id="orderLabelCount" min="1" value="1" style="width:70px;padding:8px 10px">
+        <button class="btn btn-purple btn-sm" onclick="printLabelsForOrder('${p.orderId}')"><i class="ri-printer-line"></i> Print labels</button>
+      </div>
+    </div>` : ''}
     <div style="display:flex;gap:8px;justify-content:center">
       <button class="btn btn-sm" onclick="closeModal()">Close</button>
       ${p.ready ? `<button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="printAggregateSlip('${p.orderId}')"><i class="ri-printer-line"></i> Print packing slip</button>` : ''}
     </div>
   </div>`, { wide:true });
 }
+
+window.setOrderLabelUnit = function(btn, unit){
+  document.getElementById('ordLabelUnit_box')?.classList.toggle('on', unit==='box');
+  document.getElementById('ordLabelUnit_pallet')?.classList.toggle('on', unit==='pallet');
+};
+window.printLabelsForOrder = function(oid){
+  const count = Math.max(1, parseInt(document.getElementById('orderLabelCount')?.value) || 1);
+  const unit = document.getElementById('ordLabelUnit_pallet')?.classList.contains('on') ? 'pallet' : 'box';
+  printLabels({ oid }, { worker: WS ? WS.worker : CW, unitType: unit }, count);
+};
 
 window.printAggregateSlip = async function(oid){
   const out = await apiOp('getOrderProgress', { oid });
