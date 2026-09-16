@@ -681,6 +681,19 @@ async function flushQueue(){
         }
         _queue.shift(); saveQueue(); flushed++;
       } else if (r && (r.error === 'duplicate_active' || r.error === 'already_ended')) {
+        // v13.7 — the queued startWork was rejected because the server
+        // already considers this worker active/done on this order+stage.
+        // Previously only the queue item was dropped, leaving a phantom
+        // local session (still keyed by its never-confirmed tempId)
+        // sitting in S.works forever — it looked like a real active
+        // session in the UI, but the server had never heard of that ID,
+        // so End/Leave on it always failed with "entry not found". Drop
+        // the phantom itself, not just the queue entry.
+        if (item.op === 'startWork' && item.meta && item.meta.tempId) {
+          S.works = S.works.filter(x => x.id !== item.meta.tempId);
+          stopLivePoll(item.meta.tempId);
+          clearScanState(item.meta.tempId);
+        }
         _queue.shift(); saveQueue(); flushed++; // server already has it — treat as done
       } else {
         _queue.shift(); saveQueue();
@@ -2108,6 +2121,13 @@ window.cancelInspSession = async function(wid){
     // race: it got ended (by us or someone else) right as we tried to cancel — just refresh
     toast('This session was already finished', '');
     await loadData(); updateBadges(); renderStageContent();
+  } else if (out.net && (out.res.error || '').toLowerCase().includes('not found')) {
+    // v13.7 — same orphaned-local-session case as doEndWork: the server
+    // has no record of this entryId at all, so there's nothing left to
+    // cancel — just drop it locally instead of leaving the worker stuck.
+    S.works = S.works.filter(x => x.id !== wid);
+    toast('⚠ No matching record on the server — removed locally', 'err');
+    updateBadges(); renderStageContent();
   } else {
     toast('⚠ Could not leave session: ' + ((out.res && out.res.error) || 'network'), 'err');
   }
@@ -3931,6 +3951,22 @@ function doEndWork(wid, pallets, inspData){
     const res = out.res;
     if (!res.ok) {
       if (res.error === 'already_ended') { loadData().then(() => { updateBadges(); rerenderCurrent(); }); return; }
+      // v13.7 — if the server has genuinely never heard of this entryId
+      // (a startWork that got silently orphaned — e.g. its queued start
+      // was rejected as a duplicate and only the queue item, not this
+      // local copy, used to get cleaned up), reverting to "orig" just put
+      // the session right back as if still active — every future End
+      // attempt would fail the exact same way, a permanent dead end.
+      // There is nothing real to save or revert here, so remove it locally.
+      if ((res.error || '').toLowerCase().includes('not found')) {
+        S.works = S.works.filter(x => x.id !== wid);
+        stopLivePoll(wid);
+        clearScanState(wid);
+        toast('⚠ This session had no matching record on the server — removed locally', 'err');
+        updateBadges(); renderStageContent();
+        if (curPage() === 'dash') R.dash();
+        return;
+      }
       Object.assign(w, orig);
       toast('⚠ Save failed — try again (' + (res.error||'') + ')', 'err');
       renderStageContent(); return;
