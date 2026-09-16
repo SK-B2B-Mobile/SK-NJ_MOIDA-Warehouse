@@ -2168,8 +2168,9 @@ function renderStageContent(){
             ? `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:8px 12px"><i class="ri-checkbox-circle-fill"></i> This order is fully accounted for (${r.total}/${r.total}, combining everyone's scans)</div>`
             : ''; })()}
         ${s==='INSP' ? `<div style="display:flex;gap:6px;margin-bottom:8px">
-          <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printAggregateSlip('${w.oid}')"><i class="ri-printer-line"></i> Print packing slip</button>
-          <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${w.oid}')"><i class="ri-price-tag-3-line"></i> Print labels</button>
+          <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${w.oid}','box')" title="Per box/pallet breakdown"><i class="ri-printer-line"></i> Packing Slip</button>
+          <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${w.oid}','flat')" title="Whole order, one combined list"><i class="ri-file-list-3-line"></i> Flat List</button>
+          <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${w.oid}')" title="Progress + shipping labels"><i class="ri-price-tag-3-line"></i> Labels</button>
         </div>` : ''}
         <button class="btn btn-green btn-block btn-lg${(() => { const r = skuChecklistReadyInfo(w); return r && r.ready ? ' ready-to-finish' : ''; })()}" onclick="endWork('${w.id}','${s}')" ${inf?'disabled':''}>
           <i class="ri-checkbox-circle-line"></i> ${SELABEL[s]}
@@ -2484,17 +2485,20 @@ function onOrderChange(){
 async function loadOrderProgressPreview(oid){
   const el = document.getElementById('orderProgressPreview'); if (!el) return;
   el.innerHTML = '<div style="font-size:11px;color:var(--t3);padding:4px 0">Checking progress…</div>';
-  const out = await apiOp('getOrderProgress', { oid });
+  const p = await getPrintReadyProgress(oid);
   const liveEl = document.getElementById('orderProgressPreview'); if (!liveEl) return; // order may have changed since
-  if (!out.net || !out.res.ok) { liveEl.innerHTML = ''; return; }
-  const p = out.res;
+  if (!p) { liveEl.innerHTML = ''; return; }
   if (!p.skuTotal) { liveEl.innerHTML = ''; return; } // no pick list imported — nothing to aggregate
   const skuPct = Math.round(p.skuDone / p.skuTotal * 100);
   const qtyPct = p.qtyTotal ? Math.round(p.qtyDone / p.qtyTotal * 100) : 0;
   liveEl.innerHTML = `<div style="background:var(--bg3);border:1px solid ${p.ready?'var(--green)':'var(--bd)'};border-radius:var(--r);padding:10px 12px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <span style="font-size:11px;font-weight:700;color:${p.ready?'var(--green)':'var(--t3)'}">${p.ready ? '✓ Ready to print' : 'SKU / Qty progress'}</span>
-      <span style="display:flex;gap:4px"><button class="btn btn-sm" style="padding:3px 8px" onclick="printAggregateSlip('${oid}')"><i class="ri-printer-line"></i> Print</button><button class="btn btn-sm" style="padding:3px 8px" onclick="showOrderProgressResult('${oid}')"><i class="ri-price-tag-3-line"></i> Labels</button></span>
+      <span style="display:flex;gap:4px">
+        <button class="btn btn-sm" style="padding:3px 8px" onclick="printOrderPackingSlip('${oid}','box')" title="Per box/pallet breakdown"><i class="ri-printer-line"></i> Slip</button>
+        <button class="btn btn-sm" style="padding:3px 8px" onclick="printOrderPackingSlip('${oid}','flat')" title="Whole order, one combined list"><i class="ri-file-list-3-line"></i> Flat</button>
+        <button class="btn btn-sm" style="padding:3px 8px" onclick="showOrderProgressResult('${oid}')"><i class="ri-price-tag-3-line"></i> Labels</button>
+      </span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
       <div>SKU ${p.skuDone}/${p.skuTotal}<div style="background:var(--bg4);border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${skuPct}%"></div></div></div>
@@ -3242,15 +3246,111 @@ window.finalizeInspEnd = async function(wid){
   showOrderProgressResult(w.oid);
 };
 
+// ── v13.0 fix — "checklist says 87/87 but the slip/label modal says
+// 85/85". Root cause: the on-screen checklist counts (my scans + every
+// OTHER worker's still-in-progress live scans), but every print/preview
+// path below only ever called getOrderProgress_, which only sees SKUs
+// that have already gone through "End Inspection" (i.e. saved to the
+// InspectionResults sheet). Anyone still actively scanning who hasn't
+// hit End yet was invisible to print, even though the checklist already
+// counted them. This merges getLiveScans (not-yet-saved, in-progress)
+// on top of getOrderProgress (saved) the exact same way refreshLiveBaseline
+// already does for the on-screen checklist, so all three surfaces
+// (checklist / end-confirmation modal / print) always agree. Best-effort:
+// if the live call fails, we silently fall back to saved-only rather than
+// blocking printing.
+async function getPrintReadyProgress(oid){
+  const [liveOut, endedOut] = await Promise.all([
+    apiOp('getLiveScans', { orderId: oid }),
+    apiOp('getOrderProgress', { oid })
+  ]);
+  if (!endedOut.net || !endedOut.res.ok) return null;
+  const p = endedOut.res;
+  if (!liveOut.net || !liveOut.res.ok) return p; // live merge is best-effort only
+
+  const liveAdd = {};        // sku/barcode key -> extra qty not yet saved anywhere
+  const liveWorkerQty = {};  // worker -> qty currently in-progress (not yet saved)
+  (liveOut.res.live || []).forEach(entry => {
+    let entryTotal = 0;
+    Object.entries(entry.skuCounts || {}).forEach(([key, qty]) => {
+      const q = Number(qty) || 0;
+      liveAdd[key] = (liveAdd[key] || 0) + q;
+      entryTotal += q;
+    });
+    if (entryTotal > 0 && entry.worker) {
+      liveWorkerQty[entry.worker] = (liveWorkerQty[entry.worker] || 0) + entryTotal;
+    }
+  });
+  if (!Object.keys(liveAdd).length) return p; // nothing unsaved to merge — saved data already matches
+
+  const skus = (p.skus || []).map(s => {
+    const key = s.barcode || s.sku;
+    const extra = liveAdd[key] || 0;
+    return extra ? Object.assign({}, s, { packedQty: (s.packedQty || 0) + extra }) : s;
+  });
+
+  // Same "done" rule the live checklist itself uses (skuChecklistReadyInfo):
+  // an issue flag or a zero-req line counts as accounted-for even without
+  // full physical qty, and otherwise packed+issue must reach the required qty.
+  let skuDone = 0, qtyDone = 0;
+  skus.forEach(s => {
+    const got = (s.packedQty || 0) + (s.issueQty || 0);
+    if (s.issueType || (s.reqQty || 0) <= 0 || got >= s.reqQty) skuDone++;
+    qtyDone += got;
+  });
+
+  const contributors = (p.contributors || []).map(c => Object.assign({}, c));
+  Object.entries(liveWorkerQty).forEach(([worker, qty]) => {
+    const existing = contributors.find(c => c.worker === worker);
+    if (existing) { existing.qty = (existing.qty || 0) + qty; existing.inProgress = true; }
+    else contributors.push({ worker, qty, lastAt: new Date().toISOString(), inProgress: true });
+  });
+
+  return Object.assign({}, p, { skus, skuDone, qtyDone, contributors, ready: skuDone === skus.length });
+}
+
+// ── Order-level box/pallet breakdown for the aggregate packing slip.
+// Box numbers are tracked PER inspection entry (i.e. per worker's own
+// session), so two different workers on the same order both start
+// counting from Box 1 — those are not the same box. When more than one
+// worker contributed, each group is labeled "<worker> · Box N" so nothing
+// gets silently merged across people; with a single contributor the plain
+// "Box N" label is kept. This only covers entries that already went
+// through End Inspection (box scans aren't pushed live) — an
+// -still-in-progress worker's box assignment won't appear until they end.
+async function getOrderBoxGroups(oid){
+  const entries = S.works.filter(w => w.oid === oid && w.stage === 'INSP' && w.endT);
+  const multiWorker = new Set(entries.map(e => e.w)).size > 1;
+  let unitType = 'box';
+  const groups = [];
+  for (const e of entries) {
+    const out = await apiOp('getInspectionResults', { entryId: e.id });
+    if (!out.net || !out.res.ok) continue;
+    const rows = out.res.rows || [];
+    if (rows[0]?.unitType) unitType = rows[0].unitType;
+    const byBox = {};
+    rows.filter(r => r.boxNum).forEach(r => {
+      const key = r.barcode || r.sku;
+      byBox[r.boxNum] = byBox[r.boxNum] || {};
+      byBox[r.boxNum][key] = (byBox[r.boxNum][key] || 0) + (r.packedQty || 0);
+    });
+    Object.keys(byBox).map(Number).sort((a,b) => a-b).forEach(bn => {
+      const label = multiWorker ? `${e.w} · ${unitWord(unitType, true)} ${bn}` : `${unitWord(unitType, true)} ${bn}`;
+      groups.push({ label, items: byBox[bn] });
+    });
+  }
+  return { groups, unitType };
+}
+
 // ── Order-level combined progress — shown after any worker ends their
 // portion. The packing slip only unlocks once every SKU is accounted for
 // across ALL contributors, matching the "whoever notices it's done prints
 // it" workflow. ─────────────────────────────────────────────────────
 window.showOrderProgressResult = async function(oid){
   toast('Checking order progress...', '');
-  const out = await apiOp('getOrderProgress', { oid });
-  if (!out.net || !out.res.ok) { toast('⚠ Could not load order progress', 'err'); return; }
-  renderOrderProgressModal(out.res);
+  const p = await getPrintReadyProgress(oid);
+  if (!p) { toast('⚠ Could not load order progress', 'err'); return; }
+  renderOrderProgressModal(p);
 };
 
 function renderOrderProgressModal(p){
@@ -3258,10 +3358,16 @@ function renderOrderProgressModal(p){
   const qtyPct = p.qtyTotal ? Math.round(p.qtyDone / p.qtyTotal * 100) : 0;
   const contributorsHtml = p.contributors.length
     ? p.contributors.sort((a,b) => a.lastAt < b.lastAt ? 1 : -1).map(c =>
-        `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0"><span>${c.worker}</span><span style="color:var(--t3)">${c.qty} units · ${c.lastAt.slice(11,16)}</span></div>`
+        `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0">
+          <span>${c.worker}${c.inProgress ? ' <span style="color:var(--blue);font-weight:600">· scanning now</span>' : ''}</span>
+          <span style="color:var(--t3)">${c.qty} units${c.lastAt ? ' · ' + c.lastAt.slice(11,16) : ''}</span>
+        </div>`
       ).join('')
     : '<div style="font-size:12px;color:var(--t3)">No contributions logged yet</div>';
 
+  // Packing Slip / Flat List are NOT duplicated here — they already live as
+  // direct buttons on the session card / order preview outside this modal.
+  // This modal's only job is progress + shipping-label printing.
   openModal(`<div class="end-modal-inner" style="text-align:left">
     <div style="font-size:15px;font-weight:700;margin-bottom:4px;text-align:center">${p.orderId}</div>
     <div style="text-align:center;font-size:12px;color:${p.ready?'var(--green)':'var(--t3)'};font-weight:700;margin-bottom:14px">
@@ -3294,7 +3400,6 @@ function renderOrderProgressModal(p){
     </div>
     <div style="display:flex;gap:8px;justify-content:center">
       <button class="btn btn-sm" onclick="closeModal()">Close</button>
-      <button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="printAggregateSlip('${p.orderId}')"><i class="ri-printer-line"></i> Print packing slip</button>
     </div>
   </div>`, { wide:true });
 }
@@ -3309,20 +3414,40 @@ window.printLabelsForOrder = function(oid){
   printLabels({ oid }, { worker: WS ? WS.worker : CW, unitType: unit }, count);
 };
 
-window.printAggregateSlip = async function(oid){
-  const out = await apiOp('getOrderProgress', { oid });
-  if (!out.net || !out.res.ok) { toast('⚠ Could not load order data', 'err'); return; }
-  const p = out.res;
+// ── Two distinct packing-slip outputs, matching the B2B Fulfillment
+// reference UI (Pack Verify screen): a "Packing Slip" button that shows
+// what actually went into each box/pallet (mode:'box'), and a separate
+// "Flat List" button that shows the whole order as one combined list with
+// no box breakdown (mode:'flat'). Both pull from the SAME live-merged
+// data (getPrintReadyProgress) so their totals always match the on-screen
+// checklist, no matter who has or hasn't pressed End Inspection yet.
+window.printOrderPackingSlip = async function(oid, mode){
+  toast('Preparing packing slip...', '');
+  const p = await getPrintReadyProgress(oid);
+  if (!p) { toast('⚠ Could not load order data', 'err'); return; }
   const w = { oid: p.orderId, w: '' };
   const rows = p.skus.map(s => ({
     sku:s.sku, name:s.name, barcode:s.barcode, req:s.reqQty, got:s.packedQty,
     hasIssue: !!s.issueType, issue: s.issueType ? { type:s.issueType, qty:s.issueQty, note:s.issueNote } : null,
     mc: !!s.masterCase, fc: !!s.forceCompleted
   }));
-  const contributorNames = p.contributors.map(c => `${c.worker} (${c.qty})`).join(', ');
+  const contributorNames = p.contributors.map(c => `${c.worker}${c.inProgress ? ' (in progress)' : ''} (${c.qty})`).join(', ');
+  const meta = { result: p.skuDone===p.skuTotal ? 'PASS' : 'ISSUE', worker: contributorNames || CW, forcedBy: p.forceCompletedBy||[], unitType: 'box' };
+
+  let boxGroups = null;
+  if (mode === 'box') {
+    const bg = await getOrderBoxGroups(oid);
+    boxGroups = bg.groups;
+    meta.unitType = bg.unitType;
+  }
   closeModal();
-  printPackingSlip(w, rows, { result: p.skuDone===p.skuTotal ? 'PASS' : 'ISSUE', worker: contributorNames || CW, forcedBy: p.forceCompletedBy||[] }, {}, 'flat');
+  printPackingSlip(w, rows, meta, mode === 'box' ? boxGroups : {}, mode === 'box' ? 'box' : 'flat');
 };
+
+// Legacy name kept as an alias (flat list) in case anything else still
+// calls it directly — the two explicit entry points above are what the UI
+// uses now.
+window.printAggregateSlip = function(oid){ return printOrderPackingSlip(oid, 'flat'); };
 
 // ── Packing slip — printed the moment inspection ends ───────────────
 function printPackingSlip(w, rows, meta, boxScans, slipMode){
@@ -3358,17 +3483,33 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   // slipMode==='box'. Wording follows the unit chosen during scanning
   // (Box for parcel carriers like UPS, Pallet for freight like TK).
   let boxHtml = '';
+  const uw = unitWord(meta.unitType);
   const uwCap = unitWord(meta.unitType, true);
-  if (slipMode === 'box' && boxScans && Object.keys(boxScans).length) {
+  if (slipMode === 'box') {
+    // Accepts two shapes: the legacy per-entry object keyed by box number
+    // (single worker's own boxScans, e.g. {1:{...},2:{...}}), or the newer
+    // order-level array of {label, items} groups (getOrderBoxGroups) used
+    // when several workers each tracked their own box sequence. Normalizing
+    // here means every caller — single-session print, order-level print,
+    // and reprint-from-saved-data — can share this one rendering path.
+    const groups = Array.isArray(boxScans)
+      ? boxScans
+      : (boxScans && Object.keys(boxScans).length
+          ? Object.keys(boxScans).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b)
+              .map(n => ({ label: `${uwCap} ${n}`, items: boxScans[n] }))
+          : []);
     const nameByKey = {};
     rows.forEach(r => { nameByKey[r.barcode || r.sku] = r.name || r.sku || ''; });
-    const boxNums = Object.keys(boxScans).map(Number).sort((a,b) => a-b);
-    boxHtml = `<h4 class="issues-h4">${uwCap} breakdown</h4>` + boxNums.map(bn => {
-      const lines = Object.entries(boxScans[bn] || {})
-        .map(([key, qty]) => `${nameByKey[key] || key} · ${qty}`)
-        .join(', ');
-      return `<p class="box-line"><b>${uwCap} ${bn}</b> — ${lines || '(no items recorded)'}</p>`;
-    }).join('');
+    if (groups.length) {
+      boxHtml = `<h4 class="issues-h4">${uwCap} breakdown</h4>` + groups.map(g => {
+        const lines = Object.entries(g.items || {})
+          .map(([key, qty]) => `${nameByKey[key] || key} · ${qty}`)
+          .join(', ');
+        return `<p class="box-line"><b>${g.label}</b> — ${lines || '(no items recorded)'}</p>`;
+      }).join('');
+    } else {
+      boxHtml = `<p style="font-size:11px;color:#991b1b;margin-top:10px">⚠ No ${uw} breakdown was recorded for this order — showing combined totals only.</p>`;
+    }
   }
 
   const badgeClass = result === 'PASS' ? 'verify-ok' : 'verify-bad';
@@ -3427,40 +3568,62 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
 }
 
 // ── Shipping/box labels — one page per box, printed right after the slip ──
+// v13.0 — rebuilt from scratch as a horizontal (landscape) label: a
+// standard 6in x 4in shipping-label sheet turned sideways, big box/pallet
+// number on the left where it's readable at a glance across a rack, order
+// details stacked on the right. Replaces the old 4in x 6in vertical stack.
 function printLabels(w, meta, count){
   const o = S.orders.find(x => x.id === w.oid);
   const printedAt = new Date().toLocaleString('en-US');
   const worker = meta.worker || '';
   const n = Math.max(1, count || 1);
+  const uwCap = unitWord(meta.unitType, true);
 
   const css = `
-    @page{ size: 4in 6in; margin: 6mm; }
+    @page{ size: 6in 4in; margin: 4mm; }
+    *{box-sizing:border-box;}
     body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; margin:0;}
-    .label-page{width:100%; height:5.6in; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; page-break-after:always;}
+    .label-page{width:100%; height:3.82in; padding:14px 22px; display:flex; flex-direction:column; page-break-after:always;}
     .label-page:last-child{page-break-after:auto;}
-    .label-logo{font-size:22px; font-weight:800; margin-bottom:10px;}
-    .label-box{font-size:52px; font-weight:800; margin-bottom:14px; line-height:1;}
-    .label-cust{font-size:18px; color:#333; margin-bottom:18px;}
-    .label-order{font-size:20px; font-weight:700; margin-bottom:4px;}
-    .label-worker{font-size:13px; color:#555;}
-    .label-fc{font-size:12px; font-weight:800; color:#991b1b; border:2px solid #dc2626; border-radius:6px; padding:4px 10px; margin-top:10px;}
+    .label-top{display:flex; justify-content:space-between; align-items:baseline; border-bottom:3px solid #111; padding-bottom:8px; margin-bottom:12px;}
+    .label-logo{font-size:20px; font-weight:800; letter-spacing:-0.02em;}
+    .label-meta{font-size:11px; color:#666;}
+    .label-main{flex:1; display:flex; align-items:center; gap:26px; min-height:0;}
+    .label-boxnum{flex:0 0 auto; text-align:center; border-right:2px solid #111; padding-right:26px;}
+    .label-boxnum-big{font-size:96px; font-weight:800; line-height:1;}
+    .label-boxnum-total{font-size:38px; font-weight:700; color:#555;}
+    .label-boxnum-unit{font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#555; margin-top:4px;}
+    .label-info{flex:1; min-width:0;}
+    .label-order{font-size:30px; font-weight:800; margin-bottom:8px; word-break:break-all; line-height:1.15;}
+    .label-cust{font-size:16px; color:#333; margin-bottom:10px;}
+    .label-worker{font-size:12px; color:#555;}
+    .label-fc{display:inline-block; font-size:12px; font-weight:800; color:#991b1b; border:2px solid #dc2626; border-radius:6px; padding:4px 10px; margin-top:10px;}
   `;
   const pages = [];
-  const uwCap = unitWord(meta.unitType, true);
   const fcLine = meta.forceCompleted ? `<div class="label-fc">⚠ FORCE COMPLETED — ${worker}</div>` : '';
   for (let i = 1; i <= n; i++) {
     pages.push(`<div class="label-page">
-      <div class="label-logo">StyleKorean</div>
-      <div class="label-box">${uwCap} ${i}/${n}</div>
-      <div class="label-cust">${o?.ch||''} · ${o?.cu||''}</div>
-      <div class="label-order">${w.oid}</div>
-      <div class="label-worker">${worker} · ${printedAt}</div>
-      ${fcLine}
+      <div class="label-top">
+        <div class="label-logo">StyleKorean</div>
+        <div class="label-meta">NJ / MOIDA Warehouse · ${printedAt}</div>
+      </div>
+      <div class="label-main">
+        <div class="label-boxnum">
+          <div class="label-boxnum-big">${i}<span class="label-boxnum-total">/${n}</span></div>
+          <div class="label-boxnum-unit">${uwCap}</div>
+        </div>
+        <div class="label-info">
+          <div class="label-order">${w.oid}</div>
+          <div class="label-cust">${o?.ch||''} · ${o?.cu||''}</div>
+          <div class="label-worker">Packed by ${worker}</div>
+          ${fcLine}
+        </div>
+      </div>
     </div>`);
   }
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Labels · ${w.oid}</title><style>${css}</style></head><body>${pages.join('')}</body></html>`;
 
-  const win = window.open('', '_blank', 'width=500,height=700');
+  const win = window.open('', '_blank', 'width=760,height=540');
   if (!win) { toast('⚠ Popup blocked — allow popups for this site to print labels', 'err'); return; }
   win.document.write(html);
   win.document.close();
