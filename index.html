@@ -1692,18 +1692,25 @@ window.openQtyEditModal = function(wid, key){
   const got = st.skuCounts[key] || 0;
   const isMC = !!(st.skuMasterCase || {})[key];
   const keyEsc = String(key).replace(/'/g, "\\'");
+  // v13.2 — safety cap: a typo (e.g. "30" for a required "20") used to
+  // save silently and show a confusing over-scanned "30/20". The real
+  // ceiling for YOUR portion is what's left after everyone else's
+  // already-logged contribution, not the full required qty.
+  const reqQty = it.reqQty || 0;
+  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const maxMine = Math.max(0, reqQty - othersQty);
   openModal(`
     <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
       <i class="ri-pencil-line" style="color:var(--purple)"></i> Correct scanned qty
     </div>
-    <div style="font-size:12px;color:var(--t3);margin-bottom:14px" class="mono">${it.sku||'—'} · ${(it.name||'').replace(/</g,'&lt;')} · needs ${it.reqQty||0}</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:14px" class="mono">${it.sku||'—'} · ${(it.name||'').replace(/</g,'&lt;')} · needs ${reqQty}${othersQty ? ` (others already logged ${othersQty})` : ''}</div>
     <div class="fg">
-      <label class="fl">Actual scanned qty</label>
-      <input class="fi" type="number" min="0" id="qtyEditVal" value="${got}" style="font-size:18px;text-align:center;font-weight:700" autofocus>
+      <label class="fl">Actual scanned qty (yours)${reqQty ? ` — max ${maxMine}` : ''}</label>
+      <input class="fi" type="number" min="0" ${reqQty ? `max="${maxMine}"` : ''} id="qtyEditVal" value="${got}" style="font-size:18px;text-align:center;font-weight:700" autofocus>
     </div>
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px;cursor:pointer">
       <input type="checkbox" id="qtyEditMC" style="width:auto" ${isMC?'checked':''}
-        onchange="if(this.checked) document.getElementById('qtyEditVal').value='${it.reqQty||0}';">
+        onchange="if(this.checked) document.getElementById('qtyEditVal').value='${maxMine}';">
       Master case — one case barcode covers the full quantity, not scanned unit-by-unit
     </label>
     <div style="display:flex;gap:8px;margin-top:10px">
@@ -1717,6 +1724,16 @@ window.openQtyEditModal = function(wid, key){
 window.saveQtyEdit = function(wid, key){
   const val = Number(document.getElementById('qtyEditVal')?.value);
   if (isNaN(val) || val < 0) { toast('Enter a valid quantity', 'err'); return; }
+  const w = S.works.find(x => x.id === wid);
+  const items = w ? (_orderItemsCache[w.oid] || []) : [];
+  const it = items.find(x => (x.barcode||x.sku) === key);
+  const reqQty = it ? (it.reqQty || 0) : 0;
+  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const maxMine = Math.max(0, reqQty - othersQty);
+  if (reqQty > 0 && val > maxMine) {
+    toast(`⚠ Too high — only ${maxMine} left toward ${reqQty}${othersQty ? ' (others already logged ' + othersQty + ')' : ''}`, 'err');
+    return;
+  }
   const isMC = !!document.getElementById('qtyEditMC')?.checked;
   const st = loadScanState(wid);
   st.skuCounts[key] = Math.round(val);
@@ -2982,7 +2999,20 @@ window.endWork = function(wid, stage){
   if (stage === 'PICK') {
     doEndWork(wid, null);
   } else if (stage === 'INSP') {
-    openInspEndModal(wid);
+    // v13.2 — the End Inspection button for a SKU-checklist session is
+    // already gated on skuChecklistReadyInfo (disabled until every item
+    // is scanned/flagged/force-completed), so by the time this can even
+    // be clicked, "Finish Inspection — all items match" was guaranteed to
+    // be true. Showing that list again as a second confirmation was pure
+    // duplication — go straight to the one remaining real decision (how
+    // to print labels), the same place Confirm on that list used to lead.
+    const items = _orderItemsCache[w.oid] || [];
+    const st = loadScanState(wid);
+    if (items.length > 0 && st.mode === 'sku' && skuChecklistReadyInfo(w)?.ready) {
+      proceedToPrintOptions(wid);
+    } else {
+      openInspEndModal(wid);
+    }
   } else {
     const col = SCOL[stage];
     const quickVals = [0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,6,7,8];
