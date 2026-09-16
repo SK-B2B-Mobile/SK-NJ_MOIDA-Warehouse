@@ -2592,7 +2592,6 @@ function onOrderChange(){
 
   if (CS === 'INSP') {
     ensureOrderItems(oid);
-    loadOrderProgressPreview(oid);
     const sw = document.getElementById('inspScanStartWrap');
     if (myHere > 0) {
       // Already have a live session here — the real scan UI is right
@@ -2656,6 +2655,16 @@ function onOrderChange(){
       <div style="font-size:10px;font-weight:700;color:${col};letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px"><i class="${SICON[CS]}"></i> ${CS} — ${oid}</div>
       ${feedRows}
     </div>` : ''}`;
+
+  // v13.9 — this MUST run after the innerHTML assignment right above, not
+  // before it: the #orderProgressPreview div is created by that
+  // assignment, so calling this any earlier meant it was either writing
+  // into a stale div left over from whatever order was previously
+  // selected (which the innerHTML line then immediately overwrote/wiped
+  // right after, discarding the buttons that were just rendered) or,
+  // on a first-ever render, finding no div at all and silently doing
+  // nothing. Either way the print buttons ended up permanently blank.
+  if (CS === 'INSP' && myHere === 0) loadOrderProgressPreview(oid);
 }
 
 // Fetches and renders combined SKU/qty progress for the currently
