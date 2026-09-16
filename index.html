@@ -2165,7 +2165,13 @@ function renderStageContent(){
         </div>
         ${s==='INSP' ? renderScanUI(w) : ''}
         ${(() => { const r = skuChecklistReadyInfo(w); return r && r.ready
-            ? `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px"><i class="ri-checkbox-circle-fill"></i> This order is fully accounted for (${r.total}/${r.total}, combining everyone's scans) — press finish below</div>`
+            ? `<div style="background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">
+                <div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px"><i class="ri-checkbox-circle-fill"></i> This order is fully accounted for (${r.total}/${r.total}, combining everyone's scans)</div>
+                <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+                  <button class="btn btn-sm" onclick="printAggregateSlip('${w.oid}')"><i class="ri-printer-line"></i> Print packing slip</button>
+                  <button class="btn btn-sm" onclick="showOrderProgressResult('${w.oid}')"><i class="ri-price-tag-3-line"></i> Print labels</button>
+                </div>
+              </div>`
             : ''; })()}
         <button class="btn btn-green btn-block btn-lg${(() => { const r = skuChecklistReadyInfo(w); return r && r.ready ? ' ready-to-finish' : ''; })()}" onclick="endWork('${w.id}','${s}')" ${inf?'disabled':''}>
           <i class="ri-checkbox-circle-line"></i> ${SELABEL[s]}
@@ -3029,9 +3035,10 @@ window.confirmInspEnd = function(wid, expQty){
 // ── SKU-level end flow: per-item checklist comparison ──
 function openInspEndModalSku(wid, items, st){
   const w = S.works.find(x => x.id === wid); if (!w) return;
+  const others = _liveBaseline[wid] || {};
   const rows = items.map(it => {
     const key = it.barcode || it.sku;
-    const got = st.skuCounts[key] || 0;
+    const got = (st.skuCounts[key] || 0) + (others[key] || 0);
     const issue = (st.skuIssues || {})[key] || null;
     const fullyScanned = it.reqQty <= 0 || got >= it.reqQty;
     return { sku:it.sku, name:it.name, reqQty:it.reqQty||0, got, issue, ok: fullyScanned && !issue, hasIssue: !!issue };
@@ -3093,14 +3100,16 @@ window.proceedToPrintOptions = function(wid){
   const w = S.works.find(x => x.id === wid); if (!w) return;
   const items = _orderItemsCache[w.oid] || [];
   let st = loadScanState(wid);
+  const others = _liveBaseline[wid] || {};
 
   let reason = '', note = '';
   const preRows = items.map(it => {
     const key = it.barcode || it.sku;
-    const got = st.skuCounts[key] || 0;
+    const mine = st.skuCounts[key] || 0;
+    const combined = mine + (others[key] || 0);
     const issue = (st.skuIssues || {})[key] || null;
-    const fullyScanned = it.reqQty <= 0 || got >= it.reqQty;
-    return { key, req: it.reqQty||0, ok: fullyScanned && !issue, hasIssue: !!issue };
+    const fullyScanned = it.reqQty <= 0 || combined >= it.reqQty;
+    return { key, req: it.reqQty||0, combined, ok: fullyScanned && !issue, hasIssue: !!issue };
   });
   const preShort = preRows.filter(r => !r.ok && !r.hasIssue);
   if (preShort.length) {
@@ -3110,8 +3119,10 @@ window.proceedToPrintOptions = function(wid){
   }
 
   // v12.5 — force-complete: for genuine emergencies where everything is
-  // actually fine but there's no time to scan each remaining unit. Fills
-  // every still-short item to its full required quantity and marks it —
+  // actually fine but there's no time to scan each remaining unit. Tops
+  // up only the gap left after everyone else's contributions (never the
+  // full requirement on top of what's already covered, which would
+  // double-count once combined with their logged rows), and marks it —
   // never silent: requires an explicit extra confirmation, and the
   // worker's name + time end up on both the packing slip and the labels
   // exactly like a normal "scanned by" credit, so it's always traceable
@@ -3120,7 +3131,8 @@ window.proceedToPrintOptions = function(wid){
     if (!confirm(`Force-complete ${preShort.length} remaining item${preShort.length>1?'s':''} as fully received?\n\nThis will be recorded under your name on the packing slip and labels. Only do this if you're certain everything is actually correct.`)) return;
     st.skuForceCompleted = st.skuForceCompleted || {};
     preShort.forEach(r => {
-      st.skuCounts[r.key] = r.req;
+      const gap = Math.max(0, r.req - (others[r.key] || 0));
+      st.skuCounts[r.key] = gap;
       st.skuForceCompleted[r.key] = true;
       touchSkuOrder(st, r.key);
     });
@@ -3130,12 +3142,16 @@ window.proceedToPrintOptions = function(wid){
 
   const rows = items.map(it => {
     const key = it.barcode || it.sku;
-    const got = st.skuCounts[key] || 0;
+    const mine = st.skuCounts[key] || 0;
+    const combined = mine + (others[key] || 0);
     const issue = (st.skuIssues || {})[key] || null;
     const isMC = !!(st.skuMasterCase || {})[key];
     const isFC = !!(st.skuForceCompleted || {})[key];
-    const fullyScanned = it.reqQty <= 0 || got >= it.reqQty;
-    return { sku:it.sku, name:it.name, barcode:it.barcode, got, req:it.reqQty||0, issue, ok: fullyScanned && !issue, hasIssue: !!issue, mc: isMC, fc: isFC };
+    const fullyScanned = it.reqQty <= 0 || combined >= it.reqQty;
+    // r.got is MY OWN portion only — this is what gets logged to the
+    // server as this entry's packedQty. Using the combined figure here
+    // would double-count once merged with everyone else's own logged rows.
+    return { sku:it.sku, name:it.name, barcode:it.barcode, got: mine, req:it.reqQty||0, issue, ok: fullyScanned && !issue, hasIssue: !!issue, mc: isMC, fc: isFC };
   });
   const shortRows = rows.filter(r => !r.ok && !r.hasIssue);
   const issueRows = rows.filter(r => r.hasIssue);
