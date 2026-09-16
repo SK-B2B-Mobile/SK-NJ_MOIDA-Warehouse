@@ -2670,27 +2670,28 @@ function onOrderChange(){
 // Fetches and renders combined SKU/qty progress for the currently
 // selected order in the INSP picker — so a worker can see whether it's
 // already done (and print it) before ever starting a scan session.
+// v13.10 — the outer #orderProgressPreview div gets torn down and rebuilt
+// from scratch on every periodic re-render (30s auto-refresh, the
+// first-live-sync re-render, etc.), so it always started back at
+// "Checking progress…" for a beat before repopulating — a visible
+// flicker even though nothing had actually changed. Caching the last
+// good result per order lets a rebuild show that immediately instead of
+// blanking out, while still quietly re-fetching in the background.
+let _lastOrderProgress = {}; // oid -> { labelText, labelColor, barsHtml }
+
 async function loadOrderProgressPreview(oid){
   const el = document.getElementById('orderProgressPreview'); if (!el) return;
-  // v13.6 — decision #6 ("print buttons must ALWAYS be visible regardless
-  // of completion") was being violated: the buttons were embedded inside
-  // the async progress-fetch result, so if that one API call failed (or
-  // was just slow), the buttons vanished along with it — a completed
-  // order could end up with literally nothing to print from. Buttons are
-  // now rendered immediately and unconditionally; only the progress
-  // numbers below them depend on the fetch, and if that fails the buttons
-  // stay exactly where they are (printOrderPackingSlip/showOrderProgressResult
-  // do their own fetch and report their own error if something's really wrong).
+  const cached = _lastOrderProgress[oid];
   el.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <span id="orderProgressLabel" style="font-size:11px;font-weight:700;color:var(--t3)">Checking progress…</span>
+      <span id="orderProgressLabel" style="font-size:11px;font-weight:700;color:${cached ? cached.labelColor : 'var(--t3)'}">${cached ? cached.labelText : 'Checking progress…'}</span>
       <span style="display:flex;gap:4px">
         <button class="btn btn-sm" style="padding:3px 8px" onclick="printOrderPackingSlip('${oid}','box')" title="Per box/pallet breakdown"><i class="ri-printer-line"></i> Slip</button>
         <button class="btn btn-sm" style="padding:3px 8px" onclick="printOrderPackingSlip('${oid}','flat')" title="Whole order, one combined list"><i class="ri-file-list-3-line"></i> Flat</button>
         <button class="btn btn-sm" style="padding:3px 8px" onclick="showOrderProgressResult('${oid}')"><i class="ri-price-tag-3-line"></i> Labels</button>
       </span>
     </div>
-    <div id="orderProgressBars"></div>
+    <div id="orderProgressBars">${cached ? cached.barsHtml : ''}</div>
   </div>`;
 
   let p = null;
@@ -2707,8 +2708,13 @@ async function loadOrderProgressPreview(oid){
   if (!labelEl || !barsEl) return;
 
   if (!p || !p.skuTotal) {
-    labelEl.textContent = p ? 'No pick list to track — buttons still work' : '⚠ Could not load progress — buttons still work';
-    labelEl.style.color = 'var(--amber)';
+    // Keep showing whatever we already had cached rather than flashing
+    // an error over good, still-valid data just because this one
+    // refresh attempt came back empty.
+    if (!cached) {
+      labelEl.textContent = p ? 'No pick list to track — buttons still work' : '⚠ Could not load progress — buttons still work';
+      labelEl.style.color = 'var(--amber)';
+    }
     return;
   }
   const skuPct = Math.round(p.skuDone / p.skuTotal * 100);
@@ -2719,6 +2725,11 @@ async function loadOrderProgressPreview(oid){
     <div>SKU ${p.skuDone}/${p.skuTotal}<div style="background:var(--bg4);border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${skuPct}%"></div></div></div>
     <div>Qty ${p.qtyDone}/${p.qtyTotal}<div style="background:var(--bg4);border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${qtyPct}%"></div></div></div>
   </div>`;
+  _lastOrderProgress[oid] = {
+    labelText: labelEl.textContent,
+    labelColor: p.ready ? 'var(--green)' : 'var(--t3)',
+    barsHtml: barsEl.innerHTML
+  };
 }
 
 // Scan-to-start — replaces a separate "Start Inspection" click: scanning
