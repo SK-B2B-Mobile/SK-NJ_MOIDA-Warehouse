@@ -1438,7 +1438,7 @@ function skuRowHtml(it, st, wid){
   const issue = (st.skuIssues || {})[key] || null;
   const isMC = !!(st.skuMasterCase || {})[key];
   const isFC = !!(st.skuForceCompleted || {})[key];
-  const ok = issue ? true : (it.reqQty > 0 && got >= it.reqQty);
+  const ok = issue ? true : (it.reqQty <= 0 || got >= it.reqQty);
   const cls = issue ? 'issue' : (ok ? 'ok' : (got > 0 ? 'warn' : ''));
   const keyEsc = String(key).replace(/'/g, "\\'");
   const othersNote = others > 0 ? `<div style="font-size:9px;color:var(--blue)">you: ${mine} · others: ${others}</div>` : '';
@@ -1662,7 +1662,7 @@ function renderSkuChecklistUI(w, items, st){
     const key = it.barcode || it.sku;
     const got = (st.skuCounts[key] || 0) + (others[key] || 0);
     const issue = (st.skuIssues || {})[key];
-    if (issue || (it.reqQty > 0 && got >= it.reqQty)) doneCount++;
+    if (issue || it.reqQty <= 0 || got >= it.reqQty) doneCount++;
   });
 
   const filtered = filterSkuItems(items, ui.q, st.skuTouchOrder);
@@ -1919,7 +1919,7 @@ function updateSkuChecklistLive(wid){
     const key = it.barcode || it.sku;
     const got = (st.skuCounts[key]||0) + (others[key]||0);
     const issue = (st.skuIssues||{})[key];
-    if (issue || (it.reqQty>0 && got>=it.reqQty)) doneCount++;
+    if (issue || it.reqQty<=0 || got>=it.reqQty) doneCount++;
   });
   const headerEl = document.getElementById('skuDoneCount_' + wid);
   if (headerEl) headerEl.innerHTML = `SKU checklist · ${doneCount}/${items.length} complete
@@ -2089,7 +2089,7 @@ function skuChecklistReadyInfo(w){
     const key = it.barcode || it.sku;
     const got = (st.skuCounts[key] || 0) + (others[key] || 0);
     const issue = (st.skuIssues || {})[key];
-    if (issue || (it.reqQty > 0 && got >= it.reqQty)) done++;
+    if (issue || it.reqQty <= 0 || got >= it.reqQty) done++;
   });
   return { done, total: items.length, ready: done === items.length };
 }
@@ -3033,7 +3033,7 @@ function openInspEndModalSku(wid, items, st){
     const key = it.barcode || it.sku;
     const got = st.skuCounts[key] || 0;
     const issue = (st.skuIssues || {})[key] || null;
-    const fullyScanned = it.reqQty > 0 && got >= it.reqQty;
+    const fullyScanned = it.reqQty <= 0 || got >= it.reqQty;
     return { sku:it.sku, name:it.name, reqQty:it.reqQty||0, got, issue, ok: fullyScanned && !issue, hasIssue: !!issue };
   });
   const shortRows = rows.filter(r => !r.ok && !r.hasIssue);   // unexplained mismatches — still need a reason
@@ -3099,7 +3099,7 @@ window.proceedToPrintOptions = function(wid){
     const key = it.barcode || it.sku;
     const got = st.skuCounts[key] || 0;
     const issue = (st.skuIssues || {})[key] || null;
-    const fullyScanned = it.reqQty > 0 && got >= it.reqQty;
+    const fullyScanned = it.reqQty <= 0 || got >= it.reqQty;
     return { key, req: it.reqQty||0, ok: fullyScanned && !issue, hasIssue: !!issue };
   });
   const preShort = preRows.filter(r => !r.ok && !r.hasIssue);
@@ -3134,7 +3134,7 @@ window.proceedToPrintOptions = function(wid){
     const issue = (st.skuIssues || {})[key] || null;
     const isMC = !!(st.skuMasterCase || {})[key];
     const isFC = !!(st.skuForceCompleted || {})[key];
-    const fullyScanned = it.reqQty > 0 && got >= it.reqQty;
+    const fullyScanned = it.reqQty <= 0 || got >= it.reqQty;
     return { sku:it.sku, name:it.name, barcode:it.barcode, got, req:it.reqQty||0, issue, ok: fullyScanned && !issue, hasIssue: !!issue, mc: isMC, fc: isFC };
   });
   const shortRows = rows.filter(r => !r.ok && !r.hasIssue);
