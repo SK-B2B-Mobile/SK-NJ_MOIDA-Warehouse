@@ -2643,34 +2643,52 @@ function onOrderChange(){
 // already done (and print it) before ever starting a scan session.
 async function loadOrderProgressPreview(oid){
   const el = document.getElementById('orderProgressPreview'); if (!el) return;
-  el.innerHTML = '<div style="font-size:11px;color:var(--t3);padding:4px 0">Checking progress…</div>';
-  let p;
-  try {
-    p = await getPrintReadyProgress(oid);
-  } catch (e) {
-    console.warn('loadOrderProgressPreview failed', e);
-    const errEl = document.getElementById('orderProgressPreview');
-    if (errEl) errEl.innerHTML = '';
-    return;
-  }
-  const liveEl = document.getElementById('orderProgressPreview'); if (!liveEl) return; // order may have changed since
-  if (!p) { liveEl.innerHTML = ''; return; }
-  if (!p.skuTotal) { liveEl.innerHTML = ''; return; } // no pick list imported — nothing to aggregate
-  const skuPct = Math.round(p.skuDone / p.skuTotal * 100);
-  const qtyPct = p.qtyTotal ? Math.round(p.qtyDone / p.qtyTotal * 100) : 0;
-  liveEl.innerHTML = `<div style="background:var(--bg3);border:1px solid ${p.ready?'var(--green)':'var(--bd)'};border-radius:var(--r);padding:10px 12px">
+  // v13.6 — decision #6 ("print buttons must ALWAYS be visible regardless
+  // of completion") was being violated: the buttons were embedded inside
+  // the async progress-fetch result, so if that one API call failed (or
+  // was just slow), the buttons vanished along with it — a completed
+  // order could end up with literally nothing to print from. Buttons are
+  // now rendered immediately and unconditionally; only the progress
+  // numbers below them depend on the fetch, and if that fails the buttons
+  // stay exactly where they are (printOrderPackingSlip/showOrderProgressResult
+  // do their own fetch and report their own error if something's really wrong).
+  el.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <span style="font-size:11px;font-weight:700;color:${p.ready?'var(--green)':'var(--t3)'}">${p.ready ? '✓ Ready to print' : 'SKU / Qty progress'}</span>
+      <span id="orderProgressLabel" style="font-size:11px;font-weight:700;color:var(--t3)">Checking progress…</span>
       <span style="display:flex;gap:4px">
         <button class="btn btn-sm" style="padding:3px 8px" onclick="printOrderPackingSlip('${oid}','box')" title="Per box/pallet breakdown"><i class="ri-printer-line"></i> Slip</button>
         <button class="btn btn-sm" style="padding:3px 8px" onclick="printOrderPackingSlip('${oid}','flat')" title="Whole order, one combined list"><i class="ri-file-list-3-line"></i> Flat</button>
         <button class="btn btn-sm" style="padding:3px 8px" onclick="showOrderProgressResult('${oid}')"><i class="ri-price-tag-3-line"></i> Labels</button>
       </span>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
-      <div>SKU ${p.skuDone}/${p.skuTotal}<div style="background:var(--bg4);border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${skuPct}%"></div></div></div>
-      <div>Qty ${p.qtyDone}/${p.qtyTotal}<div style="background:var(--bg4);border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${qtyPct}%"></div></div></div>
-    </div>
+    <div id="orderProgressBars"></div>
+  </div>`;
+
+  let p = null;
+  try { p = await getPrintReadyProgress(oid); }
+  catch (e) { console.warn('loadOrderProgressPreview failed', e); }
+
+  // The selected order (and thus this card) may have changed while the
+  // fetch was in flight — bail out rather than writing into a stale DOM
+  // node that no longer belongs to this oid. The freshest re-render
+  // (triggered by the new selection) will have already replaced it.
+  if (document.getElementById('workOrder')?.value !== oid) return;
+  const labelEl = document.getElementById('orderProgressLabel');
+  const barsEl = document.getElementById('orderProgressBars');
+  if (!labelEl || !barsEl) return;
+
+  if (!p || !p.skuTotal) {
+    labelEl.textContent = p ? 'No pick list to track — buttons still work' : '⚠ Could not load progress — buttons still work';
+    labelEl.style.color = 'var(--amber)';
+    return;
+  }
+  const skuPct = Math.round(p.skuDone / p.skuTotal * 100);
+  const qtyPct = p.qtyTotal ? Math.round(p.qtyDone / p.qtyTotal * 100) : 0;
+  labelEl.textContent = p.ready ? '✓ Ready to print' : 'SKU / Qty progress';
+  labelEl.style.color = p.ready ? 'var(--green)' : 'var(--t3)';
+  barsEl.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+    <div>SKU ${p.skuDone}/${p.skuTotal}<div style="background:var(--bg4);border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${skuPct}%"></div></div></div>
+    <div>Qty ${p.qtyDone}/${p.qtyTotal}<div style="background:var(--bg4);border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="background:var(--purple);height:100%;width:${qtyPct}%"></div></div></div>
   </div>`;
 }
 
