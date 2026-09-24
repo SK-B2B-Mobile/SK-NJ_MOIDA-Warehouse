@@ -718,14 +718,52 @@ function buildUrl(op, data){
   return API_URL + '?op=' + encodeURIComponent(op) +
          (data ? '&data=' + encodeURIComponent(JSON.stringify(data)) : '');
 }
-function apiCall(url){
+// v13.11 — fixes two real bugs that showed up together during a large
+// pick-list import ("Importing 11/92..." stalling, then
+// "Uncaught ReferenceError: _j27_... is not defined" in the console):
+//
+// 1. Removing the <script> tag on timeout does NOT reliably cancel the
+//    in-flight network request — the browser can keep downloading it and
+//    still execute it once it arrives, calling a global callback function
+//    that `cleanup()` had already `delete`d. That's the ReferenceError.
+//    Harmless-looking on its own, but it was masking something worse:
+// 2. Because Apps Script writes to a big Sheet can legitimately take
+//    longer than 30s, the client was timing out and RETRYING a chunk
+//    whose write had actually already succeeded server-side — and for
+//    every chunk after the first (replace:false, i.e. append), a retried
+//    append duplicates rows. That's a direct, ongoing source of the
+//    duplicate-SKU-row corruption we've had to patch around before.
+//
+// Fix: (a) a much longer default timeout so real (slow but successful)
+// writes aren't mistaken for failures in the first place, with a longer
+// timeoutMs override available per-call for the heaviest ops; (b) on
+// timeout, replace the callback with a safe catch-all instead of
+// deleting it, so a late response can no longer throw — and if that late
+// response is actually a success, we log it instead of silently losing
+// it, so a manager can tell from the console/toast that a "failed" step
+// actually went through and a retry may have just duplicated it.
+function apiCall(url, timeoutMs){
   return new Promise((res, rej) => {
     const cb = '_j' + (++_jc) + '_' + Date.now();
     const sc = document.createElement('script');
-    const to = setTimeout(() => { cleanup(); rej(new Error('Timeout')); }, 30000);
+    let settled = false;
+    const to = setTimeout(() => {
+      settled = true;
+      clearTimeout(to);
+      // Keep a stub alive (instead of deleting) so a late-arriving
+      // response calls something harmless rather than throwing. If it
+      // turns out to actually be a success, surface that loudly — the
+      // caller already treated this as a failure and may be retrying.
+      window[cb] = d => {
+        delete window[cb];
+        if (d && d.ok) console.warn('[api] Late response arrived AFTER timeout — this call actually succeeded server-side:', url, d);
+      };
+      if (sc.parentNode) sc.parentNode.removeChild(sc);
+      rej(new Error('Timeout'));
+    }, timeoutMs || 30000);
     function cleanup(){ clearTimeout(to); delete window[cb]; if (sc.parentNode) sc.parentNode.removeChild(sc); }
-    window[cb] = d => { cleanup(); res(d); };
-    sc.onerror = () => { cleanup(); rej(new Error('Network error')); };
+    window[cb] = d => { if (settled) return; settled = true; cleanup(); res(d); };
+    sc.onerror = () => { if (settled) return; settled = true; cleanup(); rej(new Error('Network error')); };
     sc.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
     document.head.appendChild(sc);
   });
@@ -740,11 +778,13 @@ function setSyncFail(){
   d.className = 'sync fail'; setTimeout(() => d.className = 'sync', 4000);
 }
 
-/** apiOp — returns { net:Boolean, res:Object }. net=false means network failure. */
-async function apiOp(op, data){
+/** apiOp — returns { net:Boolean, res:Object }. net=false means network failure.
+ *  timeoutMs (optional): override the default 30s, for calls known to be
+ *  heavier than a normal read (e.g. a large Sheets write during import). */
+async function apiOp(op, data, timeoutMs){
   _syncN++; setSyncing(true);
   try {
-    const r = await apiCall(buildUrl(op, data));
+    const r = await apiCall(buildUrl(op, data), timeoutMs);
     return { net:true, res: r || { ok:false, error:'empty' } };
   } catch(e) {
     setSyncFail();
@@ -756,8 +796,8 @@ async function apiOp(op, data){
 
 /** Manager op — attaches token; on 401 clears session and re-prompts PIN */
 function mgrData(d){ return Object.assign({}, d || {}, { token:_mgrToken }); }
-async function mgrOp(op, data){
-  const out = await apiOp(op, mgrData(data));
+async function mgrOp(op, data, timeoutMs){
+  const out = await apiOp(op, mgrData(data), timeoutMs);
   if (out.net && !out.res.ok && out.res.error === 'unauthorized') {
     _mgrOK = false; _mgrToken = ''; sessionStorage.removeItem('wms_mgr');
     toast('Manager session expired — enter password again', 'err');
@@ -5152,6 +5192,14 @@ async function importOneEntry(entryId, btn){
   const items = entry.parsed.items;
   const chunks = buildImportChunks(items);
   let importedTotal = 0, doneItems = 0;
+  // v13.11 — a Sheets write for a real pick list (dozens of rows, into a
+  // sheet that keeps growing across every order ever imported) can
+  // legitimately take longer than the normal 30s call budget. Giving
+  // import specifically a longer runway means fewer of these get
+  // mistaken for failures and retried while the original write is still
+  // quietly finishing server-side — which is what was corrupting data
+  // with duplicated rows before (see apiCall's v13.11 comment).
+  const IMPORT_TIMEOUT_MS = 60000;
 
   for (let ci = 0; ci < chunks.length; ci++) {
     const chunk = chunks[ci];
@@ -5162,10 +5210,10 @@ async function importOneEntry(entryId, btn){
     // request) before giving up — mobile networks in this warehouse are
     // known to be flaky (see handover doc §5), and a single retry recovers
     // most transient drops without bothering the manager.
-    let out = await mgrOp('importOrderItems', { orderId, items:chunk, replace: ci === 0 });
+    let out = await mgrOp('importOrderItems', { orderId, items:chunk, replace: ci === 0 }, IMPORT_TIMEOUT_MS);
     if (!out.net) {
       await new Promise(r => setTimeout(r, 800));
-      out = await mgrOp('importOrderItems', { orderId, items:chunk, replace: ci === 0 });
+      out = await mgrOp('importOrderItems', { orderId, items:chunk, replace: ci === 0 }, IMPORT_TIMEOUT_MS);
     }
 
     if (!out.net || !out.res.ok) {
@@ -5178,8 +5226,28 @@ async function importOneEntry(entryId, btn){
   }
 
   delete _orderItemsCache[orderId];
-  toast(`✓ Imported ${importedTotal} items for ${orderId}`, 'ok');
   _importBatch = _importBatch.filter(x => x.id !== entryId);
+
+  // v13.11 — record the imported pick list's own SKU count and total QTY
+  // onto the order (the same items/qty fields "Edit order" sets by hand),
+  // so PICK-stage progress and the INSP checklist total are guaranteed to
+  // match exactly what was just imported — no manager step required, and
+  // no chance of a stale/mismatched manual number sitting there. Uses the
+  // same duplicate-barcode merge the checklist itself uses, so the SKU
+  // count here is the same "unique SKU" number the checklist will show.
+  const mergedForTotals = mergeDuplicateOrderItems(items);
+  const totalSkus = mergedForTotals.length;
+  const totalQty = mergedForTotals.reduce((s, it) => s + (Number(it.reqQty) || 0), 0);
+  const o = S.orders.find(x => x.id === orderId);
+  const prevItems = o ? o.items : null, prevQty = o ? o.qty : null;
+  if (o) { o.items = totalSkus; o.qty = totalQty; }
+  const totalsOut = await mgrOp('upsertOrder', { id: orderId, items: totalSkus, qty: totalQty });
+  if (!totalsOut.net || !totalsOut.res.ok) {
+    if (o) { o.items = prevItems; o.qty = prevQty; }
+    toast(`✓ Imported ${importedTotal} items for ${orderId} — ⚠ could not save SKU/QTY totals, set them manually in Edit order`, 'err');
+  } else {
+    toast(`✓ Imported ${importedTotal} items for ${orderId} — recorded ${totalSkus} SKUs / ${totalQty} QTY total`, 'ok');
+  }
 
   // v10.3 — record the import server-side (Sheets) so "was this actually
   // saved?" has a real answer: date/time + order number, visible to any
