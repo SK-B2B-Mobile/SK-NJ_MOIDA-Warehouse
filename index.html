@@ -2010,17 +2010,26 @@ function registerSkuScan(wid, code){
   const key = match.barcode || match.sku;
   const mult = st.mult || 1;
 
-  // v11.0 — warn (not block) if others already covered this item, using
-  // the live baseline last synced from the server. Doesn't block the
-  // scan itself — a worker might be intentionally re-verifying — but
-  // makes a likely duplicate impossible to miss.
+  // v10.12 — a SKU whose required qty is already fully covered (by me
+  // and/or others combined) no longer accepts more scans as real
+  // progress. This used to still add to the count past 100% (e.g. a
+  // "1/1" item could become "2/1"), which is confusing on the checklist
+  // and on a printed/reprinted slip, and made a genuine extra unit
+  // indistinguishable from an accidental re-scan of the same item that's
+  // already done. Now it's rejected outright as a duplicate scan: the
+  // count stays exactly at reqQty (so "1/1" stays "1/1" for good), and
+  // the worker gets a clear, unmissable "already scanned" signal instead
+  // of a number that silently keeps climbing.
   const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
   const reqQty = match.reqQty || 0;
   const mineBefore = st.skuCounts[key] || 0;
   if (reqQty > 0 && (othersQty + mineBefore) >= reqQty) {
     const who = liveContributorNames(wid, key);
-    toast(`⚠ ${match.sku} already fully covered${who ? ' by '+who : ' by another worker'} — check before continuing`, 'err');
+    toast(`⚠ Duplicate scan — ${match.sku} is already complete (${othersQty + mineBefore}/${reqQty})${who ? ', by '+who : ''}`, 'err');
+    playScanBeep('error');
     if (navigator.vibrate) try { navigator.vibrate([50,50,50,50]); } catch(_){}
+    renderStageContent();
+    return;
   }
 
   st.skuCounts[key] = mineBefore + mult;
@@ -2711,15 +2720,19 @@ function onOrderChange(){
 
   if (CS === 'INSP') {
     ensureOrderItems(oid);
-    const sw = document.getElementById('inspScanStartWrap');
     if (myHere > 0) {
-      // Already have a live session here — the real scan UI is right
-      // below in "My active sessions"; showing a second scan input up
-      // here too was pure duplication.
-      if (sw) sw.innerHTML = `<button class="btn btn-sm btn-block" style="justify-content:center;padding:10px" onclick="document.getElementById('sc_${myActiveHere[0].id}')?.scrollIntoView({behavior:'smooth',block:'start'})"><i class="ri-arrow-down-line"></i> Already active on this order — scroll to it</button>`;
-    } else {
-      renderInspScanStart(oid);
+      // v10.11 — selecting an order I'm already actively inspecting has
+      // nothing left for the picker card to do (the real scan UI is
+      // already below in "My active sessions") — collapse the card back
+      // to its compact strip instead of leaving it expanded with a
+      // now-redundant "scroll to it" button. A full re-render is needed
+      // to actually move things around (this only patches a few nodes),
+      // so trigger one directly rather than just touching inspScanStartWrap.
+      _inspStartExpanded = false;
+      renderStageContent();
+      return;
     }
+    renderInspScanStart(oid);
   }
 
   const otherActiveEntries = ws.filter(w => !w.endT && w.w !== CW);
