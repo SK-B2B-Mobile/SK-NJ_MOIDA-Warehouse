@@ -525,8 +525,9 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
         <div class="fg">
           <label class="fl">Customer</label>
           <div class="chip-group" id="cuGroup">
-            <button type="button" class="chip-opt" data-val="NJ(PURCHASE)"    onclick="pickChip('cuGroup','NJ(PURCHASE)')">NJ<span class="chip-sub">PURCHASE</span></button>
+            <button type="button" class="chip-opt" data-val="PURCHASE"       onclick="pickChip('cuGroup','PURCHASE')">PURCHASE</button>
             <button type="button" class="chip-opt" data-val="WHOLESALE"       onclick="pickChip('cuGroup','WHOLESALE')">WHOLESALE</button>
+            <button type="button" class="chip-opt" data-val="MOIDA"          onclick="pickChip('cuGroup','MOIDA')">MOIDA</button>
             <button type="button" class="chip-opt" data-val="OTHER"           onclick="pickChip('cuGroup','OTHER')">OTHER</button>
           </div>
           <input type="hidden" id="newOrderCu">
@@ -542,8 +543,6 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
             <input class="fi" type="number" id="newOrderQty" placeholder="e.g. 600" min="1">
           </div>
         </div>
-        <div style="font-size:11px;color:var(--t3);margin:-6px 0 12px"><i class="ri-information-line"></i> Set once here from the invoice — workers picking this order never type these numbers themselves.</div>
-
 
         <div id="orderPreview" style="display:none;background:var(--bg3);border:1px solid var(--blue-bd);border-radius:var(--r);padding:10px 14px;margin-bottom:12px;font-size:13px">
           <span style="color:var(--t3);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Preview</span>
@@ -4760,8 +4759,9 @@ window.editOrder = function(oid){
        onclick="editChipPick('${groupId}','${v}')">${l}${sub?`<span class="chip-sub">${sub}</span>`:''}</button>`).join('');
   const chOptions = [{v:'NJ',l:'NJ'},{v:'CA',l:'CA'}];
   const cuOptions = [
-    {v:'NJ(PURCHASE)',   l:'NJ',    sub:'PURCHASE'},
+    {v:'PURCHASE',       l:'PURCHASE'},
     {v:'WHOLESALE',      l:'WHOLESALE'},
+    {v:'MOIDA',          l:'MOIDA'},
     {v:'OTHER',          l:'OTHER'}
   ];
   openModal(`
@@ -5166,8 +5166,8 @@ function readBackImportEdits(entryId){
 // names run long (real PDFs regularly do) — that's exactly what caused
 // "Import failed ... items 1-20: network" even on chunk #1. Packing by
 // measured length means every chunk is safe regardless of name length.
-const IMPORT_CHUNK_MAX_CHARS = 2200; // encoded chars of the items[] payload — safe margin under Apps Script's ~8KB URL limit, and conservative for flaky mobile networks too
-const IMPORT_CHUNK_MAX_ITEMS = 25;   // secondary cap even if names are very short
+const IMPORT_CHUNK_MAX_CHARS = 5500; // encoded chars of the items[] payload — was 2200 (very conservative); raised so a ~90-item pick list needs ~2 round-trips instead of ~4-5. Each round-trip pays a fixed Apps Script/Sheets-open cost, so fewer/bigger chunks is the main lever available without touching the server script. Still a safe margin under the ~8KB URL limit.
+const IMPORT_CHUNK_MAX_ITEMS = 60;   // secondary cap even if names are very short
 function buildImportChunks(items){
   const chunks = [];
   let cur = [], curLen = 2; // account for the [ ] wrapper
@@ -5252,7 +5252,7 @@ async function importOneEntry(entryId, btn){
   // v10.3 — record the import server-side (Sheets) so "was this actually
   // saved?" has a real answer: date/time + order number, visible to any
   // manager on any device, not just a toast that vanishes in 3 seconds.
-  mgrOp('logImportEvent', { orderId, itemCount: importedTotal }).then(() => renderImportLog());
+  mgrOp('logImportEvent', { orderId, itemCount: importedTotal, qtyTotal: totalQty }).then(() => renderImportLog());
 
   return true;
 }
@@ -5274,10 +5274,11 @@ window.renderImportLogView = function(){
   const countEl = document.getElementById('importLogCount');
   if (countEl) countEl.textContent = _importLogCache.length ? `(${rows.length} of ${_importLogCache.length})` : '';
   el.innerHTML = rows.length
-    ? `<table class="mgr-tbl"><thead><tr><th>Order</th><th>Items</th><th>Date / time</th><th></th></tr></thead><tbody>${
+    ? `<table class="mgr-tbl"><thead><tr><th>Order</th><th>SKUs</th><th>QTY</th><th>Date / time</th><th></th></tr></thead><tbody>${
         rows.map(r => `<tr>
           <td class="mono" style="font-weight:700">${r.orderId}</td>
           <td class="mono">${r.itemCount}</td>
+          <td class="mono">${(r.qtyTotal ?? r.qty ?? '—')}</td>
           <td class="mono" style="color:var(--t2)">${r.importedAt}</td>
           <td style="text-align:right"><button class="btn btn-sm" style="padding:3px 8px;color:var(--red)" title="Remove this history entry (does not affect the order's pick list)" onclick="deleteImportLogEntry('${r.id}')"><i class="ri-delete-bin-line"></i></button></td>
         </tr>`).join('')
