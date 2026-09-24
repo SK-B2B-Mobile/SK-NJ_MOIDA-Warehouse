@@ -506,11 +506,19 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
       <div class="card">
         <div class="card-t"><i class="ri-file-list-3-line" style="color:var(--blue)"></i> Orders</div>
 
-        <div class="fg">
-          <label class="fl">Order number</label>
-          <input class="fi" id="newOrderId" placeholder="e.g. IM003232"
-            oninput="updateOrderPreview()"
-            style="font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.5px">
+        <div class="frow">
+          <div class="fg">
+            <label class="fl">Order number</label>
+            <input class="fi" id="newOrderId" placeholder="e.g. IM003232"
+              oninput="updateOrderPreview()"
+              style="font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.5px">
+          </div>
+          <div class="fg">
+            <label class="fl"><i class="ri-file-list-3-line"></i> Total pages</label>
+            <input class="fi" type="number" id="newOrderPages" placeholder="e.g. 10" min="1"
+              oninput="updateOrderPreview()"
+              style="font-size:15px;font-weight:700">
+          </div>
         </div>
 
         <div class="fg">
@@ -679,7 +687,7 @@ async function flushQueue(){
           _queue.forEach(q => { if (q.data && q.data.entryId === item.meta.tempId) q.data.entryId = r.entryId; });
         }
         _queue.shift(); saveQueue(); flushed++;
-      } else if (r && (r.error === 'duplicate_active' || r.error === 'already_ended')) {
+      } else if (r && (r.error === 'duplicate_active' || r.error === 'already_ended' || r.error === 'page_out_of_range' || r.error === 'page_range_taken')) {
         // v13.7 — the queued startWork was rejected because the server
         // already considers this worker active/done on this order+stage.
         // Previously only the queue item was dropped, leaving a phantom
@@ -688,6 +696,8 @@ async function flushQueue(){
         // session in the UI, but the server had never heard of that ID,
         // so End/Leave on it always failed with "entry not found". Drop
         // the phantom itself, not just the queue entry.
+        // v10.10 — same cleanup applies to a queued PICK start that lost
+        // a page-range race while offline (page_out_of_range / _taken).
         if (item.op === 'startWork' && item.meta && item.meta.tempId) {
           S.works = S.works.filter(x => x.id !== item.meta.tempId);
           stopLivePoll(item.meta.tempId);
@@ -2589,6 +2599,38 @@ function resetPickStartBtn(){
 }
 window.revealPickStartBtn = function(){ resetPickStartBtn(); };
 
+// v10.10 — page-range ceiling + auto-suggested next range for PICK.
+// Without a known total page count, splitting a big pick list across
+// workers had no real limit and no way to see what's left — this is
+// what the manager's new "Total pages" field on an order feeds into.
+// Every non-archived PICK entry for the order (active OR finished)
+// "claims" its page range: finished means done, active means being
+// worked right now — neither should be suggested or allowed again.
+function getClaimedPickPages(oid){
+  return S.works
+    .filter(w => w.oid === oid && w.stage === 'PICK' && w.pageFrom && w.pageTo)
+    .map(w => [Number(w.pageFrom), Number(w.pageTo)])
+    .sort((a,b) => a[0]-b[0]);
+}
+// Returns the first still-open range within [1, totalPages], or null if
+// every page is already claimed. Only the earliest gap is suggested —
+// good enough for the common case (pages get picked up roughly in
+// order) and simple to read; a worker can still type a different range
+// manually as long as it's open and within bounds.
+function firstOpenPageGap(oid, totalPages){
+  if (!totalPages) return null;
+  const claimed = getClaimedPickPages(oid);
+  let next = 1;
+  for (const [from, to] of claimed) {
+    if (from > next) return { from: next, to: from - 1 };
+    next = Math.max(next, to + 1);
+  }
+  return next <= totalPages ? { from: next, to: totalPages } : null;
+}
+function pageRangeOverlapsClaimed(oid, from, to){
+  return getClaimedPickPages(oid).some(([cf, ct]) => from <= ct && to >= cf);
+}
+
 function onOrderChange(){
   const oid = document.getElementById('workOrder')?.value;
   const el = document.getElementById('workOrderInfo'); if (!el) return;
@@ -2603,9 +2645,30 @@ function onOrderChange(){
   const o = S.orders.find(x => x.id === oid);
   if (CS === 'PICK') {
     const pi = document.getElementById('pickOrderInfo');
-    if (pi) pi.innerHTML = (o && o.items && o.qty)
-      ? `<i class="ri-information-line"></i> This order: <b style="color:var(--t)">${o.items} items · ${o.qty} QTY total</b> (set by manager)`
-      : `<span style="color:var(--red)"><i class="ri-error-warning-line"></i> No Items/QTY set for this order yet — ask a manager to add it</span>`;
+    if (pi) {
+      let html = (o && o.items && o.qty)
+        ? `<i class="ri-information-line"></i> This order: <b style="color:var(--t)">${o.items} items · ${o.qty} QTY total</b> (set by manager)`
+        : `<span style="color:var(--red)"><i class="ri-error-warning-line"></i> No Items/QTY set for this order yet — ask a manager to add it</span>`;
+      if (o && o.pages) {
+        const gap = firstOpenPageGap(oid, o.pages);
+        html += `<div style="margin-top:4px"><i class="ri-file-list-3-line"></i> Total pages: <b style="color:var(--t)">${o.pages}</b>` +
+          (gap
+            ? ` — next open range: <b style="color:var(--green)">${gap.from}${gap.to!==gap.from?'–'+gap.to:''}</b> (auto-filled below — you can still change it)`
+            : ` — <span style="color:var(--amber);font-weight:700">every page is already claimed</span>`) +
+          `</div>`;
+      }
+      pi.innerHTML = html;
+    }
+    // Auto-fill Page from/to with the next open gap — only when the
+    // worker hasn't already typed something (fresh selection), and only
+    // when the manager actually set a total page count for this order.
+    if (o && o.pages) {
+      const gap = firstOpenPageGap(oid, o.pages);
+      const pf = document.getElementById('wPageFrom'), pt = document.getElementById('wPageTo');
+      if (pf) pf.max = o.pages;
+      if (pt) pt.max = o.pages;
+      if (gap && pf && pt && !pf.value && !pt.value) { pf.value = gap.from; pt.value = gap.to; }
+    }
   }
   const ws = S.works.filter(w => w.oid===oid && w.stage===CS);
   const active = ws.filter(w => !w.endT).length;
@@ -2882,6 +2945,14 @@ window.startWork = function(){
     if (!pageFrom || pageFrom < 1) { toast('Enter starting page', 'err'); return; }
     if (!pageTo   || pageTo   < 1) { toast('Enter ending page', 'err'); return; }
     if (pageTo < pageFrom) { toast('End page must be ≥ start page', 'err'); return; }
+    // v10.10 — enforce the manager's total-page count (if set) so nobody
+    // can pick a page that doesn't exist, and block ranges that overlap
+    // a page range someone else (or this order's earlier session)
+    // already claimed — both would silently corrupt per-page KPI.
+    if (o && o.pages) {
+      if (pageTo > o.pages) { toast(`This order only has ${o.pages} pages — enter a range within 1–${o.pages}`, 'err'); return; }
+      if (pageRangeOverlapsClaimed(oid, pageFrom, pageTo)) { toast('That page range overlaps pages already picked (by you or someone else) — check the range above', 'err'); return; }
+    }
   }
 
   // v10.9 — INSP has no exclusivity: joining an order I'm already actively
@@ -3082,6 +3153,23 @@ function doStartWork(oid, items, qty, pageFrom, pageTo){
       // v8.2 — one task at a time, enforced server-side too
       S.works = S.works.filter(w => w.id !== tid);
       toast(`⚠ Finish your active ${res.stage||''} on ${res.orderId||''} first`, 'err');
+      loadData().then(() => { updateBadges(); renderStageContent(); });
+      finish(); return;
+    }
+    // v10.10 — server-side mirrors of the page-range guard. These should
+    // rarely fire (the client already blocks both cases before this call
+    // goes out), but a stale page or a second device racing in ahead can
+    // still reach the server first — reload so the picker sees fresh
+    // claimed ranges instead of retrying blind.
+    if (!res.ok && res.error === 'page_out_of_range') {
+      S.works = S.works.filter(w => w.id !== tid);
+      toast(`⚠ This order only has ${res.maxPage} pages — enter a range within 1–${res.maxPage}`, 'err');
+      loadData().then(() => { updateBadges(); renderStageContent(); });
+      finish(); return;
+    }
+    if (!res.ok && res.error === 'page_range_taken') {
+      S.works = S.works.filter(w => w.id !== tid);
+      toast(`⚠ Pages ${res.claimedFrom}–${res.claimedTo} were just claimed${res.claimedWorker?' by '+res.claimedWorker:''} — pick a different range`, 'err');
       loadData().then(() => { updateBadges(); renderStageContent(); });
       finish(); return;
     }
@@ -4720,22 +4808,24 @@ window.addOrder = function(){
   const cu = document.getElementById('newOrderCu')?.value;
   const items = document.getElementById('newOrderItems')?.value;
   const qty   = document.getElementById('newOrderQty')?.value;
+  const pages = document.getElementById('newOrderPages')?.value;
   if (!id) { toast('Enter order number', 'err'); return; }
   if (!ch) { toast('Select a channel', 'err'); return; }
   if (!cu) { toast('Select a customer', 'err'); return; }
   if (S.orders.find(o => o.id === id)) { toast('Order already exists', 'err'); return; }
 
-  S.orders.push({ id, ch, cu, at: todayStr() + ' ' + nowHHmm() + ':00', items: items?Number(items):null, qty: qty?Number(qty):null });
+  S.orders.push({ id, ch, cu, at: todayStr() + ' ' + nowHHmm() + ':00', items: items?Number(items):null, qty: qty?Number(qty):null, pages: pages?Number(pages):null });
   toast(`${id} added ✓`, 'ok');
   document.getElementById('newOrderId').value = '';
   document.getElementById('newOrderCh').value = '';
   document.getElementById('newOrderCu').value = '';
   document.getElementById('newOrderItems').value = '';
   document.getElementById('newOrderQty').value = '';
+  document.getElementById('newOrderPages').value = '';
   document.querySelectorAll('#chGroup .chip-opt, #cuGroup .chip-opt').forEach(b => b.classList.remove('selected'));
   updateOrderPreview(); R.mgr();
 
-  mgrOp('upsertOrder', { id, ch, cu, items, qty }).then(out => {
+  mgrOp('upsertOrder', { id, ch, cu, items, qty, pages }).then(out => {
     if (!out.net || !out.res.ok) {
       S.orders = S.orders.filter(o => o.id !== id);
       toast('⚠ Save failed', 'err'); R.mgr();
@@ -4793,6 +4883,11 @@ window.editOrder = function(oid){
         <input class="fi" type="number" id="eoQty" min="1" value="${o.qty!=null?o.qty:''}">
       </div>
     </div>
+    <div class="fg" style="margin-top:12px">
+      <label class="fl"><i class="ri-file-list-3-line"></i> Total pages</label>
+      <input class="fi" type="number" id="eoPages" min="1" value="${o.pages!=null?o.pages:''}" placeholder="e.g. 10">
+      <div style="font-size:11px;color:var(--t3);margin-top:4px"><i class="ri-information-line"></i> Sets the page-range ceiling workers see on "Start Picking" — leave blank if this order isn't split by pages.</div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
       <button class="btn btn-blue" onclick="saveOrder('${oid}')" style="padding:10px 20px;font-weight:700">
@@ -4806,12 +4901,13 @@ window.saveOrder = function(orig){
   const cu = document.getElementById('eoCu').value.trim();
   const items = document.getElementById('eoItems')?.value;
   const qty   = document.getElementById('eoQty')?.value;
+  const pages = document.getElementById('eoPages')?.value;
   if (!newId) { toast('Order # required', 'err'); return; }
   const bkO = JSON.parse(JSON.stringify(S.orders)), bkW = JSON.parse(JSON.stringify(S.works));
-  const o = S.orders.find(x => x.id === orig); if (o) { o.id = newId; o.ch = ch; o.cu = cu; o.items = items?Number(items):null; o.qty = qty?Number(qty):null; }
+  const o = S.orders.find(x => x.id === orig); if (o) { o.id = newId; o.ch = ch; o.cu = cu; o.items = items?Number(items):null; o.qty = qty?Number(qty):null; o.pages = pages?Number(pages):null; }
   S.works.filter(w => w.oid === orig).forEach(w => w.oid = newId);
   toast('Updated', 'ok'); closeModal(); R.mgr();
-  mgrOp('upsertOrder', { id:orig, newId:newId!==orig?newId:undefined, ch, cu, items, qty }).then(out => {
+  mgrOp('upsertOrder', { id:orig, newId:newId!==orig?newId:undefined, ch, cu, items, qty, pages }).then(out => {
     if (!out.net || !out.res.ok) { S.orders = bkO; S.works = bkW; toast('⚠ Save failed', 'err'); R.mgr(); }
   });
 };
