@@ -1537,12 +1537,17 @@ function skuUI(wid){
   if (!_skuUI[wid]) _skuUI[wid] = { q:'', page:0, size:20 };
   return _skuUI[wid];
 }
-// v13.1 — reordered per worker feedback: not-yet-scanned items must always
-// sit at the top (right under the scan box) so a worker can see at a
-// glance what's left, with already-scanned items stacking below in
-// most-recently-scanned-first order. Previously "touched" items (scanned
-// OR just-corrected) jumped to the top regardless of done/not-done, which
-// could bury an unscanned item under a pile of already-finished ones.
+// v10.11 — reordered again per manager request: whatever was JUST
+// scanned must always land right under the scan box, so the worker gets
+// instant visual confirmation of what they just did without hunting for
+// it. Items get sorted purely by "most recently touched first" — every
+// touched item (scanned, corrected, or flagged) floats to the top in
+// that order, most recent at position 1; items never touched this
+// session stay below it, in original pick-list order. (This replaces
+// the earlier v13.1 "not-done stays on top" rule, which was itself a
+// deliberate reversal of an even earlier recency-first version — if
+// this swings back again, that history is worth knowing before
+// re-litigating it a third time.)
 function filterSkuItems(items, q, st, wid){
   let out = items;
   if (q) {
@@ -1555,23 +1560,13 @@ function filterSkuItems(items, q, st, wid){
     );
   }
   const touchOrder = (st && st.skuTouchOrder) || {};
-  const mine = (st && st.skuCounts) || {};
-  const others = (wid && _liveBaseline[wid]) || {};
-  const issues = (st && st.skuIssues) || {};
   out = [...out].sort((a, b) => {
     const ka = a.barcode || a.sku, kb = b.barcode || b.sku;
-    const gotA = (mine[ka]||0) + (others[ka]||0);
-    const gotB = (mine[kb]||0) + (others[kb]||0);
-    const doneA = !!issues[ka] || (a.reqQty||0) <= 0 || gotA >= (a.reqQty||0);
-    const doneB = !!issues[kb] || (b.reqQty||0) <= 0 || gotB >= (b.reqQty||0);
-    if (doneA !== doneB) return doneA ? 1 : -1; // not-done items float to the top
-    if (!doneA) return 0; // both still open — keep the original pick-list order
-    // both done: most recently scanned/touched first
     const ta = touchOrder[ka], tb = touchOrder[kb];
-    if (ta !== undefined && tb !== undefined) return tb - ta;
-    if (ta !== undefined) return -1;
-    if (tb !== undefined) return 1;
-    return 0;
+    if (ta !== undefined && tb !== undefined) return tb - ta; // both touched — most recent first
+    if (ta !== undefined) return -1; // only a is touched — a goes up top
+    if (tb !== undefined) return 1;  // only b is touched — b goes up top
+    return 0; // neither touched — keep original pick-list order
   });
   return out;
 }
@@ -2056,6 +2051,14 @@ let _liveSyncedOnce = {};    // wid -> true once the first live-baseline fetch h
 let _livePollTimers = {};    // wid -> intervalId
 let _livePushTimers = {};    // wid -> debounce timeoutId
 
+// v10.11 — once a worker already has an active INSP session, the full
+// "Start Inspection" order-picker card is mostly dead space (the real
+// work is the session card below it) — collapse it to a small "inspect
+// another order" strip so the scan UI sits higher, and let a tap expand
+// it back out to actually pick a different/additional order. Resets to
+// collapsed automatically the next time a session successfully starts.
+let _inspStartExpanded = false;
+
 function liveContributorNames(wid, key){
   const list = _liveContributors[wid] || [];
   const names = list.filter(c => (c.skuCounts||{})[key] > 0).map(c => c.worker);
@@ -2490,6 +2493,20 @@ function renderStageContent(){
       <div style="font-size:12px;color:var(--t3)">
         <i class="ri-information-line"></i> One ${s} at a time — finish the session above to start another.
       </div>
+    </div>`;
+  } else if (s === 'INSP' && mySessions.length > 0 && !_inspStartExpanded) {
+    // v10.11 — collapsed by default once at least one INSP session is
+    // already active: the full order-picker card would just be dead
+    // space above the real work (the session card(s) below). Tapping
+    // this strip expands it back out to pick a different/additional
+    // order — INSP allows several concurrent sessions, so this stays
+    // reachable rather than disappearing outright.
+    startSect = `
+    <div class="card" style="padding:11px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer" onclick="_inspStartExpanded=true;renderStageContent();">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--t2);font-weight:600">
+        <i class="ri-add-circle-line" style="color:${col};font-size:16px"></i> Inspect another order
+      </div>
+      <i class="ri-arrow-down-s-line" style="color:var(--t3);font-size:18px"></i>
     </div>`;
   } else {
     startSect = `
@@ -3075,6 +3092,7 @@ window._confirmedStart = function(oid, items, qty, pageFrom, pageTo){
 };
 
 function doStartWork(oid, items, qty, pageFrom, pageTo){
+  _inspStartExpanded = false; // re-collapse the picker card once this session is up
   if (_startLock) { toast('Starting... please wait', ''); return; }
   _startLock = true;
   const lockTimer = setTimeout(() => { _startLock = false; }, 10000);
