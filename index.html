@@ -533,7 +533,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
           <input type="hidden" id="newOrderCu">
         </div>
 
-        <div class="frow">
+        <div class="frow" style="margin-bottom:14px">
           <div class="fg" style="margin-bottom:0">
             <label class="fl"><i class="ri-box-3-line"></i> Items (SKU types)</label>
             <input class="fi" type="number" id="newOrderItems" placeholder="e.g. 34" min="1">
@@ -5241,7 +5241,12 @@ async function importOneEntry(entryId, btn){
   const o = S.orders.find(x => x.id === orderId);
   const prevItems = o ? o.items : null, prevQty = o ? o.qty : null;
   if (o) { o.items = totalSkus; o.qty = totalQty; }
-  const totalsOut = await mgrOp('upsertOrder', { id: orderId, items: totalSkus, qty: totalQty });
+  // v10.9 — pass the order's existing ch/cu through explicitly. Without
+  // this, the server's upsertOrder_ (which always writes SOME value into
+  // Channel/Customer) would fall back to its own default and stamp "-"
+  // over whatever the manager had already set — wiping Channel/Customer
+  // to "-" every time a pick list gets (re-)imported for an order.
+  const totalsOut = await mgrOp('upsertOrder', { id: orderId, ch: o ? o.ch : undefined, cu: o ? o.cu : undefined, items: totalSkus, qty: totalQty });
   if (!totalsOut.net || !totalsOut.res.ok) {
     if (o) { o.items = prevItems; o.qty = prevQty; }
     toast(`✓ Imported ${importedTotal} items for ${orderId} — ⚠ could not save SKU/QTY totals, set them manually in Edit order`, 'err');
