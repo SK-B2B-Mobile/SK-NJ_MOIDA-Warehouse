@@ -1843,6 +1843,43 @@ window.saveQtyEdit = function(wid, key){
   pushMyLiveScan(wid);
 };
 
+// Builds the "just scanned" banner shown directly above the scan box (never
+// below it — the on-screen keyboard covers anything under the input while
+// scanning, so this is the one spot guaranteed to stay visible).
+function lastScanBannerHtml(ls){
+  if (ls.type === 'unknown') {
+    return `
+    <div class="last-scanned-banner" style="display:flex;align-items:center;gap:8px;background:var(--red-bg);border:1px solid var(--red-bd);border-radius:var(--r);padding:8px 12px;margin-bottom:8px">
+      <i class="ri-error-warning-line" style="color:var(--red);font-size:16px"></i>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--red)">Not on this order's list</div>
+        <div style="font-size:11px;color:var(--t3)">${ls.code||''}</div>
+      </div>
+    </div>`;
+  }
+  if (ls.type === 'dup') {
+    return `
+    <div class="last-scanned-banner" style="display:flex;justify-content:space-between;align-items:center;background:var(--red-bg);border:1px solid var(--red-bd);border-radius:var(--r);padding:8px 12px;margin-bottom:8px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <i class="ri-error-warning-line" style="color:var(--red);font-size:16px"></i>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--red)">Duplicate scan — already complete</div>
+          <div style="font-size:11px;color:var(--t3)">${ls.sku||'—'}${ls.barcode?` · ${ls.barcode}`:''}${ls.who?` · by ${ls.who}`:''}</div>
+        </div>
+      </div>
+      <div style="font-family:var(--mono);font-weight:800;color:var(--red)">${ls.qty}/${ls.req||0}</div>
+    </div>`;
+  }
+  return `
+    <div class="last-scanned-banner" style="display:flex;justify-content:space-between;align-items:center;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:8px 12px;margin-bottom:8px">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--green)">${ls.sku||'—'}${ls.barcode?` · ${ls.barcode}`:''}</div>
+        <div style="font-size:11px;color:var(--t3)">${ls.name||''}</div>
+      </div>
+      <div style="font-family:var(--mono);font-weight:800;color:var(--green)">${ls.qty}/${ls.req||0}</div>
+    </div>`;
+}
+
 function renderSkuChecklistUI(w, items, st){
   const pageSizes = [10,20,30,40];
   const ui = skuUI(w.id);
@@ -1867,14 +1904,7 @@ function renderSkuChecklistUI(w, items, st){
   const unknownLine = st.unknown ? `<div style="font-size:11px;color:var(--red);margin-top:6px"><i class="ri-error-warning-line"></i> ${st.unknown} scan${st.unknown>1?'s':''} didn't match any item on this order's list</div>` : '';
 
   const ls = _lastScanned[w.id];
-  const lastScanHtml = (ls && Date.now() - ls.at < 2500) ? `
-    <div class="last-scanned-banner" style="display:flex;justify-content:space-between;align-items:center;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:8px 12px;margin-top:8px">
-      <div>
-        <div style="font-size:12px;font-weight:700;color:var(--green)">${ls.sku||'—'}${ls.barcode?` · ${ls.barcode}`:''}</div>
-        <div style="font-size:11px;color:var(--t3)">${ls.name||''}</div>
-      </div>
-      <div style="font-family:var(--mono);font-weight:800;color:var(--green)">${ls.qty}/${ls.req||0}</div>
-    </div>` : '';
+  const lastScanHtml = (ls && Date.now() - ls.at < 2500) ? lastScanBannerHtml(ls) : '';
 
   return `
   <div class="scan-counter-wrap" style="text-align:left">
@@ -1896,11 +1926,11 @@ function renderSkuChecklistUI(w, items, st){
       <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="nextBox('${w.id}')"><i class="ri-inbox-archive-line"></i> Finish ${unitWord(st.unitType)}, start next</button>
     </div>
 
+    ${lastScanHtml}
     <div class="scan-input-row">
       <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
     </div>
-    ${lastScanHtml}
 
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
       <div style="position:relative;flex:1;min-width:140px">
@@ -2004,7 +2034,9 @@ function registerSkuScan(wid, code){
     toast('⚠ Not on this order\'s list: ' + code, 'err');
     playScanBeep('error');
     if (navigator.vibrate) try { navigator.vibrate([40,40,40]); } catch(_){}
+    _lastScanned[wid] = { type:'unknown', code, at: Date.now() };
     renderStageContent();
+    scheduleLastScanClear(wid);
     return;
   }
   const key = match.barcode || match.sku;
@@ -2028,7 +2060,9 @@ function registerSkuScan(wid, code){
     toast(`⚠ Duplicate scan — ${match.sku} is already complete (${othersQty + mineBefore}/${reqQty})${who ? ', by '+who : ''}`, 'err');
     playScanBeep('error');
     if (navigator.vibrate) try { navigator.vibrate([50,50,50,50]); } catch(_){}
+    _lastScanned[wid] = { type:'dup', sku: match.sku, barcode: match.barcode, name: match.name, qty: othersQty + mineBefore, req: reqQty, who, at: Date.now() };
     renderStageContent();
+    scheduleLastScanClear(wid);
     return;
   }
 
@@ -2038,11 +2072,18 @@ function registerSkuScan(wid, code){
   st.boxScans[b] = st.boxScans[b] || {};
   st.boxScans[b][key] = (st.boxScans[b][key] || 0) + mult;
   saveScanState(wid, st);
-  _lastScanned[wid] = { sku: match.sku, barcode: match.barcode, name: match.name, qty: mineBefore + mult, req: reqQty, at: Date.now() };
+  _lastScanned[wid] = { type:'ok', sku: match.sku, barcode: match.barcode, name: match.name, qty: mineBefore + mult, req: reqQty, at: Date.now() };
   playScanBeep('ok');
   if (navigator.vibrate) try { navigator.vibrate(25); } catch(_){}
   renderStageContent();
   pushMyLiveScan(wid);
+  scheduleLastScanClear(wid);
+}
+
+// Re-render once the "just scanned" banner (above the scan box) has expired,
+// so it disappears on its own instead of sticking around stale. Shared by
+// the ok / duplicate / unknown-code outcomes.
+function scheduleLastScanClear(wid){
   setTimeout(() => {
     if (_lastScanned[wid] && Date.now() - _lastScanned[wid].at >= 2400) renderStageContent();
   }, 2500);
