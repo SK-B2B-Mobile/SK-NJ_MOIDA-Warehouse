@@ -5313,6 +5313,24 @@ async function processImportFiles(files){
 
       if (!parsed.items.length) { failed.push(file.name + ' (no items found)'); continue; }
 
+      // v10.16 — the CMS pick list sometimes splits ONE physical SKU across
+      // two+ lines at the same rack (e.g. a partial-lot pick: qty 5 on one
+      // line, 25 on the next, same SKU/barcode/rack, for the same 30 total).
+      // Parsed as-is, that becomes two OrderItems rows for one product —
+      // the imported "SKU count" then reads higher than the CMS's real
+      // distinct-SKU count even though the QTY total still matches (it's
+      // just split differently), which is exactly the mismatch a manager
+      // can't reconcile against CMS at a glance. Merge same barcode/SKU
+      // rows here, before the review table and before import, so what's
+      // imported always has one row per physical product with its full
+      // combined qty — same rule already used for on-screen scanning
+      // (mergeDuplicateOrderItems, used by ensureOrderItems).
+      const beforeMerge = parsed.items.length;
+      parsed.items = mergeDuplicateOrderItems(parsed.items);
+      if (parsed.items.length < beforeMerge) {
+        console.warn(`${file.name}: merged ${beforeMerge} parsed rows into ${parsed.items.length} unique SKUs (same barcode/SKU split across rows)`);
+      }
+
       // v12.0 — catch accidental double-imports (same file dropped twice,
       // or a worker/manager re-uploading a list already handled) before
       // they ever reach the review table, not just at confirm time.
