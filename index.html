@@ -1506,7 +1506,7 @@ function renderScanUI(w){
       return `<div class="scan-counter-wrap"><div style="color:var(--red);font-size:12px;margin-bottom:8px"><i class="ri-error-warning-line"></i> Could not load pick list — check connection</div>
         <button class="btn btn-sm" onclick="delete _orderItemsFailed['${w.oid}']; ensureOrderItems('${w.oid}'); renderStageContent();"><i class="ri-refresh-line"></i> Retry</button></div>`;
     }
-    return `<div class="scan-counter-wrap"><div style="color:var(--t3);font-size:12px"><i class="ri-loader-4-line"></i> Loading pick list...</div></div>`;
+    return `<div class="scan-counter-wrap"><div style="color:var(--t3);font-size:12px"><i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> Loading pick list...</div></div>`;
   }
   if (items.length > 0) {
     if (st.mode !== 'sku') { st.mode = 'sku'; st.skuCounts = st.skuCounts || {}; saveScanState(w.id, st); }
@@ -1520,7 +1520,25 @@ function renderScanUI(w){
     // order or a broken reset rather than what it actually was: still
     // loading everyone else's already-saved progress.
     if (!_liveSyncedOnce[w.id]) {
-      return `<div class="scan-counter-wrap"><div style="color:var(--t3);font-size:12px"><i class="ri-loader-4-line"></i> Syncing this order's progress...</div></div>`;
+      // v10.19 — a spinner with no way out reads as "broken" once it runs
+      // past a few seconds, whatever the cause (the id-migration bug just
+      // fixed, a slow server, or a dropped connection). Past 8s, swap the
+      // plain spinner for an explicit "still syncing" state with a manual
+      // Retry (tries the fetch again right now) and Continue anyway
+      // (starts the checklist on local-only data — same as a fresh device
+      // that's never seen this session before) so a worker is never stuck
+      // staring at a placeholder with nothing to do about it.
+      const waitedMs = Date.now() - (_liveSyncStartedAt[w.id] || Date.now());
+      if (waitedMs > 8000) {
+        return `<div class="scan-counter-wrap">
+          <div style="color:var(--amber);font-size:12px;margin-bottom:8px"><i class="ri-error-warning-line"></i> Still syncing this order's progress — check connection</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="refreshLiveBaseline('${w.id}')"><i class="ri-refresh-line"></i> Retry</button>
+            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="_liveSyncedOnce['${w.id}']=true; renderStageContent();"><i class="ri-play-line"></i> Continue anyway</button>
+          </div>
+        </div>`;
+      }
+      return `<div class="scan-counter-wrap"><div style="color:var(--t3);font-size:12px"><i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> Syncing this order's progress...</div></div>`;
     }
     return renderSkuChecklistUI(w, items, st);
   }
@@ -2102,6 +2120,7 @@ let _liveContributors = {};  // wid -> [{ worker, skuCounts }, ...] — raw, for
 let _liveSyncedOnce = {};    // wid -> true once the first live-baseline fetch has resolved
 let _livePollTimers = {};    // wid -> intervalId
 let _livePushTimers = {};    // wid -> debounce timeoutId
+let _liveSyncStartedAt = {}; // wid -> Date.now() when its poll first started — powers the "stuck? retry" fallback below
 
 // v10.11 — once a worker already has an active INSP session, the full
 // "Start Inspection" order-picker card is mostly dead space (the real
@@ -2140,7 +2159,16 @@ async function refreshLiveBaseline(wid){
   // baseline instead of overwriting it with a partial/empty one. Without
   // this, a single dropped request made completed items flicker back to
   // "incomplete" and made the "ready to finish" state flap on and off.
-  if (!liveOut.net || !liveOut.res.ok || !endedOut.net || !endedOut.res.ok) return;
+  if (!liveOut.net || !liveOut.res.ok || !endedOut.net || !endedOut.res.ok) {
+    // v10.19 — keep the "still syncing" placeholder actually refreshing
+    // even while every attempt so far has failed (flaky connection, or a
+    // slow server), so the elapsed-time fallback below gets a chance to
+    // show up with a manual Retry/Continue instead of the spinner just
+    // sitting there unchanged. Only while unsynced — once synced, normal
+    // polling already updates in place without a full re-render.
+    if (!_liveSyncedOnce[wid]) renderStageContent();
+    return;
+  }
   const baseline = {};
   const rawLive = [];
   (liveOut.res.live || []).forEach(entry => {
@@ -2192,6 +2220,7 @@ function updateSkuChecklistLive(wid){
 
 function startLivePoll(wid){
   if (_livePollTimers[wid]) return;
+  if (!_liveSyncStartedAt[wid]) _liveSyncStartedAt[wid] = Date.now();
   refreshLiveBaseline(wid);
   _livePollTimers[wid] = setInterval(() => refreshLiveBaseline(wid), 5000);
 }
@@ -2201,6 +2230,7 @@ function stopLivePoll(wid){
   delete _liveBaseline[wid];
   delete _liveContributors[wid];
   delete _liveSyncedOnce[wid];
+  delete _liveSyncStartedAt[wid];
   clearTimeout(_livePushTimers[wid]);
   delete _livePushTimers[wid];
 }
@@ -3398,7 +3428,24 @@ function migrateWidKeyedState(oldId, newId){
   }
   if (_liveBaseline[oldId])     { _liveBaseline[newId] = _liveBaseline[oldId]; delete _liveBaseline[oldId]; }
   if (_liveContributors[oldId]) { _liveContributors[newId] = _liveContributors[oldId]; delete _liveContributors[oldId]; }
-  if (_livePollTimers[oldId])   { _livePollTimers[newId] = _livePollTimers[oldId]; delete _livePollTimers[oldId]; }
+  // v10.19 — root cause of "checklist flashes into view once, then gets
+  // stuck on 'Syncing...' forever": _liveSyncedOnce was never carried over
+  // to the new id, so the UI demanded a fresh sync under a key that had
+  // no baseline data of its own yet. Worse, the OLD code moved
+  // _livePollTimers[oldId] to _livePollTimers[newId] as-is — but that
+  // timer's callback is `() => refreshLiveBaseline(wid)` with `wid`
+  // already locked in as oldId from when setInterval was created, so the
+  // "migrated" timer kept quietly polling a work entry that no longer
+  // existed (S.works.find found nothing → silent no-op) FOREVER, while
+  // also blocking startLivePoll(newId) from ever starting a real,
+  // correctly-closured poll (its guard saw _livePollTimers[newId]
+  // already "existed"). Fix: carry the already-fetched baseline's synced
+  // status forward, and kill the stale timer outright instead of
+  // relocating it — the next render's startLivePoll(newId) then starts a
+  // brand new interval that's actually keyed to the right id.
+  if (_liveSyncedOnce[oldId])  { _liveSyncedOnce[newId] = true; delete _liveSyncedOnce[oldId]; }
+  if (_liveSyncStartedAt[oldId]) { _liveSyncStartedAt[newId] = _liveSyncStartedAt[oldId]; delete _liveSyncStartedAt[oldId]; }
+  if (_livePollTimers[oldId])  { clearInterval(_livePollTimers[oldId]); delete _livePollTimers[oldId]; }
 }
 
 // ══════════════════════════════════════════════════════
