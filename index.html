@@ -2718,16 +2718,23 @@ function renderStageContent(){
     }
   }
 
-  // Auto-focus the scan input for hardware (Bluetooth/USB) barcode
-  // scanners on desktop. Skipped on mobile — autofocus there just pops
-  // the on-screen keyboard unnecessarily when no scanner is attached.
-  // preventScroll:true stops this from yanking the page back to the top
-  // of the scroll (the original bug) — that alone was the fix; there's
-  // no need to limit how often this runs, and doing so previously meant
-  // that once focus left the scan input for ANY reason, it never came
-  // back, so the scanner would beep (successful read) but nothing
-  // happened because the keystrokes had nowhere to land.
-  if (s === 'INSP' && mySessions.length === 1 && !isMobileDevice()) {
+  // Auto-focus the scan input for hardware barcode scanners — including
+  // on "mobile" user agents. v10.20 — this warehouse's actual scan
+  // hardware is rugged Android handheld scanners (they report as
+  // "Android" same as a phone), which behave as a keyboard: a scan types
+  // characters into whatever currently has focus, then Enter. Skipping
+  // autofocus on anything matching /Android/ meant these devices — 100%
+  // of the real fleet — never got the initial focus in the first place,
+  // so every scan typed into nothing and looked exactly like "barcode
+  // not recognized" even though the checklist matching logic was never
+  // reached at all. A genuine phone with no scanner attached popping its
+  // on-screen keyboard is a minor, dismissable side effect; a scanner
+  // gun with nowhere to type is a completely broken screen — so this now
+  // always focuses, on every device. preventScroll:true stops this from
+  // yanking the page back to the top of the scroll; there's no need to
+  // limit how often this runs; once focus left the scan input for ANY
+  // reason it must not stay gone, or the next scan silently goes nowhere.
+  if (s === 'INSP' && mySessions.length === 1) {
     const soleId = mySessions[0].id;
     setTimeout(() => document.getElementById('scanIn_' + soleId)?.focus({ preventScroll:true }), 80);
   }
