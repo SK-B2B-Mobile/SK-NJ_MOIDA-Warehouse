@@ -578,9 +578,11 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
         Review the parsed rows before confirming.
       </p>
       <div class="import-drop" id="importDropZone" onclick="document.getElementById('importFile').click()">
-        <i class="ri-file-pdf-2-line" style="font-size:26px;color:var(--t3);display:block;margin-bottom:6px"></i>
-        <div style="font-size:13px;font-weight:600">Click to select, or drag files here</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:2px">PDF, CSV, or XLSX · select multiple files for several orders at once</div>
+        <div id="importDropZoneBody">
+          <i class="ri-file-pdf-2-line" style="font-size:26px;color:var(--t3);display:block;margin-bottom:6px"></i>
+          <div style="font-size:13px;font-weight:600">Click to select, or drag files here</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:2px">PDF, CSV, or XLSX · select multiple files for several orders at once</div>
+        </div>
         <input type="file" id="importFile" accept=".pdf,.csv,.xlsx,.xls" multiple style="display:none" onchange="handleImportFile(event)">
       </div>
       <div id="importStatus" style="font-size:12px;color:var(--t3);margin-top:8px"></div>
@@ -2108,6 +2110,7 @@ let _livePushTimers = {};    // wid -> debounce timeoutId
 // it back out to actually pick a different/additional order. Resets to
 // collapsed automatically the next time a session successfully starts.
 let _inspStartExpanded = false;
+let _pickPagesFullyClaimed = false; // whether the currently-selected PICK order has no open page range left
 
 function liveContributorNames(wid, key){
   const list = _liveContributors[wid] || [];
@@ -2232,6 +2235,75 @@ window.cancelInspSession = async function(wid){
     updateBadges(); renderStageContent();
   } else {
     toast('⚠ Could not leave session: ' + ((out.res && out.res.error) || 'network'), 'err');
+  }
+};
+
+// v10.14 — self-service page-range correction. A worker who mistyped
+// their page range when starting PICK ("1-6" instead of "1-3") no longer
+// has to find a manager to fix it — they can correct their own,
+// still-open session right from the active-session card. Same rules as
+// starting fresh apply (can't exceed the order's total pages, can't
+// overlap a range someone else — or an earlier session of mine — already
+// claimed), enforced again server-side so this can't be spoofed into
+// corrupting per-page KPI.
+window.editMyPageRangeModal = function(wid){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const o = S.orders.find(x => x.id === w.oid);
+  openModal(`
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px"><i class="ri-pencil-line"></i> Correct my page range</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:12px">${w.oid}${o&&o.pages?` · total pages: <b style="color:var(--t)">${o.pages}</b>`:''}</div>
+    <div class="frow" style="margin-bottom:6px">
+      <div class="fg" style="margin-bottom:0">
+        <label class="fl">Page from</label>
+        <input class="fi" type="number" min="1" ${o&&o.pages?`max="${o.pages}"`:''} id="editPageFrom" value="${w.pageFrom||''}" style="font-size:16px;text-align:center;font-weight:700">
+      </div>
+      <div class="fg" style="margin-bottom:0">
+        <label class="fl">Page to</label>
+        <input class="fi" type="number" min="1" ${o&&o.pages?`max="${o.pages}"`:''} id="editPageTo" value="${w.pageTo||''}" style="font-size:16px;text-align:center;font-weight:700">
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--t3);margin:2px 0 12px"><i class="ri-information-line"></i> Can't overlap a page range already claimed by you or someone else on this order.</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-purple btn-sm" onclick="saveMyPageRange('${wid}')"><i class="ri-check-line"></i> Save</button>
+    </div>
+  `);
+};
+
+window.saveMyPageRange = async function(wid){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const o = S.orders.find(x => x.id === w.oid);
+  const pf = Number(document.getElementById('editPageFrom')?.value);
+  const pt = Number(document.getElementById('editPageTo')?.value);
+  if (!pf || !pt) { toast('Enter both page numbers', 'err'); return; }
+  if (pt < pf) { toast('Page to must be ≥ page from', 'err'); return; }
+  if (o && o.pages && pt > o.pages) { toast(`⚠ This order only has ${o.pages} pages`, 'err'); return; }
+  // Client-side overlap check — same test the server repeats authoritatively —
+  // against every OTHER active/finished PICK range on this order (my own
+  // entry being edited is excluded, so keeping or shifting within it is fine).
+  const overlap = S.works.find(x => x.id !== wid && x.oid === w.oid && x.stage === 'PICK' && x.pageFrom && x.pageTo
+    && pf <= Number(x.pageTo) && pt >= Number(x.pageFrom));
+  if (overlap) { toast(`⚠ p.${overlap.pageFrom}${overlap.pageTo&&overlap.pageTo!==overlap.pageFrom?'–'+overlap.pageTo:''} is already claimed by ${overlap.w} — pick a different range`, 'err'); return; }
+
+  const out = await apiOp('updatePickPageRange', { entryId: wid, worker: WS ? WS.worker : CW, wpin: (WS&&WS.wpin)||'', pageFrom: pf, pageTo: pt });
+  if (out.net && out.res.ok) {
+    w.pageFrom = pf; w.pageTo = pt;
+    closeModal();
+    toast('Page range updated', 'ok');
+    renderStageContent();
+  } else if (out.net && out.res.error === 'page_out_of_range') {
+    toast(`⚠ This order only has ${out.res.maxPage} pages`, 'err');
+  } else if (out.net && out.res.error === 'page_range_taken') {
+    toast(`⚠ p.${out.res.claimedFrom}${out.res.claimedTo!==out.res.claimedFrom?'–'+out.res.claimedTo:''} is already claimed by ${out.res.claimedWorker} — pick a different range`, 'err');
+  } else if (out.net && out.res.error === 'already_ended') {
+    toast('This session already finished — ask a manager to correct it', 'err');
+    await loadData(); updateBadges(); renderStageContent();
+  } else if (out.net && (out.res.error === 'not_your_entry' || out.res.error === 'not_pick_entry' || (out.res.error||'').toLowerCase().includes('not found'))) {
+    toast('⚠ Could not update — this session is no longer editable here', 'err');
+    await loadData(); updateBadges(); renderStageContent();
+  } else {
+    toast('⚠ Could not update: ' + ((out.res && out.res.error) || 'network'), 'err');
   }
 };
 
@@ -2437,7 +2509,7 @@ function renderStageContent(){
                   : `<span class="badge b-live"><i class="ri-record-circle-line"></i> ${s} Active</span>`}
         </div>
         <div class="session-chips">
-          ${s==='PICK'&&w.items ? `<span class="chip"><i class="ri-box-3-line"></i> ${w.items} items</span><span class="chip"><i class="ri-stack-line"></i> ${w.qty} QTY</span>${w.pageFrom?`<span class="chip"><i class="ri-file-list-3-line"></i> p.${w.pageFrom}${w.pageTo&&w.pageTo!==w.pageFrom?'–'+w.pageTo:''}</span>`:''}` : ''}
+          ${s==='PICK'&&w.items ? `<span class="chip"><i class="ri-box-3-line"></i> ${w.items} items</span><span class="chip"><i class="ri-stack-line"></i> ${w.qty} QTY</span>${w.pageFrom?`<span class="chip"><i class="ri-file-list-3-line"></i> p.${w.pageFrom}${w.pageTo&&w.pageTo!==w.pageFrom?'–'+w.pageTo:''}</span><button type="button" class="chip" style="cursor:pointer;color:var(--blue);border-color:var(--blue-bd,rgba(59,130,246,.35))" title="Correct my page range" onclick="editMyPageRangeModal('${w.id}')" ${queued||inf?'disabled':''}><i class="ri-pencil-line"></i> Edit</button>`:''}` : ''}
           <span class="chip"><i class="ri-play-line"></i> Started ${w.startT||'—'}</span>
           ${elapsed ? `<span class="chip hi" id="elapsed_${w.id}"><i class="ri-timer-line"></i> ${elapsed}</span>` : `<span id="elapsed_${w.id}"></span>`}
         </div>
@@ -2469,6 +2541,14 @@ function renderStageContent(){
 
   const orderOpts = S.orders.map(o => {
     const myHere = S.works.filter(w => w.oid===o.id && w.w===CW && w.stage===s && !w.endT).length;
+    // v10.14 — once every page of a PICK order is already claimed (by me
+    // or others), there is truly nothing left to start: don't just let the
+    // worker select it and then lock the fields — take the order out of
+    // the list entirely so it's obvious at a glance there's nothing here.
+    // While pages are still open (partially or fully unclaimed), the order
+    // stays selectable so others can pick the remaining range.
+    const fullyClaimed = s === 'PICK' && o.pages && !firstOpenPageGap(o.id, o.pages) && !myHere;
+    if (fullyClaimed) return `<option value="${o.id}" disabled>${o.id} (${o.ch}·${o.cu}) — all pages assigned</option>`;
     return `<option value="${o.id}">${o.id} (${o.ch}·${o.cu})${orderStageStatusTag(o, s)}${myHere?' ⚡ Active':''}${isSLA(o)?' ⚠ SLA':''}</option>`;
   }).join('');
 
@@ -2706,6 +2786,9 @@ function onOrderChange(){
     const pi = document.getElementById('pickOrderInfo'); if (pi) pi.innerHTML = '';
     const sw = document.getElementById('inspScanStartWrap');
     if (sw) sw.innerHTML = `<div style="font-size:12px;color:var(--t3);text-align:center;padding:10px 0">Select an order above to begin</div>`;
+    _pickPagesFullyClaimed = false;
+    const pf0 = document.getElementById('wPageFrom'), pt0 = document.getElementById('wPageTo'), sp0 = document.getElementById('wSinglePage');
+    if (pf0) pf0.disabled = false; if (pt0) pt0.disabled = false; if (sp0) sp0.disabled = false;
     resetPickStartBtn();
     return;
   }
@@ -2721,7 +2804,7 @@ function onOrderChange(){
         html += `<div style="margin-top:4px"><i class="ri-file-list-3-line"></i> Total pages: <b style="color:var(--t)">${o.pages}</b>` +
           (gap
             ? ` — next open range: <b style="color:var(--green)">${gap.from}${gap.to!==gap.from?'–'+gap.to:''}</b> (auto-filled below — you can still change it)`
-            : ` — <span style="color:var(--amber);font-weight:700">every page is already claimed</span>`) +
+            : ` — <span style="color:var(--amber);font-weight:700">every page is already claimed — nothing left to pick</span>`) +
           `</div>`;
       }
       pi.innerHTML = html;
@@ -2729,13 +2812,24 @@ function onOrderChange(){
     // Auto-fill Page from/to with the next open gap — only when the
     // worker hasn't already typed something (fresh selection), and only
     // when the manager actually set a total page count for this order.
+    // v10.13 — when every page is already claimed there is nothing left
+    // to type: rather than let the worker fill in a range that the
+    // server will only reject after the fact (page_range_taken), lock
+    // the page fields and the Start button here, with a plain explanation.
+    const pf = document.getElementById('wPageFrom'), pt = document.getElementById('wPageTo');
+    const sp = document.getElementById('wSinglePage');
+    const fullyClaimed = !!(o && o.pages && !firstOpenPageGap(oid, o.pages));
     if (o && o.pages) {
       const gap = firstOpenPageGap(oid, o.pages);
-      const pf = document.getElementById('wPageFrom'), pt = document.getElementById('wPageTo');
       if (pf) pf.max = o.pages;
       if (pt) pt.max = o.pages;
       if (gap && pf && pt && !pf.value && !pt.value) { pf.value = gap.from; pt.value = gap.to; }
     }
+    if (pf) pf.disabled = fullyClaimed;
+    if (pt) pt.disabled = fullyClaimed || (sp && sp.checked);
+    if (sp) sp.disabled = fullyClaimed;
+    if (fullyClaimed) { if (pf) pf.value=''; if (pt) pt.value=''; }
+    _pickPagesFullyClaimed = fullyClaimed;
   }
   const ws = S.works.filter(w => w.oid===oid && w.stage===CS);
   const active = ws.filter(w => !w.endT).length;
@@ -2748,7 +2842,13 @@ function onOrderChange(){
     const myDoneHere = ws.some(w => w.w === CW && w.endT);
     const wrap = document.getElementById('pickStartBtnWrap');
     if (wrap) {
-      wrap.innerHTML = myDoneHere ? `
+      // v10.13 — a fully-claimed page range wins over every other state:
+      // there is nothing open to start, whether or not I've picked here
+      // before, so the button stays locked either way.
+      wrap.innerHTML = _pickPagesFullyClaimed ? `
+        <button class="btn btn-block btn-lg" disabled style="font-size:15px;padding:14px;opacity:.55;cursor:not-allowed">
+          <i class="ri-lock-line"></i> All pages already assigned
+        </button>` : myDoneHere ? `
         <div style="text-align:center;padding:8px 0">
           <div style="font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px"><i class="ri-checkbox-circle-line"></i> You already picked this order</div>
           <button class="btn btn-sm" style="color:var(--t3)" onclick="revealPickStartBtn()"><i class="ri-add-line"></i> Pick more pages anyway</button>
@@ -5177,12 +5277,23 @@ window.handleImportFile = async function(ev){
 async function processImportFiles(files){
   const statusEl = document.getElementById('importStatus');
   const zone = document.getElementById('importDropZone');
-  if (zone) { zone.style.opacity = '.5'; zone.style.pointerEvents = 'none'; }
+  const zoneBody = document.getElementById('importDropZoneBody');
+  const zoneBodyDefault = zoneBody ? zoneBody.innerHTML : '';
+  // v10.13 — the drop zone used to just dim to 50% opacity while a file
+  // was being uploaded/parsed, which reads as "disabled", not "working".
+  // Swap its content for a spinning icon + live progress so it's obvious
+  // an upload is actually in flight, especially for a slow PDF parse.
+  if (zone) { zone.style.pointerEvents = 'none'; zone.style.borderColor = 'var(--teal)'; }
+  if (zoneBody) zoneBody.innerHTML = `
+    <i class="ri-loader-4-line" style="font-size:26px;color:var(--teal);display:block;margin-bottom:6px;animation:spin .8s linear infinite"></i>
+    <div style="font-size:13px;font-weight:700;color:var(--teal)" id="importDropZoneMsg">Uploading file 1/${files.length}…</div>`;
   let ok = 0, failed = [], skipped = [];
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     const isPdf = /\.pdf$/i.test(file.name);
-    statusEl.innerHTML = `<i class="ri-loader-4-line"></i> Uploading &amp; parsing file ${i+1}/${files.length}: ${file.name}` +
+    const zoneMsg = document.getElementById('importDropZoneMsg');
+    if (zoneMsg) zoneMsg.textContent = `Uploading file ${i+1}/${files.length}: ${file.name}`;
+    statusEl.innerHTML = `<i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> Uploading &amp; parsing file ${i+1}/${files.length}: ${file.name}` +
       (isPdf ? ' (server pdfplumber — first request can take ~20-30s if idle)' : '');
     try {
       const ext = file.name.split('.').pop().toLowerCase();
@@ -5229,7 +5340,8 @@ async function processImportFiles(files){
     : (skipped.length ? `<span style="color:var(--amber)">${skipped.length} file${skipped.length>1?'s':''} skipped as duplicate</span>` : `<span style="color:var(--red)">All files failed to parse</span>`);
   if (failed.length) console.warn('Import parse failures:', failed);
   if (skipped.length) console.warn('Import skipped as duplicate:', skipped);
-  if (zone) { zone.style.opacity = '1'; zone.style.pointerEvents = ''; }
+  if (zone) { zone.style.pointerEvents = ''; zone.style.borderColor = ''; }
+  if (zoneBody) zoneBody.innerHTML = zoneBodyDefault;
   renderImportBatch();
 }
 
@@ -5449,14 +5561,14 @@ window.renderImportLogView = function(){
   el.innerHTML = rows.length
     ? `<table class="mgr-tbl"><thead><tr><th>Order</th><th>SKUs</th><th>QTY</th><th>Date / time</th><th></th></tr></thead><tbody>${
         rows.map(r => `<tr>
-          <td class="mono" style="font-weight:700">${r.orderId}</td>
-          <td class="mono">${r.itemCount}</td>
-          <td class="mono">${(r.qtyTotal ?? r.qty ?? '—')}</td>
+          <td class="mono" style="font-weight:700;color:var(--t)">${r.orderId}</td>
+          <td class="mono" style="color:var(--t)">${r.itemCount}</td>
+          <td class="mono" style="color:var(--t)">${(r.qtyTotal ?? r.qty ?? '—')}</td>
           <td class="mono" style="color:var(--t2)">${r.importedAt}</td>
           <td style="text-align:right"><button class="btn btn-sm" style="padding:3px 8px;color:var(--red)" title="Remove this history entry (does not affect the order's pick list)" onclick="deleteImportLogEntry('${r.id}')"><i class="ri-delete-bin-line"></i></button></td>
         </tr>`).join('')
       }</tbody></table>`
-    : (q ? '<div style="padding:6px 0">No matches</div>' : '<div style="padding:6px 0">No imports recorded yet</div>');
+    : (q ? '<div style="padding:6px 0;color:var(--t3)">No matches</div>' : '<div style="padding:6px 0;color:var(--t3)">No imports recorded yet</div>');
 };
 window.deleteImportLogEntry = async function(id){
   if (!id) return;
