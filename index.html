@@ -1924,7 +1924,7 @@ function renderSkuChecklistUI(w, items, st){
   const unknownLine = st.unknown ? `<div style="font-size:11px;color:var(--red);margin-top:6px"><i class="ri-error-warning-line"></i> ${st.unknown} scan${st.unknown>1?'s':''} didn't match any item on this order's list</div>` : '';
 
   const ls = _lastScanned[w.id];
-  const lastScanHtml = (ls && Date.now() - ls.at < 2500) ? lastScanBannerHtml(ls) : '';
+  const lastScanHtml = (ls && (ls.sticky || Date.now() - ls.at < 2500)) ? lastScanBannerHtml(ls) : '';
 
   return `
   <div class="scan-counter-wrap" style="text-align:left">
@@ -1946,7 +1946,7 @@ function renderSkuChecklistUI(w, items, st){
       <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="nextBox('${w.id}')"><i class="ri-inbox-archive-line"></i> Finish ${unitWord(st.unitType)}, start next</button>
     </div>
 
-    ${lastScanHtml}
+    <div id="lastScanBanner_${w.id}">${lastScanHtml}</div>
     <div class="scan-input-row">
       <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
@@ -1974,7 +1974,7 @@ function renderSkuChecklistUI(w, items, st){
         <button class="btn btn-sm" id="skuPageNext_${w.id}" ${ui.page>=totalPages-1?'disabled':''} onclick="skuPage('${w.id}',1)"><i class="ri-arrow-right-s-line"></i></button>
       </div>
     </div>
-    ${unknownLine}
+    <div id="skuUnknownLine_${w.id}">${unknownLine}</div>
   </div>`;
 }
 
@@ -2042,7 +2042,27 @@ window.scanHit = function(wid){
 };
 
 // SKU mode: match a scanned code against the order's imported pick list.
+// v13.2 — the whole body is now wrapped in try/catch. A worker reported
+// scanning going completely dead after a handful of successful hits —
+// beep only, zero visible change, even surviving a refresh — with no way
+// for them to tell us WHY. Every normal branch here already calls
+// toast()/renderStageContent(), so if none of those visibly fired, the
+// most likely explanation is an uncaught exception partway through this
+// function silently killing the rest of the call. Wrapping it means that
+// from now on, whatever goes wrong, the worker always gets a visible red
+// error (not silence), and we get the actual error text via console / the
+// toast message instead of guessing blind.
 function registerSkuScan(wid, code){
+  try {
+    _registerSkuScanInner(wid, code);
+  } catch (err) {
+    console.error('registerSkuScan failed:', err);
+    try { toast('⚠ Scan error — ' + (err && err.message ? err.message : 'unknown') + ' (tell your manager)', 'err'); } catch(_){}
+    try { playScanBeep('error'); } catch(_){}
+    try { if (navigator.vibrate) navigator.vibrate([80,80,80]); } catch(_){}
+  }
+}
+function _registerSkuScanInner(wid, code){
   const w = S.works.find(x => x.id === wid); if (!w) return;
   const items = _orderItemsCache[w.oid] || [];
   const match = items.find(it => it.barcode && it.barcode === code)
@@ -2054,13 +2074,12 @@ function registerSkuScan(wid, code){
     toast('⚠ Not on this order\'s list: ' + code, 'err');
     playScanBeep('error');
     if (navigator.vibrate) try { navigator.vibrate([40,40,40]); } catch(_){}
-    _lastScanned[wid] = { type:'unknown', code, at: Date.now() };
-    renderStageContent();
+    _lastScanned[wid] = { type:'unknown', code, at: Date.now(), sticky:true };
+    updateSkuChecklistLive(wid);
     scheduleLastScanClear(wid);
     return;
   }
   const key = match.barcode || match.sku;
-  const mult = st.mult || 1;
 
   // v10.12 — a SKU whose required qty is already fully covered (by me
   // and/or others combined) no longer accepts more scans as real
@@ -2072,40 +2091,202 @@ function registerSkuScan(wid, code){
   // count stays exactly at reqQty (so "1/1" stays "1/1" for good), and
   // the worker gets a clear, unmissable "already scanned" signal instead
   // of a number that silently keeps climbing.
-  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
-  const reqQty = match.reqQty || 0;
-  const mineBefore = st.skuCounts[key] || 0;
+  const othersQty = Number((_liveBaseline[wid] && _liveBaseline[wid][key]) || 0) || 0;
+  const reqQty = Number(match.reqQty || 0) || 0;
+  const mineBefore = Number(st.skuCounts[key] || 0) || 0;
   if (reqQty > 0 && (othersQty + mineBefore) >= reqQty) {
     const who = liveContributorNames(wid, key);
     toast(`⚠ Duplicate scan — ${match.sku} is already complete (${othersQty + mineBefore}/${reqQty})${who ? ', by '+who : ''}`, 'err');
     playScanBeep('error');
     if (navigator.vibrate) try { navigator.vibrate([50,50,50,50]); } catch(_){}
-    _lastScanned[wid] = { type:'dup', sku: match.sku, barcode: match.barcode, name: match.name, qty: othersQty + mineBefore, req: reqQty, who, at: Date.now() };
-    renderStageContent();
+    _lastScanned[wid] = { type:'dup', sku: match.sku, barcode: match.barcode, name: match.name, qty: othersQty + mineBefore, req: reqQty, who, at: Date.now(), sticky:true };
+    updateSkuChecklistLive(wid);
     scheduleLastScanClear(wid);
     return;
   }
 
-  st.skuCounts[key] = mineBefore + mult;
+  // v14.0 — scanning no longer has to happen once per physical unit. A
+  // recognized scan of an item that isn't done yet now opens a quantity
+  // modal instead of silently adding 1: pre-filled with the full amount
+  // still needed, so a normal case is "scan → confirm → done" in one
+  // step, but the worker can type a smaller number when some of it is
+  // short — and picks a reason (OOS / expired / damaged / etc.) for the
+  // difference right there, in the same modal, instead of a separate
+  // step later. An item with no defined required qty has nothing to ask
+  // a number for, so it's still just logged as a plain +1, as before.
+  if (reqQty <= 0) {
+    st.skuCounts[key] = mineBefore + 1;
+    touchSkuOrder(st, key);
+    const b0 = st.currentBox || 1;
+    st.boxScans[b0] = st.boxScans[b0] || {};
+    st.boxScans[b0][key] = (st.boxScans[b0][key] || 0) + 1;
+    saveScanState(wid, st);
+    _lastScanned[wid] = { type:'ok', sku: match.sku, barcode: match.barcode, name: match.name, qty: mineBefore + 1, req: reqQty, at: Date.now() };
+    playScanBeep('ok');
+    if (navigator.vibrate) try { navigator.vibrate(25); } catch(_){}
+    updateSkuChecklistLive(wid);
+    pushMyLiveScan(wid);
+    scheduleLastScanClear(wid);
+    return;
+  }
+  playScanBeep('ok');
+  if (navigator.vibrate) try { navigator.vibrate(25); } catch(_){}
+  openScanQtyModal(wid, key);
+}
+
+// ── Scan-triggered quantity entry — v14.0 ───────────────────────────
+// Replaces "scan the same barcode once per unit": a recognized scan of
+// an incomplete item opens this instead of incrementing directly. Default
+// value is the full amount still needed (the common case — everything in
+// the box matched — is then just "scan, confirm, next"); typing a lower
+// number reveals a mandatory reason for the shortfall, reusing the same
+// issue types as the manual 🚩 flag button, so a partial pick is always
+// explained rather than just left short with no record of why.
+window.openScanQtyModal = function(wid, key){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const items = _orderItemsCache[w.oid] || [];
+  const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
+  const st = loadScanState(wid);
+  const mineBefore = st.skuCounts[key] || 0;
+  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const reqQty = it.reqQty || 0;
+  const maxMine = Math.max(0, reqQty - othersQty);
+  const keyEsc = String(key).replace(/'/g, "\\'");
+  const existingIssue = (st.skuIssues || {})[key] || null;
+
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
+      <i class="ri-checkbox-circle-line" style="color:var(--green)"></i> ${it.sku||'—'}
+    </div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:14px" class="mono">${(it.name||'').replace(/</g,'&lt;')}${it.rack?' · '+it.rack:''}</div>
+    <div style="display:flex;justify-content:space-between;gap:6px;font-size:11px;color:var(--t3);margin-bottom:14px;background:var(--bg3);border-radius:var(--r);padding:8px 10px;text-align:center">
+      <span style="flex:1">Required<br><b style="font-size:15px;color:var(--t)">${reqQty}</b></span>
+      <span style="flex:1">Others logged<br><b style="font-size:15px;color:var(--t)">${othersQty}</b></span>
+      <span style="flex:1">Remaining<br><b style="font-size:15px;color:var(--t)">${maxMine}</b></span>
+    </div>
+    <div class="fg">
+      <label class="fl">정상 수량 (normal / OK qty)</label>
+      <input class="fi" type="number" min="0" max="${maxMine}" id="scanQtyOk" value="${maxMine}"
+        style="font-size:20px;text-align:center;font-weight:800" autofocus
+        oninput="_onScanQtyOkInput('${wid}','${keyEsc}')">
+    </div>
+    <div id="scanQtyIssueWrap" style="display:none">
+      <div style="font-size:11px;color:var(--amber);margin-bottom:6px"><i class="ri-error-warning-line"></i> 남은 <b id="scanQtyShortfall">0</b>개는 사유를 선택하세요</div>
+      <div class="chip-group" id="scanQtyIssueTypeGroup">
+        ${SKU_ISSUE_TYPES.map(t => `<button type="button" class="chip-opt${existingIssue&&existingIssue.type===t.v?' selected':''}" data-val="${t.v}" onclick="pickScanQtyIssueType('${t.v}')">${t.l}</button>`).join('')}
+      </div>
+      <input type="hidden" id="scanQtyIssueTypeVal" value="${existingIssue?existingIssue.type:''}">
+      <div class="fg" style="margin-top:8px">
+        <label class="fl">Note (Other 선택 시 필수)</label>
+        <input class="fi" id="scanQtyIssueNote" placeholder="e.g. torn box, wrong expiry date..." value="${existingIssue&&existingIssue.note?String(existingIssue.note).replace(/"/g,'&quot;'):''}">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-sm" onclick="cancelScanQtyModal('${wid}')">Cancel</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-green btn-sm" onclick="saveScanQty('${wid}','${keyEsc}')"><i class="ri-check-line"></i> Save</button>
+    </div>
+  `);
+  setTimeout(() => window._onScanQtyOkInput(wid, key), 0);
+};
+
+window._onScanQtyOkInput = function(wid, key){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const items = _orderItemsCache[w.oid] || [];
+  const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
+  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const reqQty = it.reqQty || 0;
+  const maxMine = Math.max(0, reqQty - othersQty);
+  const okInput = document.getElementById('scanQtyOk');
+  let ok = Number(okInput && okInput.value);
+  if (isNaN(ok) || ok < 0) ok = 0;
+  if (ok > maxMine) { ok = maxMine; if (okInput) okInput.value = maxMine; }
+  const shortfall = Math.max(0, maxMine - ok);
+  const wrap = document.getElementById('scanQtyIssueWrap');
+  const sfEl = document.getElementById('scanQtyShortfall');
+  if (sfEl) sfEl.textContent = shortfall;
+  if (wrap) wrap.style.display = shortfall > 0 ? 'block' : 'none';
+};
+
+window.pickScanQtyIssueType = function(val){
+  const group = document.getElementById('scanQtyIssueTypeGroup'); if (!group) return;
+  group.querySelectorAll('.chip-opt').forEach(b => b.classList.toggle('selected', b.dataset.val === val));
+  const hidden = document.getElementById('scanQtyIssueTypeVal'); if (hidden) hidden.value = val;
+};
+
+window.cancelScanQtyModal = function(wid){
+  closeModal();
+  const inp = document.getElementById('scanIn_' + wid);
+  if (inp) inp.focus({ preventScroll:true });
+};
+
+window.saveScanQty = async function(wid, key){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const items = _orderItemsCache[w.oid] || [];
+  const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
+  const st = loadScanState(wid);
+  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const reqQty = it.reqQty || 0;
+  const maxMine = Math.max(0, reqQty - othersQty);
+
+  let ok = Number(document.getElementById('scanQtyOk')?.value);
+  if (isNaN(ok) || ok < 0) { toast('⚠ Enter a valid quantity', 'err'); return; }
+  if (ok > maxMine) ok = maxMine;
+  const shortfall = Math.max(0, maxMine - ok);
+
+  let issueType = '', issueNote = '';
+  if (shortfall > 0) {
+    issueType = document.getElementById('scanQtyIssueTypeVal')?.value || '';
+    issueNote = (document.getElementById('scanQtyIssueNote')?.value || '').trim();
+    if (!issueType) { toast(`⚠ 남은 ${shortfall}개에 대한 사유를 선택하세요`, 'err'); return; }
+    if (issueType === 'OTHER' && !issueNote) { toast('Other 선택 시 메모를 입력하세요', 'err'); return; }
+  }
+
+  const mineBefore = st.skuCounts[key] || 0;
+  st.skuCounts[key] = mineBefore + ok;
   touchSkuOrder(st, key);
   const b = st.currentBox || 1;
   st.boxScans[b] = st.boxScans[b] || {};
-  st.boxScans[b][key] = (st.boxScans[b][key] || 0) + mult;
+  st.boxScans[b][key] = (st.boxScans[b][key] || 0) + ok;
+  st.skuIssues = st.skuIssues || {};
+  if (shortfall > 0) st.skuIssues[key] = { type: issueType, qty: shortfall, note: issueNote };
+  else delete st.skuIssues[key]; // fully covered now — an earlier partial flag no longer applies
   saveScanState(wid, st);
-  _lastScanned[wid] = { type:'ok', sku: match.sku, barcode: match.barcode, name: match.name, qty: mineBefore + mult, req: reqQty, at: Date.now() };
+
+  closeModal();
+  _lastScanned[wid] = { type:'ok', sku: it.sku, barcode: it.barcode, name: it.name, qty: othersQty + mineBefore + ok, req: reqQty, at: Date.now() };
   playScanBeep('ok');
   if (navigator.vibrate) try { navigator.vibrate(25); } catch(_){}
-  renderStageContent();
+  updateSkuChecklistLive(wid);
   pushMyLiveScan(wid);
   scheduleLastScanClear(wid);
-}
+  const inp = document.getElementById('scanIn_' + wid);
+  if (inp) inp.focus({ preventScroll:true });
+
+  // Server record for the shortfall — same non-blocking, worker-authenticated
+  // pattern as the manual 🚩 flag (logSkuIssue), so it shows up in the same
+  // cross-device SkuIssues audit trail regardless of which flow created it.
+  if (shortfall > 0) {
+    const out = await apiOp('logSkuIssue', {
+      orderId: w.oid, entryId: wid, sku: it.sku, barcode: it.barcode, name: it.name,
+      issueType, qty: shortfall, note: issueNote,
+      worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
+    });
+    if (!out.net || !out.res.ok) toast('⚠ 이슈 기록이 서버에 저장되지 않았습니다 — 새로고침 시 재시도', 'err');
+  }
+};
 
 // Re-render once the "just scanned" banner (above the scan box) has expired,
 // so it disappears on its own instead of sticking around stale. Shared by
 // the ok / duplicate / unknown-code outcomes.
+// v13.2 — a duplicate/"already complete" banner is now sticky: it stays
+// on screen (doesn't auto-clear after ~2.5s) until the worker's next scan
+// replaces it, since it's exactly the case a worker scanning fast without
+// watching the screen most needs to actually notice.
 function scheduleLastScanClear(wid){
   setTimeout(() => {
-    if (_lastScanned[wid] && Date.now() - _lastScanned[wid].at >= 2400) renderStageContent();
+    const ls = _lastScanned[wid];
+    if (ls && !ls.sticky && Date.now() - ls.at >= 2400) updateSkuChecklistLive(wid);
   }, 2500);
 }
 let _lastScanned = {}; // wid -> { sku, barcode, name, qty, req, at } — for the "just scanned" banner
@@ -2200,6 +2381,24 @@ async function refreshLiveBaseline(wid){
 // does NOT call renderStageContent(), which rebuilds the entire tab
 // (including the order picker's <select>) and was wiping whatever the
 // worker had selected there, on every 5s poll tick, on every tab.
+//
+// v13.5 — this is now ALSO what every barcode scan uses to update the
+// screen (registerSkuScan used to call renderStageContent() directly).
+// Root cause of "scanning fast enough eventually just stops working,
+// beep only, nothing on screen, survives a refresh": renderStageContent()
+// destroys and recreates the ENTIRE stage — including the #scanIn_*
+// input itself — on every single call, then reattaches focus 80ms later
+// via setTimeout. A worker scanning two items back-to-back faster than
+// that 80ms window means the second scan's keystrokes arrive while the
+// input is mid-replacement or not focused yet, so they land nowhere —
+// the scanner still beeps (that's the scanner's own hardware beep, not
+// this page), but registerSkuScan is never even called, hence zero
+// visible change. Routing every scan through this function instead means
+// the #scanIn_* node is never destroyed while a checklist session is
+// running — it only gets rebuilt by renderStageContent() for real
+// structural changes (starting/ending a session, switching box, etc.),
+// none of which happen mid-scan-burst — so there is no window where a
+// fast scan can be dropped.
 function updateSkuChecklistLive(wid){
   const w = S.works.find(x => x.id === wid); if (!w || w.endT) return;
   const items = _orderItemsCache[w.oid] || [];
@@ -2216,6 +2415,14 @@ function updateSkuChecklistLive(wid){
   if (headerEl) headerEl.innerHTML = `SKU checklist · ${doneCount}/${items.length} complete
     ${Object.keys(others).length ? `<span style="color:var(--blue);text-transform:none;font-weight:600;margin-left:4px"><i class="ri-refresh-line"></i> live-synced</span>` : ''}`;
   updateSkuListView(wid);
+
+  const bannerEl = document.getElementById('lastScanBanner_' + wid);
+  if (bannerEl) {
+    const ls = _lastScanned[wid];
+    bannerEl.innerHTML = (ls && (ls.sticky || Date.now() - ls.at < 2500)) ? lastScanBannerHtml(ls) : '';
+  }
+  const unknownEl = document.getElementById('skuUnknownLine_' + wid);
+  if (unknownEl) unknownEl.innerHTML = st.unknown ? `<div style="font-size:11px;color:var(--red);margin-top:6px"><i class="ri-error-warning-line"></i> ${st.unknown} scan${st.unknown>1?'s':''} didn't match any item on this order's list</div>` : '';
 }
 
 function startLivePoll(wid){
