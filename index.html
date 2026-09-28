@@ -912,6 +912,12 @@ function closeModal(){
   document.getElementById('modalBody').className = 'modal';
 }
 function openModal(html, opts){
+  // v14.1 — whatever had focus before this modal opened (almost always
+  // the scan input, mid-scan) keeps the on-screen keyboard up underneath
+  // the modal, covering its lower half (Save button and all) until the
+  // worker manually dismisses the keyboard first. Blurring it here closes
+  // that keyboard before the modal content ever appears.
+  if (document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
   const body = document.getElementById('modalBody');
   body.className = 'modal' + (opts && opts.wide ? ' wide' : '');
   body.innerHTML = html;
@@ -2167,8 +2173,9 @@ window.openScanQtyModal = function(wid, key){
     <div class="fg">
       <label class="fl">정상 수량 (normal / OK qty)</label>
       <input class="fi" type="number" min="0" max="${maxMine}" id="scanQtyOk" value="${maxMine}"
-        style="font-size:20px;text-align:center;font-weight:800" autofocus
+        style="font-size:20px;text-align:center;font-weight:800"
         oninput="_onScanQtyOkInput('${wid}','${keyEsc}')">
+      <div style="font-size:10.5px;color:var(--t3);margin-top:4px">전체 정상이면 그대로 Save, 아니면 숫자를 탭해서 수정</div>
     </div>
     <div id="scanQtyIssueWrap" style="display:none">
       <div style="font-size:11px;color:var(--amber);margin-bottom:6px"><i class="ri-error-warning-line"></i> 남은 <b id="scanQtyShortfall">0</b>개는 사유를 선택하세요</div>
