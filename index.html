@@ -2787,8 +2787,16 @@ function onOrderChange(){
     const sw = document.getElementById('inspScanStartWrap');
     if (sw) sw.innerHTML = `<div style="font-size:12px;color:var(--t3);text-align:center;padding:10px 0">Select an order above to begin</div>`;
     _pickPagesFullyClaimed = false;
+    // v10.15 — deselecting the order (back to "Select order") used to leave
+    // whatever page numbers were auto-filled sitting in the inputs, only
+    // clearing on the next full re-render (the ~40s data poll) instead of
+    // right away. Clear them here immediately, same moment everything else
+    // resets, so the fields actually read empty (their "e.g. 1" placeholder)
+    // as soon as the order is deselected.
     const pf0 = document.getElementById('wPageFrom'), pt0 = document.getElementById('wPageTo'), sp0 = document.getElementById('wSinglePage');
-    if (pf0) pf0.disabled = false; if (pt0) pt0.disabled = false; if (sp0) sp0.disabled = false;
+    if (pf0) { pf0.disabled = false; pf0.value = ''; }
+    if (pt0) { pt0.disabled = false; pt0.value = ''; }
+    if (sp0) { sp0.disabled = false; sp0.checked = false; }
     resetPickStartBtn();
     return;
   }
