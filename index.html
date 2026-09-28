@@ -2881,7 +2881,17 @@ function onOrderChange(){
       renderStageContent();
       return;
     }
-    renderInspScanStart(oid);
+    // v10.17 — auto-start Inspection the instant an order is picked from
+    // the dropdown, instead of also requiring a scan or a separate "Or
+    // start without scanning" tap. Selecting the order IS the deliberate
+    // action here (this list only appears once "Inspection" is already
+    // open), so the extra confirm step was pure friction, not a safety
+    // net — startWork() below runs the exact same duplicate-session
+    // checks a manual start would. The checklist itself still shows
+    // "Loading pick list..." until ensureOrderItems (kicked off above)
+    // resolves, same as before.
+    startWork();
+    return;
   }
 
   const otherActiveEntries = ws.filter(w => !w.endT && w.w !== CW);
