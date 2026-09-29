@@ -399,6 +399,10 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
     <div class="login-brand">STYLEKOREAN_NJ / MOIDA</div>
     <div class="login-sub">Select your name to sign in. Work is recorded under this name.</div>
     <div class="login-grid" id="loginGrid"></div>
+    <div id="connFailBanner" style="display:none;text-align:center;background:var(--red-bg);border:1px solid var(--red-bd);border-radius:var(--r);padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:12px;color:var(--red);font-weight:700;margin-bottom:8px"><i class="ri-wifi-off-line"></i> Failed to connect — check API URL</div>
+      <button class="btn btn-sm" style="color:var(--t)" onclick="location.reload()"><i class="ri-refresh-line"></i> 다시 연결 시도</button>
+    </div>
     <div class="login-pin" id="loginPinSect">
       <label class="fl" style="text-align:center">PIN for <strong id="loginPinWho" style="color:var(--blue)"></strong></label>
       <input class="fi pallet-input" type="password" inputmode="numeric" id="loginPin" maxlength="8"
@@ -906,10 +910,13 @@ function playScanBeep(kind){
     else tone(1568, 0, 0.11, 'sine');
   } catch(_){}
 }
-function closeModal(){
+let _modalClosable = true;
+function closeModal(force){
+  if (!_modalClosable && !force) return; // v14.4 — a save-in-progress spinner must not be dismissed mid-save
   stopScanHardware();
   document.getElementById('modalBg').classList.remove('show');
   document.getElementById('modalBody').className = 'modal';
+  _modalClosable = true;
 }
 function openModal(html, opts){
   // v14.1 — whatever had focus before this modal opened (almost always
@@ -921,6 +928,10 @@ function openModal(html, opts){
   const body = document.getElementById('modalBody');
   body.className = 'modal' + (opts && opts.wide ? ' wide' : '');
   body.innerHTML = html;
+  // v14.4 — closable:false (used for the "saving, don't leave" spinner)
+  // blocks both the backdrop-tap-to-close and any closeModal() call that
+  // doesn't explicitly pass force=true.
+  _modalClosable = !(opts && opts.closable === false);
   document.getElementById('modalBg').classList.add('show');
 }
 
@@ -2131,12 +2142,27 @@ function _registerSkuScanInner(wid, code){
   const othersQty = Number((_liveBaseline[wid] && _liveBaseline[wid][key]) || 0) || 0;
   const reqQty = Number(match.reqQty || 0) || 0;
   const mineBefore = Number(st.skuCounts[key] || 0) || 0;
-  if (reqQty > 0 && (othersQty + mineBefore) >= reqQty) {
+  // v14.4 — a shortfall already explained by a 🚩 issue flag (or the
+  // scan-modal's own shortfall reason) counts as covered too, exactly
+  // like the checklist row itself already treats it (see skuRowHtml's
+  // `ok = issue ? true : …`). Without this, re-scanning an item that was
+  // already fully accounted for by scan+issue together (e.g. 22 scanned +
+  // 18 flagged OOS = 40/40) didn't trip the "already complete" guard —
+  // scanned 22 + issue 18 < reqQty 40 by the raw math — so it fell
+  // through into openScanQtyModal again and, worse, saveScanQty's own
+  // "shortfall === 0 → delete the issue flag" cleanup then silently
+  // erased the very issue record that made it complete in the first
+  // place. A worker reported an 18-unit OOS flag turning back into a
+  // plain "normal" pass after using Force Complete — this was the
+  // mechanism: a stray re-scan of that same barcode, sometime before or
+  // during the batch pass, wiped the flag underneath it.
+  const myIssueQty = Number((st.skuIssues && st.skuIssues[key] && st.skuIssues[key].qty) || 0) || 0;
+  if (reqQty > 0 && (othersQty + mineBefore + myIssueQty) >= reqQty) {
     const who = liveContributorNames(wid, key);
-    toast(`⚠ Duplicate scan — ${match.sku} is already complete (${othersQty + mineBefore}/${reqQty})${who ? ', by '+who : ''}`, 'err');
+    toast(`⚠ Duplicate scan — ${match.sku} is already complete (${othersQty + mineBefore + myIssueQty}/${reqQty})${who ? ', by '+who : ''}`, 'err');
     playScanBeep('error');
     if (navigator.vibrate) try { navigator.vibrate([50,50,50,50]); } catch(_){}
-    _lastScanned[wid] = { type:'dup', sku: match.sku, barcode: match.barcode, name: match.name, qty: othersQty + mineBefore, req: reqQty, who, at: Date.now(), sticky:true };
+    _lastScanned[wid] = { type:'dup', sku: match.sku, barcode: match.barcode, name: match.name, qty: othersQty + mineBefore + myIssueQty, req: reqQty, who, at: Date.now(), sticky:true };
     updateSkuChecklistLive(wid);
     scheduleLastScanClear(wid);
     return;
@@ -2187,9 +2213,18 @@ window.openScanQtyModal = function(wid, key){
   const mineBefore = st.skuCounts[key] || 0;
   const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
   const reqQty = it.reqQty || 0;
-  const maxMine = Math.max(0, reqQty - othersQty);
-  const keyEsc = String(key).replace(/'/g, "\\'");
   const existingIssue = (st.skuIssues || {})[key] || null;
+  const myIssueQty = Number(existingIssue && existingIssue.qty || 0) || 0;
+  // v14.4 — this used to be just reqQty - othersQty, ignoring what I'D
+  // ALREADY scanned (mineBefore) and any qty I'd already flagged as an
+  // issue (myIssueQty). A re-scan of the same barcode (a legitimate
+  // rescan of a different box, or an accidental repeat) then defaulted
+  // to the FULL required amount again, and saving that added it on top
+  // of what was already there — badly over-counting the checklist and,
+  // since the recomputed shortfall came out to 0, silently deleting a
+  // real issue flag that had nothing to do with this scan.
+  const maxMine = Math.max(0, reqQty - othersQty - mineBefore - myIssueQty);
+  const keyEsc = String(key).replace(/'/g, "\\'");
 
   openModal(`
     <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
@@ -2198,7 +2233,7 @@ window.openScanQtyModal = function(wid, key){
     <div style="font-size:12px;color:var(--t3);margin-bottom:14px" class="mono">${(it.name||'').replace(/</g,'&lt;')}${it.rack?' · '+it.rack:''}</div>
     <div style="display:flex;justify-content:space-between;gap:6px;font-size:11px;color:var(--t3);margin-bottom:14px;background:var(--bg3);border-radius:var(--r);padding:8px 10px;text-align:center">
       <span style="flex:1">Required<br><b style="font-size:15px;color:var(--t)">${reqQty}</b></span>
-      <span style="flex:1">Others logged<br><b style="font-size:15px;color:var(--t)">${othersQty}</b></span>
+      <span style="flex:1">Others+me so far<br><b style="font-size:15px;color:var(--t)">${othersQty + mineBefore + myIssueQty}</b></span>
       <span style="flex:1">Remaining<br><b style="font-size:15px;color:var(--t)">${maxMine}</b></span>
     </div>
     <div class="fg">
@@ -2232,9 +2267,12 @@ window._onScanQtyOkInput = function(wid, key){
   const w = S.works.find(x => x.id === wid); if (!w) return;
   const items = _orderItemsCache[w.oid] || [];
   const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
+  const st = loadScanState(wid);
   const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const mineBefore = st.skuCounts[key] || 0;
+  const myIssueQty = Number((st.skuIssues && st.skuIssues[key] && st.skuIssues[key].qty) || 0) || 0;
   const reqQty = it.reqQty || 0;
-  const maxMine = Math.max(0, reqQty - othersQty);
+  const maxMine = Math.max(0, reqQty - othersQty - mineBefore - myIssueQty);
   const okInput = document.getElementById('scanQtyOk');
   let ok = Number(okInput && okInput.value);
   if (isNaN(ok) || ok < 0) ok = 0;
@@ -2264,15 +2302,19 @@ window.saveScanQty = async function(wid, key){
   const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
   const st = loadScanState(wid);
   const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const mineBefore = st.skuCounts[key] || 0;
+  const myIssueQty = Number((st.skuIssues && st.skuIssues[key] && st.skuIssues[key].qty) || 0) || 0;
   const reqQty = it.reqQty || 0;
-  const maxMine = Math.max(0, reqQty - othersQty);
+  const maxMine = Math.max(0, reqQty - othersQty - mineBefore - myIssueQty);
 
   let ok = Number(document.getElementById('scanQtyOk')?.value);
   if (isNaN(ok) || ok < 0) { toast('⚠ Enter a valid quantity', 'err'); return; }
   if (ok > maxMine) ok = maxMine;
   const shortfall = Math.max(0, maxMine - ok);
 
-  let issueType = '', issueNote = '';
+  const existingIssue = (st.skuIssues || {})[key] || null;
+  let issueType = existingIssue ? existingIssue.type : '';
+  let issueNote = existingIssue ? existingIssue.note : '';
   if (shortfall > 0) {
     issueType = document.getElementById('scanQtyIssueTypeVal')?.value || '';
     issueNote = (document.getElementById('scanQtyIssueNote')?.value || '').trim();
@@ -2280,15 +2322,20 @@ window.saveScanQty = async function(wid, key){
     if (issueType === 'OTHER' && !issueNote) { toast('Other 선택 시 메모를 입력하세요', 'err'); return; }
   }
 
-  const mineBefore = st.skuCounts[key] || 0;
+  // v14.4 — myIssueQty is whatever was ALREADY flagged before this modal
+  // opened (already excluded from maxMine above); shortfall here is only the
+  // NEW amount not covered by this save. The item's total issue qty is the
+  // sum of both, and a shortfall of 0 must NOT erase a pre-existing flag.
+  const totalIssueQty = myIssueQty + shortfall;
+
   st.skuCounts[key] = mineBefore + ok;
   touchSkuOrder(st, key);
   const b = st.currentBox || 1;
   st.boxScans[b] = st.boxScans[b] || {};
   st.boxScans[b][key] = (st.boxScans[b][key] || 0) + ok;
   st.skuIssues = st.skuIssues || {};
-  if (shortfall > 0) st.skuIssues[key] = { type: issueType, qty: shortfall, note: issueNote };
-  else delete st.skuIssues[key]; // fully covered now — an earlier partial flag no longer applies
+  if (totalIssueQty > 0) st.skuIssues[key] = { type: issueType, qty: totalIssueQty, note: issueNote };
+  else delete st.skuIssues[key]; // nothing outstanding for this item anymore
   saveScanState(wid, st);
 
   closeModal();
@@ -2698,21 +2745,28 @@ function orderStageWork(oid, stage){
 function orderStageStatusTag(o, stage){
   const { active, done } = orderStageWork(o.id, stage);
   const otherActive = active.filter(w => w.w !== CW);
-  if (otherActive.length) {
-    if (stage === 'PICK') {
-      // Large orders are legitimately split across multiple pickers by
-      // page range — this is informational, not a conflict warning.
+  if (stage === 'PICK') {
+    // Large orders are legitimately split across multiple pickers by
+    // page range — this is informational, not a conflict warning, so
+    // PICK keeps showing who's picking which pages.
+    if (otherActive.length) {
       const parts = otherActive.map(w => `${w.w}${w.pageFrom?` (p.${w.pageFrom}${w.pageTo&&w.pageTo!==w.pageFrom?'–'+w.pageTo:''})`:''}`);
       return ` — 🔵 also picking: ${parts.join(', ')}`;
     }
-    const names = [...new Set(otherActive.map(w => w.w))].join(', ');
-    return ` — 🔴 ${stage} in progress (${names})`;
+    if (done.length) return ` — ✅ ${stage} done ×${done.length}`;
+    return '';
   }
-  if (stage !== 'PICK') {
-    const pick = orderStageWork(o.id, 'PICK');
-    if (!pick.active.length && !pick.done.length) return ' — ⏳ not picked yet';
-  }
-  if (done.length) return ` — ✅ ${stage} done ×${done.length}`;
+  // v14.4 — INSP allows several workers to inspect the same order at once
+  // by design, so naming other workers (or a raw "done ×N" count of every
+  // ended session across everyone) in the order-picker dropdown was just
+  // confusing noise for the worker choosing their NEXT order — it reads
+  // like someone else's work is "showing up" in their screen. The only
+  // thing that actually matters before picking an order to inspect is
+  // whether it's been picked yet at all; who else is inspecting it, and
+  // any per-worker detail, still shows inside the order once selected
+  // (the live-synced checklist), where it was explicitly asked for.
+  const pick = orderStageWork(o.id, 'PICK');
+  if (!pick.active.length && !pick.done.length) return ' — ⏳ not picked yet';
   return '';
 }
 
@@ -3137,6 +3191,25 @@ function onOrderChange(){
       // so trigger one directly rather than just touching inspScanStartWrap.
       _inspStartExpanded = false;
       renderStageContent();
+      return;
+    }
+    // v14.4 — before auto-starting, check whether I've already FINISHED
+    // an inspection on this exact order. Previously this always fell
+    // through to startWork() below, so re-selecting an order I'd already
+    // completed silently created another ended work-entry every time —
+    // the direct cause of "INSP done ×4" piling up and the green Finish
+    // button reappearing on an order that was genuinely already done.
+    // Mirrors PICK's existing "already picked" gate a few lines up.
+    const myDoneHereInsp = ws.some(w => w.w === CW && w.endT);
+    if (myDoneHereInsp) {
+      const wrap = document.getElementById('inspScanStartWrap');
+      if (wrap) {
+        wrap.innerHTML = `
+        <div style="text-align:center;padding:8px 0">
+          <div style="font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px"><i class="ri-checkbox-circle-line"></i> You already finished inspecting this order</div>
+          <button class="btn btn-sm" style="color:var(--t3)" onclick="startWork()"><i class="ri-add-line"></i> Inspect again anyway</button>
+        </div>`;
+      }
       return;
     }
     // v10.17 — auto-start Inspection the instant an order is picked from
@@ -4069,7 +4142,16 @@ window.finalizeInspEnd = async function(wid){
   const unitType = pend.unitType;
 
   closeModal();
-  toast('Saving your scan results...', '');
+  // v14.4 — a toast fades after ~3s on its own timer, so on a big order
+  // (chunked upload can take longer than that) the screen looked "stuck/
+  // disconnected" with no feedback right when the worker most needed to
+  // see something was happening. A blocking spinner modal stays up for
+  // the whole wait and is explicitly closed once the result is known.
+  openModal(`<div class="end-modal-inner" style="text-align:center;padding:8px 0">
+    <div class="spinner" style="margin:0 auto 14px"></div>
+    <div style="font-size:14px;font-weight:700;color:var(--t)">스캔 결과 저장 중...</div>
+    <div style="font-size:11.5px;color:var(--t3);margin-top:4px">잠시만 기다려주세요 — 화면을 벗어나지 마세요</div>
+  </div>`, { closable:false });
 
   const ok = await logInspectionResultsToServer(wid, w.oid, pend.rows, pend.result, pend.boxScans, unitType);
   if (!ok) {
@@ -4084,6 +4166,8 @@ window.finalizeInspEnd = async function(wid){
     </div>`);
     return;
   }
+
+  closeModal(true); // dismiss the "saving..." spinner now that the write is confirmed
 
   const meta = { result: pend.result, worker: WS ? WS.worker : CW, unitType, forceCompleted: pend.rows.some(r => r.fc) };
   // Labels only print once the results write is confirmed — printing a
@@ -4550,14 +4634,35 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
     });
   }
   const chunks = buildImportChunks(payload);
-  for (let ci = 0; ci < chunks.length; ci++) {
-    const out = await apiOp('logInspectionResults', {
-      entryId: wid, orderId, result, rows: chunks[ci], replace: ci === 0,
+  if (!chunks.length) return true;
+  // v14.4 — chunk 0 carries replace:true (clears prior rows for this
+  // entryId server-side) so it MUST land first and MUST be confirmed
+  // before anything else writes, or a race could wipe rows an append
+  // chunk just wrote. Every chunk after that is append-only and order
+  // doesn't matter between them, so they go out together — this is what
+  // was making "End Inspection" on a large order feel stuck: every chunk
+  // was paying a full round-trip + Apps Script doc-lock wait, one after
+  // another, when only the first one actually needs to be sequential.
+  const first = await apiOp('logInspectionResults', {
+    entryId: wid, orderId, result, rows: chunks[0], replace: true,
+    unitType: unitType || 'box',
+    worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
+  }, 45000);
+  if (!first.net || !first.res.ok) {
+    console.warn('logInspectionResults chunk failed', 0, first);
+    return false;
+  }
+  if (chunks.length === 1) return true;
+  const rest = await Promise.all(chunks.slice(1).map(rowsChunk =>
+    apiOp('logInspectionResults', {
+      entryId: wid, orderId, result, rows: rowsChunk, replace: false,
       unitType: unitType || 'box',
       worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
-    }, 45000);
-    if (!out.net || !out.res.ok) {
-      console.warn('logInspectionResults chunk failed', ci, out);
+    }, 45000)
+  ));
+  for (let i = 0; i < rest.length; i++) {
+    if (!rest[i].net || !rest[i].res.ok) {
+      console.warn('logInspectionResults chunk failed', i + 1, rest[i]);
       return false;
     }
   }
@@ -6135,7 +6240,16 @@ window.changePin = async function(){
 
   const ok = await loadData();
   document.getElementById('loadingScreen').style.display = 'none';
-  if (!ok) toast('Failed to connect — check API URL', 'err');
+  if (!ok) {
+    toast('Failed to connect — check API URL', 'err');
+    // v14.4 — the toast alone fades in ~3s and the login screen otherwise
+    // looks identical to a normal cold start, so a worker who glances back
+    // at their phone a few seconds later just sees a plain sign-in screen
+    // with no clue anything failed. A persistent banner + one-tap retry
+    // (instead of "reopen the app / pull to refresh") replaces that.
+    const banner = document.getElementById('connFailBanner');
+    if (banner) banner.style.display = 'block';
+  }
 
   // Restore any pick-list files that were parsed but not yet confirmed —
   // survives an accidental refresh (PDF server parsing can take 20-30s).
