@@ -4062,9 +4062,13 @@ window.confirmInspEnd = function(wid, expQty){
   // pallet counts — see the matching renderEntries change and Code.gs's
   // new EC.ISSUE_QTY column).
   const issueQtyForEntry = mismatch ? Math.abs(expQty - n) : 0;
+  // v14.17 — this simple qty-match flow has no per-SKU breakdown (unlike
+  // finalizeInspEnd's checklist flow), so there's no way to know how many
+  // DISTINCT SKUs were actually scanned this session — only the total qty.
+  // scanCount is left null here (shown as "—" in KPI) rather than guessed.
   closeModal();
   clearScanState(wid);
-  doEndWork(wid, null, { scannedQty:n, inspResult:result, inspNote:fullNote, issueQty:issueQtyForEntry });
+  doEndWork(wid, null, { scannedQty:n, inspResult:result, inspNote:fullNote, issueQty:issueQtyForEntry, scanCount:null });
 };
 
 // ── SKU-level end flow: per-item checklist comparison ──
@@ -4311,7 +4315,16 @@ window.finalizeInspEnd = async function(wid){
   // v14.11 — total issue-flagged quantity for this session, as its own
   // issueQty field (see confirmInspEnd + Code.gs's EC.ISSUE_QTY column).
   const totalIssueQty = pend.rows.reduce((s,r) => s + (r.hasIssue ? (r.issue.qty||0) : 0), 0);
-  doEndWork(wid, null, { scannedQty:pend.totalScanned, inspResult:pend.result, inspNote:pend.fullNote, issueQty:totalIssueQty });
+  // v14.17 — distinct SKU count actually handled by THIS worker's own
+  // session (r.got is this worker's own portion, never the combined/
+  // everyone total — see the comment on `rows` above). A SKU counts as
+  // "scanned" here if this worker logged any qty against it OR flagged it
+  // as an issue (EXP/NF/OOS/etc. is still "handling" that SKU, just with
+  // a problem instead of a clean scan) — this is the real per-worker
+  // measure the KPI tab now uses for INSP-stage ranking/speed, instead of
+  // pallets (which INSP-only "scanning" workers may never even enter).
+  const scanCountForEntry = pend.rows.filter(r => r.got > 0 || r.hasIssue).length;
+  doEndWork(wid, null, { scannedQty:pend.totalScanned, inspResult:pend.result, inspNote:pend.fullNote, issueQty:totalIssueQty, scanCount:scanCountForEntry });
   delete _pendingInspEnd[wid];
 
   // v13.8 — used to force-open the Labels progress modal right here. Now
@@ -4851,13 +4864,18 @@ function doEndWork(wid, pallets, inspData){
   const w = S.works.find(x => x.id === wid); if (!w || _pending[wid]) return;
   const now = new Date();
   const hhmm = nowHHmm();
-  const orig = { endT:w.endT, netMin:w.netMin, pallets:w.pallets, endISO:w.endISO, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote, issueQty:w.issueQty };
+  const orig = { endT:w.endT, netMin:w.netMin, pallets:w.pallets, endISO:w.endISO, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote, issueQty:w.issueQty, scanCount:w.scanCount };
   const nm = clientNet(w, now);
   w.endT = hhmm; w.netMin = nm;
   w.endISO = todayStr() + 'T' + hhmm + ':00';
   if (pallets !== null) w.pallets = pallets;
   if (inspData) {
     w.scanQty = inspData.scannedQty; w.inspResult = inspData.inspResult; w.inspNote = inspData.inspNote; w.issueQty = inspData.issueQty || 0;
+    // v14.17 — distinct SKU count scanned this session (null when the
+    // simple qty-match flow was used, which has no per-SKU breakdown —
+    // see confirmInspEnd). Used for INSP-stage KPI ranking/speed instead
+    // of pallets, which "scanning" workers may never enter.
+    w.scanCount = (inspData.scanCount !== undefined && inspData.scanCount !== null) ? inspData.scanCount : null;
     // v14.13 — this order's cached "already done" progress card (see
     // onOrderChange/renderInspDoneCard) is now stale: force the next
     // check to hit the server instead of redrawing last known state.
@@ -4870,11 +4888,11 @@ function doEndWork(wid, pallets, inspData){
 
   const reqData = Object.assign(
     { entryId:wid, pallets:pallets!==null?pallets:undefined, wpin:(WS&&WS.wpin)||'' },
-    inspData ? { scannedQty:inspData.scannedQty, inspResult:inspData.inspResult, inspNote:inspData.inspNote, issueQty:inspData.issueQty||0 } : {}
+    inspData ? { scannedQty:inspData.scannedQty, inspResult:inspData.inspResult, inspNote:inspData.inspNote, issueQty:inspData.issueQty||0, scanCount:(inspData.scanCount!==undefined&&inspData.scanCount!==null)?inspData.scanCount:undefined } : {}
   );
   // v10.7 — carried into the queue so loadData() can re-apply it if a
   // server refresh happens before this op actually syncs (see loadData()).
-  const localEnd = { endT:w.endT, netMin:w.netMin, endISO:w.endISO, pallets:w.pallets, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote, issueQty:w.issueQty };
+  const localEnd = { endT:w.endT, netMin:w.netMin, endISO:w.endISO, pallets:w.pallets, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote, issueQty:w.issueQty, scanCount:w.scanCount };
 
   // Entry's start is still waiting in the offline queue → queue the end too (order preserved)
   if (isTempQueued(wid) || !navigator.onLine) {
@@ -4920,6 +4938,7 @@ function doEndWork(wid, pallets, inspData){
     if (res.scannedQty !== undefined && res.scannedQty !== null) w.scanQty = res.scannedQty;
     if (res.inspResult) w.inspResult = res.inspResult;
     if (res.issueQty !== undefined && res.issueQty !== null) w.issueQty = res.issueQty;
+    if (res.scanCount !== undefined && res.scanCount !== null) w.scanCount = res.scanCount;
     renderStageContent();
     if (curPage() === 'dash') R.dash();
   });
@@ -5126,14 +5145,43 @@ function renderKPI(){
   const label = from === to ? from : `${from} ~ ${to}`;
   if (!done.length) { document.getElementById('kpiContent').innerHTML = `<div class="empty"><i class="ri-bar-chart-2-line"></i>No completed entries for ${label}</div>`; return; }
 
-  // worker → stage → {n, items, qty, pallets, min}
-  const blank = () => ({ PICK:{n:0,items:0,qty:0,pallets:0,min:0}, INSP:{n:0,items:0,qty:0,pallets:0,min:0}, PALL:{n:0,items:0,qty:0,pallets:0,min:0} });
+  // worker → stage → {n, items, qty, pallets, pages, min}
+  // v14.15 — when an order's pages are split across several pickers (e.g.
+  // a 20-page order picked 5 pages each by 4 workers), w.items/w.qty on
+  // EVERY one of those PICK entries is the WHOLE order's items/QTY (that's
+  // all Code.gs has to go on — items/QTY are only ever set at the order
+  // level, never per page-range), so every picker of that order shows the
+  // identical items/QTY regardless of whether they picked 5 pages or 20.
+  // Ranking or computing "speed" from that number is comparing everyone
+  // against the same order-wide total, not what they individually did —
+  // the real, comparable measure of a picker's own work is how many PAGES
+  // their own entry covers (pageTo - pageFrom + 1). That's now tracked
+  // alongside items/qty and used for PICK-stage speed/ranking instead.
+  // v14.16 — "Sessions" counts entries, not distinct orders: a worker who
+  // picked the same order across 2 separate sessions (e.g. came back for
+  // more pages later) would count as 2 sessions but only 1 order. Pages
+  // tells you volume; a separate distinct-order count tells you how many
+  // different orders someone actually touched — both requested explicitly,
+  // tracked separately rather than conflated.
+  // v14.17 — same problem as PICK/pages (see comment above), now for INSP:
+  // items/qty on an INSP entry are STILL the whole order's totals, so two
+  // scanning workers who split one order's SKUs would show identical
+  // items/QTY regardless of who scanned more. The real per-worker measure
+  // for a scanning worker is how many DISTINCT SKUs their own session
+  // actually scanned/handled (scanCount, computed at end-time — see
+  // finalizeInspEnd) and how much qty they personally scanned (scanQty,
+  // already tracked). INSP-stage speed/ranking now uses these instead of
+  // pallets, which a pure "scanning" worker may never even enter.
+  const blank = () => ({ PICK:{n:0,items:0,qty:0,pallets:0,pages:0,scans:0,scanQty:0,min:0,orders:new Set()}, INSP:{n:0,items:0,qty:0,pallets:0,pages:0,scans:0,scanQty:0,min:0,orders:new Set()}, PALL:{n:0,items:0,qty:0,pallets:0,pages:0,scans:0,scanQty:0,min:0,orders:new Set()} });
   const stats = {};
   S.workers.forEach(wk => { stats[wk] = blank(); });
+  const pagesOf = w => (w.stage==='PICK' && w.pageFrom!=null && w.pageTo!=null) ? (Number(w.pageTo)-Number(w.pageFrom)+1) : 0;
   done.forEach(w => {
     if (!stats[w.w]) stats[w.w] = blank();
     const st = stats[w.w][w.stage]; if (!st) return;
-    st.n++; st.items += (w.items||0); st.qty += (w.qty||0); st.pallets += (w.pallets||0); st.min += (w.netMin||0);
+    st.n++; st.items += (w.items||0); st.qty += (w.qty||0); st.pallets += (w.pallets||0); st.pages += pagesOf(w); st.min += (w.netMin||0);
+    if (w.stage === 'INSP') { st.scans += (w.scanCount||0); st.scanQty += (w.scanQty||0); }
+    if (w.oid) st.orders.add(w.oid);
   });
 
   const totItems = done.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
@@ -5164,10 +5212,10 @@ function renderKPI(){
 
   // Worker × Stage breakdown
   html += `<div class="section">Worker × Stage — detail</div>
-  <div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)"><table class="kpi-tbl" style="min-width:700px">
+  <div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)"><table class="kpi-tbl" style="min-width:860px">
   <thead><tr>
     <th>Worker</th><th>Stage</th>
-    <th>Sessions</th><th>Items</th><th>QTY</th><th>Pallets</th>
+    <th>Sessions</th><th title="Distinct orders touched in this stage — not the same as Sessions if a worker returned to the same order more than once">Orders</th><th title="Whole order's Items/QTY — identical for every picker who split this order's pages, not this worker's own share">Items</th><th>QTY</th><th title="Pages actually picked by this entry — the real per-worker measure when an order is split across several pickers">Pages</th><th title="Distinct SKUs this worker's own session scanned/handled, and the qty they personally scanned — the real per-worker measure for inspection (order-wide Items/QTY don't vary by who did the work)">Scans</th><th>Pallets</th>
     <th>Net time</th><th>Avg/session</th><th>Speed</th>
   </tr></thead><tbody>`;
 
@@ -5177,23 +5225,41 @@ function renderKPI(){
     const tI = Object.values(stages).reduce((s,v)=>s+v.items,0);
     const tQ = Object.values(stages).reduce((s,v)=>s+v.qty,0);
     const tP = Object.values(stages).reduce((s,v)=>s+v.pallets,0);
+    const tPg = stages.PICK.pages; // pages only means anything for PICK
+    const tSC = stages.INSP.scans;    // scans only means anything for INSP
+    const tSQ = stages.INSP.scanQty;
+    // v14.16 — distinct orders touched across every stage, unioned (an
+    // order a worker both picked AND inspected counts once here, not twice).
+    const allOrders = new Set();
+    Object.values(stages).forEach(v => v.orders.forEach(o => allOrders.add(o)));
+    const tO = allOrders.size;
     const tM = laborBy[wk] || 0;   // v8.3: union labor time (overlap once)
-    workerTotals.push({ wk, totN, tI, tQ, tP, tM });
+    workerTotals.push({ wk, totN, tI, tQ, tP, tPg, tSC, tSQ, tO, tM });
     let first = true;
     ['PICK','INSP','PALL'].forEach(stage => {
       const st = stages[stage]; if (!st.n) return;
       const avg = Math.round(st.min/st.n);
-      const speed = stage==='PICK' && st.min ? Math.round(st.items/st.min*60)
-                  : stage!=='PICK' && st.min && st.pallets ? +(st.pallets/st.min*60).toFixed(1) : null;
-      const speedStr = speed ? speed + (stage==='PICK' ? ' i/hr' : ' pall/hr') : '—';
+      // v14.15 — PICK speed/ranking is based on pages picked, not the
+      // order-wide items total (see the blank()/pagesOf comment above).
+      // v14.17 — INSP speed/ranking is based on distinct SKUs scanned per
+      // hour (scans), not pallets — a pure scanning worker may never log
+      // a pallet count at all.
+      const speed = stage==='PICK' ? (st.min && st.pages ? Math.round(st.pages/st.min*60) : null)
+                  : stage==='INSP' ? (st.min && st.scans ? Math.round(st.scans/st.min*60) : null)
+                  : (st.min && st.pallets ? +(st.pallets/st.min*60).toFixed(1) : null);
+      const speedStr = speed ? speed + (stage==='PICK' ? ' pages/hr' : stage==='INSP' ? ' SKU/hr' : ' pall/hr') : '—';
+      const scansStr = stage==='INSP' && (st.scans || st.scanQty) ? `${st.scans||0} SKU / ${st.scanQty||0} qty` : '—';
       html += `<tr${wk===CW?' style="background:rgba(59,130,246,.04)"':''}>
         <td style="font-weight:${first?800:400};${!first?'color:transparent':''}">
           ${wk}${wk===CW?' <span style="color:var(--blue);font-size:11px;font-weight:700"> YOU</span>':''}
         </td>
         <td><span style="color:${SCOL[stage]};font-weight:800;font-size:13px;letter-spacing:.04em">${stage}</span></td>
         <td style="font-family:var(--mono);font-size:15px;font-weight:700">${st.n}</td>
+        <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--t2)">${st.orders.size}</td>
         <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--purple)">${st.items||'—'}</td>
         <td style="font-family:var(--mono);font-size:14px;color:var(--teal)">${st.qty||'—'}</td>
+        <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--blue)">${stage==='PICK'&&st.pages?st.pages:'—'}</td>
+        <td style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--blue)">${scansStr}</td>
         <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--amber)">${st.pallets?fmtPallets(st.pallets):'—'}</td>
         <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--blue)">${fmtMin(st.min)}</td>
         <td style="font-family:var(--mono);font-size:14px">${avg?fmtMin(avg):'—'}</td>
@@ -5203,18 +5269,21 @@ function renderKPI(){
     });
   });
   html += `</tbody></table></div>
-  <div style="font-size:11px;color:var(--t3);margin-top:6px"><i class="ri-information-line"></i> Stage rows show time engaged in each stage. <b>Labor time*</b> in the totals below counts actual hours worked.</div>`;
+  <div style="font-size:11px;color:var(--t3);margin-top:6px"><i class="ri-information-line"></i> Stage rows show time engaged in each stage. <b>Items/QTY</b> are the whole order's totals (same for every picker/scanner who split that order) — <b>Pages</b> (PICK) and <b>Scans</b> (INSP) reflect each worker's own actual share, and drive that stage's speed/ranking. <b>Labor time*</b> in the totals below counts actual hours worked.</div>`;
 
   // Worker totals
   html += `<div class="section">Worker totals</div>
-  <div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)"><table class="kpi-tbl" style="min-width:580px">
-  <thead><tr><th>Worker</th><th>Sessions</th><th>Items picked</th><th>Boxes/Pallets</th><th>Labor time*</th><th>Performance</th></tr></thead><tbody>`;
+  <div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)"><table class="kpi-tbl" style="min-width:700px">
+  <thead><tr><th>Worker</th><th>Sessions</th><th title="Distinct orders touched, any stage">Orders</th><th title="Pages picked (PICK only) — the real per-worker PICK volume">Pages</th><th title="Distinct SKUs scanned and qty scanned (INSP only) — the real per-worker inspection volume">Scans</th><th title="Whole-order Items total — see the note above the detail table">Items</th><th>Boxes/Pallets</th><th>Labor time*</th><th>Performance</th></tr></thead><tbody>`;
   const maxI = Math.max(...workerTotals.map(x => x.tI), 1);
-  workerTotals.sort((a,b)=>b.tI-a.tI).forEach(({wk,totN,tI,tQ,tP,tM}) => {
+  workerTotals.sort((a,b)=>b.tI-a.tI).forEach(({wk,totN,tI,tQ,tP,tPg,tSC,tSQ,tO,tM}) => {
     const bar = Math.round(tI/maxI*100);
     html += `<tr${wk===CW?' style="background:rgba(59,130,246,.04)"':''}>
       <td style="font-weight:800;font-size:15px">${wk}${wk===CW?' <span style="color:var(--blue);font-size:11px;font-weight:700"> YOU</span>':''}</td>
       <td style="font-family:var(--mono);font-size:15px;font-weight:700">${totN}</td>
+      <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--t2)">${tO}</td>
+      <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--blue)">${tPg||'—'}</td>
+      <td style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--blue)">${(tSC||tSQ)?`${tSC||0} SKU / ${tSQ||0} qty`:'—'}</td>
       <td style="font-family:var(--mono);font-size:16px;font-weight:800;color:var(--purple)">${tI}</td>
       <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--amber)">${tP?fmtPallets(tP):'—'}</td>
       <td style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--blue)">${fmtMin(tM)}</td>
@@ -5232,17 +5301,25 @@ function renderKPI(){
   html += `<div class="section">Stage leaderboard</div><div class="g3">`;
   ['PICK','INSP','PALL'].forEach(stage => {
     const col = SCOL[stage];
-    const metric = stage==='PICK' ? 'items' : 'pallets';
-    const rows = S.workers.map(wk => { const st = stats[wk]?.[stage] || {n:0,items:0,qty:0,pallets:0,min:0}; return { wk, ...st }; })
+    // v14.15 — PICK ranks by pages picked (each picker's own actual share),
+    // not "items", which is the same whole-order number for every picker
+    // who split that order's pages and told everyone nothing about who did
+    // more work.
+    // v14.17 — INSP ranks by distinct SKUs scanned (each scanner's own
+    // actual share), not pallets, which a pure scanning worker may never
+    // even log.
+    const metric = stage==='PICK' ? 'pages' : stage==='INSP' ? 'scans' : 'pallets';
+    const rows = S.workers.map(wk => { const st = stats[wk]?.[stage] || {n:0,items:0,qty:0,pallets:0,pages:0,scans:0,scanQty:0,min:0}; return { wk, ...st }; })
       .filter(x => x.n > 0).sort((a,b)=>b[metric]-a[metric]);
     const maxV = rows[0]?.[metric] || 1;
-    html += `<div class="card" style="padding:14px"><div style="font-size:11px;font-weight:700;color:${col};letter-spacing:.06em;margin-bottom:10px">${stage} — ${stage==='PICK'?'by items':'by pallets'}</div>`;
+    html += `<div class="card" style="padding:14px"><div style="font-size:11px;font-weight:700;color:${col};letter-spacing:.06em;margin-bottom:10px">${stage} — ${stage==='PICK'?'by pages picked':stage==='INSP'?'by SKUs scanned':'by pallets'}</div>`;
     rows.forEach((r,i) => {
       const v = r[metric]; const bar = Math.round(v/maxV*100);
+      const valueStr = stage==='PICK' ? `${v} pages` : stage==='INSP' ? `${v} SKU · ${r.scanQty||0} qty` : `${fmtPallets(v)} pall`;
       html += `<div style="margin-bottom:9px">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
           <span style="font-size:14px">${['🥇','🥈','🥉'][i]||''} <span style="font-weight:${r.wk===CW?800:500}">${r.wk}</span></span>
-          <span style="font-family:var(--mono);font-size:15px;font-weight:700;color:${col}">${stage==='PICK'?v:fmtPallets(v)} ${metric}</span>
+          <span style="font-family:var(--mono);font-size:15px;font-weight:700;color:${col}">${valueStr}</span>
         </div>
         <div style="height:4px;background:var(--bg3);border-radius:3px"><div style="height:100%;width:${bar}%;background:${col};border-radius:3px"></div></div>
       </div>`;
@@ -6280,7 +6357,7 @@ window.renderEntries = function(){
         <td class="mono" style="color:var(--blue)">${w.pageFrom!=null?`${w.pageFrom}${w.pageTo&&w.pageTo!==w.pageFrom?'–'+w.pageTo:''}`:'—'}</td>
         <td class="mono" style="color:var(--amber)">${w.pallets!==null?fmtPallets(w.pallets):'—'}</td>
         <td>${w.stage==='INSP' && w.inspResult
-              ? `<span class="badge ${w.inspResult==='PASS'?'b-pass':'b-issue'}" style="font-size:10px;padding:2px 7px" title="${(w.inspNote||'').replace(/"/g,'&quot;') || 'Inspection result'}">${w.inspResult}</span> ${w.scanQty!=null?`<span class="mono" style="font-size:11px;color:var(--t3)" title="Quantity this session logged as scanned/packed">${w.scanQty} scanned</span>`:''}${w.issueQty?` <span class="mono" style="font-size:11px;color:var(--red)" title="Total units flagged as an issue/mismatch in this session">· ${w.issueQty} issue</span>`:''}`
+              ? `<span class="badge ${w.inspResult==='PASS'?'b-pass':'b-issue'}" style="font-size:10px;padding:2px 7px" title="${(w.inspNote||'').replace(/"/g,'&quot;') || 'Inspection result'}">${w.inspResult}</span> ${w.scanQty!=null?`<span class="mono" style="font-size:11px;color:var(--t3)" title="Quantity this session logged as scanned/packed">${w.scanQty} scanned</span>`:''}${w.scanCount!=null?` <span class="mono" style="font-size:11px;color:var(--blue)" title="Distinct SKUs this worker's own session scanned/handled — the KPI tab's per-worker INSP measure">· ${w.scanCount} SKU</span>`:''}${w.issueQty?` <span class="mono" style="font-size:11px;color:var(--red)" title="Total units flagged as an issue/mismatch in this session">· ${w.issueQty} issue</span>`:''}`
               : '—'}</td>
         <td class="mono">${w.startT||'—'}</td><td class="mono">${w.endT||'—'}</td>
         <td class="mono" style="color:var(--teal)">${fmtMin(w.netMin)}</td>
@@ -6356,6 +6433,7 @@ window.editEntryModal = function(wid){
       </select></div>
     </div>
     <div class="fg"><label class="fl">Issue Qty (INSP)</label><input class="fi" type="number" id="eeIssueQty" min="0" value="${w.issueQty!=null?w.issueQty:''}"></div>
+    <div class="fg"><label class="fl">Scan Count — SKUs scanned (INSP)</label><input class="fi" type="number" id="eeScanCount" min="0" value="${w.scanCount!=null?w.scanCount:''}"></div>
     <div class="fg"><label class="fl">Insp. Note</label><input class="fi" id="eeInspNote" value="${w.inspNote||''}"></div>
     <div style="font-size:11px;color:var(--t3);margin-bottom:14px"><i class="ri-information-line"></i> Times are not editable here — they stay as recorded. KPI_Daily reflects edits after the next rebuild.</div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -6375,8 +6453,9 @@ window.saveEntryEdit = function(wid){
   const scanQ  = document.getElementById('eeScanQty').value;
   const inspR  = document.getElementById('eeInspResult').value;
   const issueQ = document.getElementById('eeIssueQty').value;
+  const scanCnt = document.getElementById('eeScanCount').value;
   const inspN  = document.getElementById('eeInspNote').value;
-  const bk = { w:w.w, stage:w.stage, items:w.items, qty:w.qty, pageFrom:w.pageFrom, pageTo:w.pageTo, pallets:w.pallets, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote, issueQty:w.issueQty };
+  const bk = { w:w.w, stage:w.stage, items:w.items, qty:w.qty, pageFrom:w.pageFrom, pageTo:w.pageTo, pallets:w.pallets, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote, issueQty:w.issueQty, scanCount:w.scanCount };
   w.w = worker; w.stage = stage;
   w.items   = items !== '' ? Number(items) : null;
   w.qty     = qty   !== '' ? Number(qty)   : null;
@@ -6386,11 +6465,12 @@ window.saveEntryEdit = function(wid){
   w.scanQty = scanQ !== '' ? Number(scanQ) : null;
   w.inspResult = inspR || '';
   w.issueQty = issueQ !== '' ? Number(issueQ) : null;
+  w.scanCount = scanCnt !== '' ? Number(scanCnt) : null;
   w.inspNote   = inspN || '';
   closeModal(); toast('Entry updated', 'ok'); renderEntries();
-  mgrOp('editEntry', { entryId:wid, worker, stage, items, qty, pageFrom:pgFrom, pageTo:pgTo, pallets:pall, scannedQty:scanQ, inspResult:inspR, issueQty:issueQ, inspNote:inspN }).then(out => {
+  mgrOp('editEntry', { entryId:wid, worker, stage, items, qty, pageFrom:pgFrom, pageTo:pgTo, pallets:pall, scannedQty:scanQ, inspResult:inspR, issueQty:issueQ, scanCount:scanCnt, inspNote:inspN }).then(out => {
     if (!out.net || !out.res.ok) {
-      Object.assign(w, { w:bk.w, stage:bk.stage, items:bk.items, qty:bk.qty, pageFrom:bk.pageFrom, pageTo:bk.pageTo, pallets:bk.pallets, scanQty:bk.scanQty, inspResult:bk.inspResult, inspNote:bk.inspNote, issueQty:bk.issueQty });
+      Object.assign(w, { w:bk.w, stage:bk.stage, items:bk.items, qty:bk.qty, pageFrom:bk.pageFrom, pageTo:bk.pageTo, pallets:bk.pallets, scanQty:bk.scanQty, inspResult:bk.inspResult, inspNote:bk.inspNote, issueQty:bk.issueQty, scanCount:bk.scanCount });
       toast('⚠ Save failed', 'err'); renderEntries();
     }
   });
