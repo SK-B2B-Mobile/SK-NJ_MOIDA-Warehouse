@@ -3130,6 +3130,18 @@ function pageRangeOverlapsClaimed(oid, from, to){
 // background-refresh re-render, so both paths draw the exact same card.
 function renderInspDoneCard(wrap, oid, prog){
   if (!wrap) return;
+  // v14.14 — "skuDone/skuTotal" means "accounted for" (packed OR flagged
+  // as an issue), not "actually shipped clean" — a SKU that's 100% issue
+  // (0 packed) still counts as "done" there, by design (see getOrderProgress_
+  // in Code.gs). Showing that as a bare "71/71" reads as "everything's
+  // fine", which isn't true when one of those 71 is a flagged issue with
+  // zero packed. Break it out explicitly: shipped-clean vs issue-flagged,
+  // same split already used on the printed packing slip.
+  const issueSkus = prog ? (prog.skus || []).filter(s => s.issueType) : [];
+  const shippedClean = prog ? prog.skuTotal - issueSkus.length : 0;
+  const breakdown = prog
+    ? (issueSkus.length ? ` — ${shippedClean} shipped · ${issueSkus.length} issue (${prog.skuTotal} SKUs total)` : ` — ${prog.skuTotal}/${prog.skuTotal} SKUs`)
+    : '';
   if (prog && !prog.ready) {
     // Genuinely partial — offer to CONTINUE (not "re-inspect from
     // scratch"): startWork() opens a session whose checklist already
@@ -3149,7 +3161,7 @@ function renderInspDoneCard(wrap, oid, prog){
   }
   wrap.innerHTML = `
     <div style="text-align:center;padding:10px 0 4px">
-      <div style="font-size:13px;color:var(--green);font-weight:700;margin-bottom:10px"><i class="ri-checkbox-circle-fill"></i> Inspection complete${prog ? ` — ${prog.skuDone}/${prog.skuTotal} SKUs` : ''}</div>
+      <div style="font-size:13px;color:${issueSkus.length?'var(--amber)':'var(--green)'};font-weight:700;margin-bottom:10px"><i class="${issueSkus.length?'ri-error-warning-line':'ri-checkbox-circle-fill'}"></i> Inspection complete${breakdown}</div>
       <div style="display:flex;gap:6px;margin-bottom:10px">
         <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','box',this)"><i class="ri-printer-line"></i> Packing Slip</button>
         <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat',this)"><i class="ri-file-list-3-line"></i> Flat List</button>
