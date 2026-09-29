@@ -4015,9 +4015,14 @@ window.confirmInspEnd = function(wid, expQty){
   }
   const result = mismatch ? 'ISSUE' : 'PASS';
   const fullNote = mismatch ? (reason + (note ? ' — ' + note : '')) : '';
+  // v14.11 — total mismatch quantity for this session, stored as its own
+  // issueQty field (separate from pallets, which stays reserved for real
+  // pallet counts — see the matching renderEntries change and Code.gs's
+  // new EC.ISSUE_QTY column).
+  const issueQtyForEntry = mismatch ? Math.abs(expQty - n) : 0;
   closeModal();
   clearScanState(wid);
-  doEndWork(wid, null, { scannedQty:n, inspResult:result, inspNote:fullNote });
+  doEndWork(wid, null, { scannedQty:n, inspResult:result, inspNote:fullNote, issueQty:issueQtyForEntry });
 };
 
 // ── SKU-level end flow: per-item checklist comparison ──
@@ -4261,7 +4266,10 @@ window.finalizeInspEnd = async function(wid){
   stopLivePoll(wid);
   apiOp('clearLiveScan', { orderId: w.oid, entryId: wid });
   clearScanState(wid);
-  doEndWork(wid, null, { scannedQty:pend.totalScanned, inspResult:pend.result, inspNote:pend.fullNote });
+  // v14.11 — total issue-flagged quantity for this session, as its own
+  // issueQty field (see confirmInspEnd + Code.gs's EC.ISSUE_QTY column).
+  const totalIssueQty = pend.rows.reduce((s,r) => s + (r.hasIssue ? (r.issue.qty||0) : 0), 0);
+  doEndWork(wid, null, { scannedQty:pend.totalScanned, inspResult:pend.result, inspNote:pend.fullNote, issueQty:totalIssueQty });
   delete _pendingInspEnd[wid];
 
   // v13.8 — used to force-open the Labels progress modal right here. Now
@@ -4607,39 +4615,34 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   const badgeClass = result === 'PASS' ? 'verify-ok' : 'verify-bad';
   const badgeText = result === 'PASS' ? '✓ INSPECTION PASSED — ALL ITEMS VERIFIED' : '⚠ INSPECTION COMPLETE — WITH ISSUES';
 
-  // v14.10 — printed slips were coming out cropped on the left/right and
-  // top/bottom, with the logo cut off on page 1. @page's own margin can
-  // be silently zeroed by the OS print dialog whenever "Margins: None" is
-  // selected there (common default on some printer drivers), which prints
-  // truly edge-to-edge into the printer's own unprintable border. Real
-  // padding on <body> is a second, independent safety margin that the
-  // print dialog's margin setting can't remove, so content stays inside
-  // the printable area even then. Also drops the type size a notch so a
-  // long 70+ SKU order has room to breathe instead of packing the page
-  // edge-to-edge.
+  // v14.11 — v14.10 fixed actual clipping, but the layout still felt
+  // cramped edge-to-edge. Redone with one single, generous margin source
+  // (body padding — reliable regardless of the print dialog's own margin
+  // setting) and noticeably more breathing room between every section:
+  // header, info block, table rows, issues block, and the closing badge.
   const css = `
-    @page{ size: letter; margin: 14mm 12mm; }
+    @page{ size: letter; margin: 8mm; }
     *{box-sizing:border-box;}
     html, body{width:100%;}
-    body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; padding:8mm 6mm; max-width:100%; margin:0; font-size:11.5px;}
-    .slip-head{display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #111; padding-bottom:14px; margin-bottom:18px; margin-top:2mm;}
-    .slip-logo{font-size:24px; font-weight:800; letter-spacing:-0.02em;}
-    .slip-addr{font-size:11px; color:#555; margin-top:4px; line-height:1.5;}
+    body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; padding:16mm 15mm 20mm; max-width:100%; margin:0; font-size:12px; line-height:1.5;}
+    .slip-head{display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #111; padding-bottom:18px; margin-bottom:26px;}
+    .slip-logo{font-size:25px; font-weight:800; letter-spacing:-0.02em;}
+    .slip-addr{font-size:11.5px; color:#555; margin-top:6px; line-height:1.6;}
     .slip-title{font-size:18px; font-weight:800; text-align:right;}
-    .slip-meta{font-size:11px; color:#555; text-align:right; margin-top:4px;}
-    .slip-info{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px; font-size:12.5px;}
-    .slip-info div b{display:block; font-size:10.5px; color:#777; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:2px;}
-    table.slip-table{width:100%; border-collapse:collapse; font-size:11px; margin-top:8px;}
-    table.slip-table th{background:#111; color:#fff; padding:6px 8px; text-align:left; font-size:10px; text-transform:uppercase;}
-    table.slip-table td{padding:5px 8px; border-bottom:1px solid #ddd;}
+    .slip-meta{font-size:11.5px; color:#555; text-align:right; margin-top:6px; line-height:1.6;}
+    .slip-info{display:grid; grid-template-columns:1fr 1fr; gap:16px 20px; margin-bottom:26px; font-size:12.5px;}
+    .slip-info div b{display:block; font-size:10.5px; color:#777; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;}
+    table.slip-table{width:100%; border-collapse:collapse; font-size:11.5px; margin-top:10px;}
+    table.slip-table th{background:#111; color:#fff; padding:8px 10px; text-align:left; font-size:10px; text-transform:uppercase;}
+    table.slip-table td{padding:7px 10px; border-bottom:1px solid #ddd;}
     table.slip-table tbody tr, table.slip-table tfoot tr{page-break-inside:avoid; break-inside:avoid;}
-    .slip-total-row td{border-top:2px solid #111; border-bottom:none; padding-top:9px; background:#f7f7f7;}
-    .issues-h4{margin-top:16px; font-size:12.5px; text-transform:uppercase; color:#555;}
-    .box-line{font-size:12.5px; margin:6px 0; page-break-inside:avoid; break-inside:avoid;}
-    .verify-badge{display:inline-block; padding:6px 14px; border-radius:6px; font-weight:800; font-size:12.5px; margin-top:16px; page-break-inside:avoid; break-inside:avoid;}
+    .slip-total-row td{border-top:2px solid #111; border-bottom:none; padding-top:12px; padding-bottom:12px; background:#f7f7f7;}
+    .issues-h4{margin-top:26px; margin-bottom:4px; font-size:12.5px; text-transform:uppercase; color:#555;}
+    .box-line{font-size:12.5px; margin:8px 0; page-break-inside:avoid; break-inside:avoid;}
+    .verify-badge{display:inline-block; padding:8px 16px; border-radius:6px; font-weight:800; font-size:12.5px; margin-top:26px; page-break-inside:avoid; break-inside:avoid;}
     .verify-ok{background:#ede9fe; color:#5b21b6; border:1px solid #8b5cf6;}
     .verify-bad{background:#fee2e2; color:#991b1b; border:1px solid #dc2626;}
-    .slip-footer{margin-top:22px; padding-top:12px; border-top:1px solid #ccc; font-size:10.5px; color:#777; display:flex; justify-content:space-between; page-break-inside:avoid; break-inside:avoid;}
+    .slip-footer{margin-top:28px; padding-top:14px; border-top:1px solid #ccc; font-size:10.5px; color:#777; display:flex; justify-content:space-between; page-break-inside:avoid; break-inside:avoid;}
     /* Keep the total row + badge + footer together as one unbreakable
        block whenever possible, so a page break can't land in the middle
        of the numbers a customer would actually check. */
@@ -4648,7 +4651,7 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Packing Slip · ${w.oid}</title><style>${css}</style></head><body>
     <div class="slip-head">
-      <div><div class="slip-logo">StyleKorean</div><div class="slip-addr">NJ / MOIDA Warehouse</div></div>
+      <div><div class="slip-logo">StyleKorean</div><div class="slip-addr">NJ/MOIDA</div></div>
       <div><div class="slip-title">PACKING SLIP</div><div class="slip-meta">Order ${w.oid}<br>Printed ${printedAt}</div></div>
     </div>
     <div class="slip-info">
@@ -4799,12 +4802,12 @@ function doEndWork(wid, pallets, inspData){
   const w = S.works.find(x => x.id === wid); if (!w || _pending[wid]) return;
   const now = new Date();
   const hhmm = nowHHmm();
-  const orig = { endT:w.endT, netMin:w.netMin, pallets:w.pallets, endISO:w.endISO, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote };
+  const orig = { endT:w.endT, netMin:w.netMin, pallets:w.pallets, endISO:w.endISO, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote, issueQty:w.issueQty };
   const nm = clientNet(w, now);
   w.endT = hhmm; w.netMin = nm;
   w.endISO = todayStr() + 'T' + hhmm + ':00';
   if (pallets !== null) w.pallets = pallets;
-  if (inspData) { w.scanQty = inspData.scannedQty; w.inspResult = inspData.inspResult; w.inspNote = inspData.inspNote; }
+  if (inspData) { w.scanQty = inspData.scannedQty; w.inspResult = inspData.inspResult; w.inspNote = inspData.inspNote; w.issueQty = inspData.issueQty || 0; }
 
   showCompletionCard(wid, w, nm, pallets, hhmm, inspData);
   updateBadges(); renderStageContent();
@@ -4812,11 +4815,11 @@ function doEndWork(wid, pallets, inspData){
 
   const reqData = Object.assign(
     { entryId:wid, pallets:pallets!==null?pallets:undefined, wpin:(WS&&WS.wpin)||'' },
-    inspData ? { scannedQty:inspData.scannedQty, inspResult:inspData.inspResult, inspNote:inspData.inspNote } : {}
+    inspData ? { scannedQty:inspData.scannedQty, inspResult:inspData.inspResult, inspNote:inspData.inspNote, issueQty:inspData.issueQty||0 } : {}
   );
   // v10.7 — carried into the queue so loadData() can re-apply it if a
   // server refresh happens before this op actually syncs (see loadData()).
-  const localEnd = { endT:w.endT, netMin:w.netMin, endISO:w.endISO, pallets:w.pallets, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote };
+  const localEnd = { endT:w.endT, netMin:w.netMin, endISO:w.endISO, pallets:w.pallets, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote, issueQty:w.issueQty };
 
   // Entry's start is still waiting in the offline queue → queue the end too (order preserved)
   if (isTempQueued(wid) || !navigator.onLine) {
@@ -4861,6 +4864,7 @@ function doEndWork(wid, pallets, inspData){
     if (res.pallets !== null && res.pallets !== undefined) w.pallets = res.pallets;
     if (res.scannedQty !== undefined && res.scannedQty !== null) w.scanQty = res.scannedQty;
     if (res.inspResult) w.inspResult = res.inspResult;
+    if (res.issueQty !== undefined && res.issueQty !== null) w.issueQty = res.issueQty;
     renderStageContent();
     if (curPage() === 'dash') R.dash();
   });
@@ -6212,7 +6216,8 @@ window.renderEntries = function(){
   const ws = q ? S.works.filter(w => w.oid.toUpperCase().includes(q) || w.w.toUpperCase().includes(q)) : S.works.slice(0, 50);
   document.getElementById('entryTable').innerHTML = ws.length ?
     `<table class="mgr-tbl"><thead><tr><th>Order</th><th>Worker</th><th>Stage</th><th>Items</th><th>QTY</th><th>Pages</th><th>Pallets</th><th>Result</th><th>Start</th><th>End</th><th>Net</th><th></th></tr></thead><tbody>${
-      ws.map(w => `<tr id="entryRow_${w.id}">
+      ws.map(w => {
+        return `<tr id="entryRow_${w.id}">
         <td class="mono">${w.oid}</td><td>${w.w}</td>
         <td><span style="color:${SCOL[w.stage]||'var(--t)'};font-weight:700;font-size:11px">${w.stage}</span></td>
         <td class="mono">${w.items!==null?w.items:'—'}</td>
@@ -6220,7 +6225,7 @@ window.renderEntries = function(){
         <td class="mono" style="color:var(--blue)">${w.pageFrom!=null?`${w.pageFrom}${w.pageTo&&w.pageTo!==w.pageFrom?'–'+w.pageTo:''}`:'—'}</td>
         <td class="mono" style="color:var(--amber)">${w.pallets!==null?fmtPallets(w.pallets):'—'}</td>
         <td>${w.stage==='INSP' && w.inspResult
-              ? `<span class="badge ${w.inspResult==='PASS'?'b-pass':'b-issue'}" style="font-size:10px;padding:2px 7px" title="${(w.inspNote||'').replace(/"/g,'&quot;') || 'Inspection result'}">${w.inspResult}</span> ${w.scanQty!=null?`<span class="mono" style="font-size:11px;color:var(--t3)" title="Quantity this session logged as scanned/packed">${w.scanQty} scanned</span>`:''}`
+              ? `<span class="badge ${w.inspResult==='PASS'?'b-pass':'b-issue'}" style="font-size:10px;padding:2px 7px" title="${(w.inspNote||'').replace(/"/g,'&quot;') || 'Inspection result'}">${w.inspResult}</span> ${w.scanQty!=null?`<span class="mono" style="font-size:11px;color:var(--t3)" title="Quantity this session logged as scanned/packed">${w.scanQty} scanned</span>`:''}${w.issueQty?` <span class="mono" style="font-size:11px;color:var(--red)" title="Total units flagged as an issue/mismatch in this session">· ${w.issueQty} issue</span>`:''}`
               : '—'}</td>
         <td class="mono">${w.startT||'—'}</td><td class="mono">${w.endT||'—'}</td>
         <td class="mono" style="color:var(--teal)">${fmtMin(w.netMin)}</td>
@@ -6229,7 +6234,8 @@ window.renderEntries = function(){
           <button class="btn btn-sm" style="padding:2px 5px" title="Edit" onclick="editEntryModal('${w.id}')"><i class="ri-edit-line"></i></button>
           <button class="btn btn-sm" style="color:var(--red);padding:2px 5px" title="Delete" onclick="delEntry('${w.id}')"><i class="ri-delete-bin-line"></i></button>
         </td>
-      </tr>`).join('')}</tbody></table>`
+      </tr>`;
+      }).join('')}</tbody></table>`
     : '<div style="font-size:12px;color:var(--t3);padding:8px 0">No entries</div>';
 };
 
@@ -6294,6 +6300,7 @@ window.editEntryModal = function(wid){
         <option value="ISSUE"${w.inspResult==='ISSUE'?' selected':''}>ISSUE</option>
       </select></div>
     </div>
+    <div class="fg"><label class="fl">Issue Qty (INSP)</label><input class="fi" type="number" id="eeIssueQty" min="0" value="${w.issueQty!=null?w.issueQty:''}"></div>
     <div class="fg"><label class="fl">Insp. Note</label><input class="fi" id="eeInspNote" value="${w.inspNote||''}"></div>
     <div style="font-size:11px;color:var(--t3);margin-bottom:14px"><i class="ri-information-line"></i> Times are not editable here — they stay as recorded. KPI_Daily reflects edits after the next rebuild.</div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -6312,8 +6319,9 @@ window.saveEntryEdit = function(wid){
   const pall   = document.getElementById('eePallets').value;
   const scanQ  = document.getElementById('eeScanQty').value;
   const inspR  = document.getElementById('eeInspResult').value;
+  const issueQ = document.getElementById('eeIssueQty').value;
   const inspN  = document.getElementById('eeInspNote').value;
-  const bk = { w:w.w, stage:w.stage, items:w.items, qty:w.qty, pageFrom:w.pageFrom, pageTo:w.pageTo, pallets:w.pallets, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote };
+  const bk = { w:w.w, stage:w.stage, items:w.items, qty:w.qty, pageFrom:w.pageFrom, pageTo:w.pageTo, pallets:w.pallets, scanQty:w.scanQty, inspResult:w.inspResult, inspNote:w.inspNote, issueQty:w.issueQty };
   w.w = worker; w.stage = stage;
   w.items   = items !== '' ? Number(items) : null;
   w.qty     = qty   !== '' ? Number(qty)   : null;
@@ -6322,11 +6330,12 @@ window.saveEntryEdit = function(wid){
   w.pallets = pall  !== '' ? Number(pall)  : null;
   w.scanQty = scanQ !== '' ? Number(scanQ) : null;
   w.inspResult = inspR || '';
+  w.issueQty = issueQ !== '' ? Number(issueQ) : null;
   w.inspNote   = inspN || '';
   closeModal(); toast('Entry updated', 'ok'); renderEntries();
-  mgrOp('editEntry', { entryId:wid, worker, stage, items, qty, pageFrom:pgFrom, pageTo:pgTo, pallets:pall, scannedQty:scanQ, inspResult:inspR, inspNote:inspN }).then(out => {
+  mgrOp('editEntry', { entryId:wid, worker, stage, items, qty, pageFrom:pgFrom, pageTo:pgTo, pallets:pall, scannedQty:scanQ, inspResult:inspR, issueQty:issueQ, inspNote:inspN }).then(out => {
     if (!out.net || !out.res.ok) {
-      Object.assign(w, { w:bk.w, stage:bk.stage, items:bk.items, qty:bk.qty, pageFrom:bk.pageFrom, pageTo:bk.pageTo, pallets:bk.pallets, scanQty:bk.scanQty, inspResult:bk.inspResult, inspNote:bk.inspNote });
+      Object.assign(w, { w:bk.w, stage:bk.stage, items:bk.items, qty:bk.qty, pageFrom:bk.pageFrom, pageTo:bk.pageTo, pallets:bk.pallets, scanQty:bk.scanQty, inspResult:bk.inspResult, inspNote:bk.inspNote, issueQty:bk.issueQty });
       toast('⚠ Save failed', 'err'); renderEntries();
     }
   });
