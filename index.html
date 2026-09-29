@@ -1048,6 +1048,35 @@ window.setUnitType = function(wid, type){
 function saveScanState(wid, st){ _scanState[wid] = st; try { localStorage.setItem('wms_scan_' + wid, JSON.stringify(st)); } catch(_){} }
 function clearScanState(wid){ delete _scanState[wid]; try { localStorage.removeItem('wms_scan_' + wid); } catch(_){} }
 
+// ── v14.18 — "나가기" on an in-progress INSP session used to only
+// navigate to Dashboard: the session itself stayed active on the server
+// (nothing here ends it — that's the point, so nothing is lost), so
+// coming back to Work > Inspection kept showing the exact same
+// "in-progress" card every time, which looked like exiting hadn't done
+// anything. This hides that ONE session's card on THIS device only —
+// scanned progress is completely untouched, server-side and in
+// localStorage — until the worker explicitly taps "이어하기" to bring it
+// back. Purely a local display preference, so it's kept in its own
+// localStorage key rather than synced anywhere.
+function loadHiddenInspSessions(){
+  try { return JSON.parse(localStorage.getItem('wms_hidden_insp') || '[]') || []; } catch(_) { return []; }
+}
+function saveHiddenInspSessions(arr){ try { localStorage.setItem('wms_hidden_insp', JSON.stringify(arr)); } catch(_){} }
+function isInspSessionHidden(wid){ return loadHiddenInspSessions().indexOf(wid) !== -1; }
+function unhideInspSessionLocal(wid){
+  const arr = loadHiddenInspSessions().filter(x => x !== wid);
+  saveHiddenInspSessions(arr);
+}
+window.hideInspSession = function(wid){
+  const arr = loadHiddenInspSessions();
+  if (arr.indexOf(wid) === -1) { arr.push(wid); saveHiddenInspSessions(arr); }
+  go('dash');
+};
+window.unhideInspSession = function(wid){
+  unhideInspSessionLocal(wid);
+  renderStageContent();
+};
+
 /** Returns cached SKU-level pick list for an order, or null while it's still loading (fetch kicked off in background). */
 // v13.1 — root cause of "checklist says 87/87 but the packing slip says
 // 85 SKUs": a pick-list import occasionally produces two separate
@@ -2821,7 +2850,7 @@ function renderStageContent(){
     singlePage: document.getElementById('wSinglePage')?.checked || false
   };
 
-  const mySessions = S.works.filter(w => w.w === CW && w.stage === s && !w.endT);
+  const mySessions = S.works.filter(w => w.w === CW && w.stage === s && !w.endT && !(s === 'INSP' && isInspSessionHidden(w.id)));
 
   let activeSect = '';
   if (mySessions.length > 0) {
@@ -2869,7 +2898,7 @@ function renderStageContent(){
           title="${notReadyYet ? 'Tap to finish early — you can flag or force-complete what\'s left' : ''}">
           <i class="ri-checkbox-circle-line"></i> ${notReadyYet ? `Finish early (${readyInfo.done}/${readyInfo.total} scanned)` : SELABEL[s]}
         </button>
-        ${s==='INSP' ? `<button class="btn" style="width:100%;justify-content:center;margin-top:8px;padding:10px;font-size:12.5px;font-weight:600;color:var(--t2)" onclick="go('dash')" title="진행 상황은 그대로 저장되어 있고, 나중에 다시 들어와서 이어할 수 있습니다">
+        ${s==='INSP' ? `<button class="btn" style="width:100%;justify-content:center;margin-top:8px;padding:10px;font-size:12.5px;font-weight:600;color:var(--t2)" onclick="hideInspSession('${w.id}')" title="스캔 진행상황은 그대로 저장되고, 이 화면에서만 카드가 숨겨집니다 — 아래 '숨겨진 세션'에서 언제든 다시 불러올 수 있습니다">
           <i class="ri-logout-box-r-line" style="font-size:14px"></i> 나가기 (진행 상황 저장됨)
         </button>` : ''}
       </div>`;
@@ -2878,6 +2907,37 @@ function renderStageContent(){
       <div class="section" style="margin-top:0"><i class="${icon}" style="color:${col}"></i> My active ${s} sessions</div>
       ${activeSect}
     </div>`;
+  }
+
+  // v14.18 — sessions this worker hid via "나가기" (still active on the
+  // server, scan progress untouched) — shown as a compact resume list
+  // rather than the full session card, so they stay out of the way but
+  // aren't lost.
+  let hiddenSect = '';
+  if (s === 'INSP') {
+    const hiddenIds = loadHiddenInspSessions();
+    const hiddenSessions = hiddenIds.length
+      ? S.works.filter(w => w.w === CW && w.stage === 'INSP' && !w.endT && hiddenIds.indexOf(w.id) !== -1)
+      : [];
+    // Clean up hidden-flags for sessions that ended or vanished elsewhere,
+    // so the list (and localStorage) don't silently accumulate stale ids.
+    const stillValidIds = hiddenSessions.map(w => w.id);
+    if (stillValidIds.length !== hiddenIds.length) saveHiddenInspSessions(stillValidIds);
+    if (hiddenSessions.length) {
+      hiddenSect = `<div style="margin-bottom:14px">
+        <div class="section" style="margin-top:0"><i class="ri-eye-off-line"></i> 숨겨진 세션 (${hiddenSessions.length}) — 진행상황 저장됨</div>
+        ${hiddenSessions.map(w => {
+          const o = S.orders.find(x => x.id === w.oid);
+          return `<div class="session-card ${bdcl}" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px">
+            <div>
+              <div class="session-title" style="font-size:13px">${w.oid}</div>
+              <div class="session-sub" style="font-size:11px">${o?.ch||''} · ${o?.cu||''} · 시작 ${w.startT||'—'}</div>
+            </div>
+            <button class="btn btn-sm" onclick="unhideInspSession('${w.id}')"><i class="ri-eye-line"></i> 이어하기</button>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
   }
 
   const orderOpts = S.orders.map(o => {
@@ -3013,7 +3073,7 @@ function renderStageContent(){
     </div>`;
   }
 
-  container.innerHTML = s === 'INSP' ? (startSect + activeSect) : (activeSect + startSect);
+  container.innerHTML = s === 'INSP' ? (startSect + activeSect + hiddenSect) : (activeSect + startSect);
   startSessionTimer();
 
   // Restore whatever the worker had selected/typed before this re-render.
@@ -3263,6 +3323,13 @@ async function onOrderChange(){
   if (CS === 'INSP') {
     ensureOrderItems(oid);
     if (myHere > 0) {
+      // v14.18 — if this order's session was previously hidden via "나가기"
+      // (see hideInspSession), explicitly re-selecting the SAME order from
+      // the dropdown is the worker asking to resume it — unhide it here so
+      // the active-session card (with all their scanned progress) reappears
+      // immediately, instead of leaving them looking at an empty screen
+      // because the card is still filtered out of mySessions.
+      myActiveHere.forEach(w => unhideInspSessionLocal(w.id));
       // v10.11 — selecting an order I'm already actively inspecting has
       // nothing left for the picker card to do (the real scan UI is
       // already below in "My active sessions") — collapse the card back
@@ -4880,6 +4947,9 @@ function doEndWork(wid, pallets, inspData){
     // onOrderChange/renderInspDoneCard) is now stale: force the next
     // check to hit the server instead of redrawing last known state.
     delete _inspProgCache[w.oid];
+    // v14.18 — this session is finished, so drop its "hidden via 나가기"
+    // flag (if any) rather than leave a stale id sitting in localStorage.
+    unhideInspSessionLocal(wid);
   }
 
   showCompletionCard(wid, w, nm, pallets, hhmm, inspData);
@@ -6483,6 +6553,8 @@ window.delEntry = async function(wid){
   // keep seeing a stale complete/partial state on the Work tab.
   const _delW = S.works.find(x => x.id === wid);
   if (_delW) delete _inspProgCache[_delW.oid];
+  // v14.18 — drop any "hidden via 나가기" flag for the deleted entry too.
+  unhideInspSessionLocal(wid);
   // v14.8 — this used to remove the row from the list optimistically
   // (before the server confirmed anything) and only put it back if the
   // call failed. Deleting an entry with many InspectionResults rows could
