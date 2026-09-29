@@ -1072,6 +1072,13 @@ function unhideInspSessionLocal(wid){
 window.hideInspSession = function(wid){
   const arr = loadHiddenInspSessions();
   if (arr.indexOf(wid) === -1) { arr.push(wid); saveHiddenInspSessions(arr); }
+  // v14.27 — also tell the server this session is now paused (see
+  // pauseWork_), so its clock stops counting toward NetMinutes/KPI from
+  // this moment on, regardless of how long it takes the worker to come
+  // back and resume it (or a manager to Force End it). Best-effort and
+  // non-blocking, same pattern as pushMyLiveScan elsewhere — the worker
+  // should never wait on a network call just to leave this screen.
+  apiOp('pauseWork', { entryId: wid, worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : '' });
   updateBadges();
   go('dash');
 };
@@ -3357,6 +3364,34 @@ async function onOrderChange(){
       // the active-session card (with all their scanned progress) reappears
       // immediately, instead of leaving them looking at an empty screen
       // because the card is still filtered out of mySessions.
+      //
+      // v14.27 — before unhiding, tell the server to actually resume any
+      // paused session (see pauseWork_/resumeWork_) so its clock stops
+      // excluding time from now on, AND so we find out here — not after
+      // showing a stale scan screen — if someone else finished this order
+      // entirely while this worker was away doing something else. A
+      // completed order can't be re-entered for any stage, paused session
+      // or not.
+      const pausedHere = myActiveHere.filter(w => isInspSessionHidden(w.id));
+      if (pausedHere.length) {
+        const worker = WS ? WS.worker : CW, wpin = WS ? WS.wpin : '';
+        const results = await Promise.all(pausedHere.map(w => apiOp('resumeWork', { entryId: w.id, worker, wpin })));
+        const blocked = results.find(out => out.net && out.res && out.res.ok === false && out.res.error === 'order_completed');
+        if (blocked) {
+          const wrap = document.getElementById('inspScanStartWrap');
+          if (wrap) wrap.innerHTML = `<div style="text-align:center;padding:16px 10px">
+            <div style="font-size:13px;color:var(--green);font-weight:700;margin-bottom:4px"><i class="ri-checkbox-circle-fill"></i> 이 오더는 이미 완료되었습니다</div>
+            <div style="font-size:11.5px;color:var(--t3)">다른 작업자가 검수를 마쳤습니다 — 더 이상 들어갈 수 없습니다.</div>
+          </div>`;
+          return;
+        }
+        // A network/server hiccup on resumeWork itself (not an
+        // order_completed refusal) fails OPEN here — the worker's own
+        // still-genuinely-open session must not get stranded behind a
+        // flaky connection. Worst case, this one pause's duration doesn't
+        // get excluded from NetMinutes, which is a minor KPI nit, not a
+        // safety problem.
+      }
       myActiveHere.forEach(w => unhideInspSessionLocal(w.id));
       // v10.11 — selecting an order I'm already actively inspecting has
       // nothing left for the picker card to do (the real scan UI is
@@ -3892,6 +3927,16 @@ function doStartWork(oid, items, qty, pageFrom, pageTo){
     if (!res.ok && res.error === 'page_range_taken') {
       S.works = S.works.filter(w => w.id !== tid);
       toast(`⚠ Pages ${res.claimedFrom}–${res.claimedTo} were just claimed${res.claimedWorker?' by '+res.claimedWorker:''} — pick a different range`, 'err');
+      loadData().then(() => { updateBadges(); renderStageContent(); });
+      finish(); return;
+    }
+    // v14.27 — this order's inspection genuinely finished (possibly just
+    // now, by someone else, while this request was in flight) — no stage
+    // can be started on it anymore. Roll back the optimistic entry and
+    // refresh so the picker stops offering it.
+    if (!res.ok && res.error === 'order_completed') {
+      S.works = S.works.filter(w => w.id !== tid);
+      toast('✔ 이 오더는 이미 완료되었습니다 — 더 이상 시작할 수 없습니다', 'err');
       loadData().then(() => { updateBadges(); renderStageContent(); });
       finish(); return;
     }
@@ -6643,13 +6688,15 @@ window.delEntry = async function(wid){
   }
 };
 
-// v14.24 — a session that's still open (no End time) but genuinely stuck
-// (worker forgot to tap "End", or exited via "나가기" and never came
-// back) silently blocks that worker from starting PICK anywhere — PICK
-// requires zero active sessions for that worker (see startWork_/
-// busy_active). Unlike Delete (which archives it and loses its Net
-// time), this properly closes it with a real EndTime/NetMin, exactly as
-// if the worker had tapped "End" themselves, so KPI stays accurate.
+// v14.24 — a manager's way to properly close a session that's still open
+// (no End time) but genuinely stuck (worker forgot to tap "End", or
+// exited via "나가기"/paused and never came back to resume it). PICK no
+// longer has any exclusivity rule (v14.27 — see startWork_), so this is
+// no longer needed to unblock a worker's PICK; it's still useful whenever
+// a manager just wants a stuck entry closed out with a real, accurate
+// EndTime/NetMin instead of left open indefinitely. Unlike Delete (which
+// archives it and loses its Net time), this ends it exactly as if the
+// worker had tapped "End" themselves, so KPI stays accurate.
 window.forceEndEntry = async function(wid){
   const w = S.works.find(x => x.id === wid);
   if (!confirm(`Force-end this session now?\n${w ? w.oid + ' · ' + w.w + ' · ' + w.stage : ''}\n\nThis closes it with the current time as End time (keeps its Net time for KPI) and immediately frees this worker to start other work. Use this for a stuck/forgotten session — not one they're actually still working on.`)) return;
