@@ -1048,16 +1048,18 @@ window.setUnitType = function(wid, type){
 function saveScanState(wid, st){ _scanState[wid] = st; try { localStorage.setItem('wms_scan_' + wid, JSON.stringify(st)); } catch(_){} }
 function clearScanState(wid){ delete _scanState[wid]; try { localStorage.removeItem('wms_scan_' + wid); } catch(_){} }
 
-// ── v14.18 — "나가기" on an in-progress INSP session used to only
-// navigate to Dashboard: the session itself stayed active on the server
-// (nothing here ends it — that's the point, so nothing is lost), so
-// coming back to Work > Inspection kept showing the exact same
-// "in-progress" card every time, which looked like exiting hadn't done
-// anything. This hides that ONE session's card on THIS device only —
-// scanned progress is completely untouched, server-side and in
-// localStorage — until the worker explicitly taps "이어하기" to bring it
-// back. Purely a local display preference, so it's kept in its own
-// localStorage key rather than synced anywhere.
+// ── v14.20 — "나가기" on an in-progress INSP session: a complete exit.
+// The session card disappears, and (as of v14.19/14.20) EVERY visible
+// "active" indicator for it disappears too — the order dropdown's "⚡
+// Active" tag, the Inspection stage-tab's "N active" count, and the Work
+// nav badge (see updateBadges/updateTabStatus/orderOpts). There is no
+// separate "resume" list (v14.18 had one — removed per explicit feedback:
+// re-selecting the order from the dropdown IS the resume action, nothing
+// else is needed). Nothing server-side is touched by 나가기 itself — the
+// session stays open (no endT) so the worker's already-scanned progress
+// is exactly where they left it — re-selecting the same order just picks
+// up scanning wherever the SKU checklist still shows gaps. This is purely
+// a local display flag, kept in its own localStorage key.
 function loadHiddenInspSessions(){
   try { return JSON.parse(localStorage.getItem('wms_hidden_insp') || '[]') || []; } catch(_) { return []; }
 }
@@ -1070,11 +1072,8 @@ function unhideInspSessionLocal(wid){
 window.hideInspSession = function(wid){
   const arr = loadHiddenInspSessions();
   if (arr.indexOf(wid) === -1) { arr.push(wid); saveHiddenInspSessions(arr); }
+  updateBadges();
   go('dash');
-};
-window.unhideInspSession = function(wid){
-  unhideInspSessionLocal(wid);
-  renderStageContent();
 };
 
 /** Returns cached SKU-level pick list for an order, or null while it's still loading (fetch kicked off in background). */
@@ -1235,7 +1234,11 @@ function renderWorkerChip(){
 }
 
 function updateBadges(){
-  const n = S.works.filter(w => w.w === CW && !w.endT).length;
+  // v14.20 — this Work-tab badge counts "sessions I still need to deal
+  // with", so an INSP session hidden via 나가기 (a deliberate, complete
+  // exit — see hideInspSession) must not count here either, same as the
+  // stage-tab status and the order dropdown's Active tag.
+  const n = S.works.filter(w => w.w === CW && !w.endT && !(w.stage === 'INSP' && isInspSessionHidden(w.id))).length;
   const btn = document.querySelector('[data-p="work"]'); if (!btn) return;
   let b = btn.querySelector('.nb-badge');
   if (n > 0) { if (!b) { b = document.createElement('span'); b.className = 'nb-badge'; btn.appendChild(b); } b.textContent = n; }
@@ -2913,37 +2916,6 @@ function renderStageContent(){
     </div>`;
   }
 
-  // v14.18 — sessions this worker hid via "나가기" (still active on the
-  // server, scan progress untouched) — shown as a compact resume list
-  // rather than the full session card, so they stay out of the way but
-  // aren't lost.
-  let hiddenSect = '';
-  if (s === 'INSP') {
-    const hiddenIds = loadHiddenInspSessions();
-    const hiddenSessions = hiddenIds.length
-      ? S.works.filter(w => w.w === CW && w.stage === 'INSP' && !w.endT && hiddenIds.indexOf(w.id) !== -1)
-      : [];
-    // Clean up hidden-flags for sessions that ended or vanished elsewhere,
-    // so the list (and localStorage) don't silently accumulate stale ids.
-    const stillValidIds = hiddenSessions.map(w => w.id);
-    if (stillValidIds.length !== hiddenIds.length) saveHiddenInspSessions(stillValidIds);
-    if (hiddenSessions.length) {
-      hiddenSect = `<div style="margin-bottom:14px">
-        <div class="section" style="margin-top:0"><i class="ri-eye-off-line"></i> 숨겨진 세션 (${hiddenSessions.length}) — 진행상황 저장됨</div>
-        ${hiddenSessions.map(w => {
-          const o = S.orders.find(x => x.id === w.oid);
-          return `<div class="session-card ${bdcl}" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px">
-            <div>
-              <div class="session-title" style="font-size:13px">${w.oid}</div>
-              <div class="session-sub" style="font-size:11px">${o?.ch||''} · ${o?.cu||''} · 시작 ${w.startT||'—'}</div>
-            </div>
-            <button class="btn btn-sm" onclick="unhideInspSession('${w.id}')"><i class="ri-eye-line"></i> 이어하기</button>
-          </div>`;
-        }).join('')}
-      </div>`;
-    }
-  }
-
   const orderOpts = S.orders.map(o => {
     const myHere = S.works.filter(w => w.oid===o.id && w.w===CW && w.stage===s && !w.endT).length;
     // v10.14 — once every page of a PICK order is already claimed (by me
@@ -3086,7 +3058,7 @@ function renderStageContent(){
     </div>`;
   }
 
-  container.innerHTML = s === 'INSP' ? (startSect + activeSect + hiddenSect) : (activeSect + startSect);
+  container.innerHTML = s === 'INSP' ? (startSect + activeSect) : (activeSect + startSect);
   startSessionTimer();
 
   // Restore whatever the worker had selected/typed before this re-render.
