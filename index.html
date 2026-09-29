@@ -3121,7 +3121,7 @@ function pageRangeOverlapsClaimed(oid, from, to){
   return getClaimedPickPages(oid).some(([cf, ct]) => from <= ct && to >= cf);
 }
 
-function onOrderChange(){
+async function onOrderChange(){
   const oid = document.getElementById('workOrder')?.value;
   const el = document.getElementById('workOrderInfo'); if (!el) return;
   if (!oid) {
@@ -3225,28 +3225,47 @@ function onOrderChange(){
       return;
     }
     // v14.5 — before auto-starting, check whether this order's inspection
-    // is already DONE (by me or anyone — the checklist/print math already
-    // combines everyone's scans, so once one ended session exists the
-    // order is genuinely finished). Previously this always fell through
-    // to startWork() below, so re-selecting a finished order silently
-    // created another ended work-entry every time — the direct cause of
-    // "INSP done ×4" piling up and the green Finish button reappearing on
-    // an order that was already done. v14.5 also fixes the follow-on bug:
-    // "Inspect again anyway" used to just call startWork() outright, which
-    // opened the FULL active session again (scan UI + live End Inspection
-    // button) — indistinguishable from a real in-progress inspection, and
-    // one accidental tap could re-trigger the whole finish flow on an
-    // order that was already correctly closed out. Now a finished order
-    // shows a clearly read-only "Complete" card with only the print
-    // actions (no scan UI, no End Inspection button); re-inspecting is a
-    // separate, explicitly confirmed action, not one tap away.
-    const orderDoneInsp = done > 0; // `done` here is the count of ended INSP sessions on this order (any worker)
-    if (orderDoneInsp) {
+    // is already DONE. v14.9 fixes a real inconsistency this introduced:
+    // it used to treat "at least one ended session exists" (done > 0) as
+    // proof the order was fully complete, and label it "Complete" on that
+    // basis alone. Once a duplicate/erroneous session got deleted (the
+    // cleanup this same conversation walked through for the old ×N-session
+    // bug), that was no longer true — the packing slip could show plenty
+    // of never-actually-scanned items while the dropdown still confidently
+    // said "✅ Complete". "Ended" and "actually fully accounted for" are
+    // different things, and only the SAME combined data the packing slip
+    // itself uses (getPrintReadyProgress) can tell them apart — so that's
+    // what this checks now, instead of the cheap ended-session count.
+    if (done > 0) {
       const wrap = document.getElementById('inspScanStartWrap');
-      if (wrap) {
-        wrap.innerHTML = `
+      if (wrap) wrap.innerHTML = `<div style="font-size:12px;color:var(--t3);text-align:center;padding:10px 0"><i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> Checking actual progress...</div>`;
+      let prog = null;
+      try { prog = await getPrintReadyProgress(oid); } catch(e) { console.warn('getPrintReadyProgress failed', e); }
+      // If the order changed again while this was in flight, don't clobber
+      // whatever the worker has since selected.
+      if (document.getElementById('workOrder')?.value !== oid) return;
+      const wrap2 = document.getElementById('inspScanStartWrap');
+      if (!wrap2) return;
+      if (prog && !prog.ready) {
+        // Genuinely partial — offer to CONTINUE (not "re-inspect from
+        // scratch"): startWork() opens a session whose checklist already
+        // shows everything already covered as done (via the live-baseline
+        // merge), so only the real gap is left to scan.
+        wrap2.innerHTML = `
         <div style="text-align:center;padding:10px 0 4px">
-          <div style="font-size:13px;color:var(--green);font-weight:700;margin-bottom:10px"><i class="ri-checkbox-circle-fill"></i> Inspection complete — ${done} session${done>1?'s':''} closed out</div>
+          <div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:10px"><i class="ri-error-warning-line"></i> Partially complete — ${prog.skuDone}/${prog.skuTotal} SKUs accounted for</div>
+          <div style="display:flex;gap:6px;margin-bottom:10px">
+            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','box',this)"><i class="ri-printer-line"></i> Packing Slip</button>
+            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat',this)"><i class="ri-file-list-3-line"></i> Flat List</button>
+            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${oid}',this)"><i class="ri-price-tag-3-line"></i> Labels</button>
+          </div>
+          <button class="btn ${SBTN[CS]} btn-block" onclick="startWork()"><i class="ri-play-circle-line"></i> Continue inspecting (남은 항목 계속 검수)</button>
+        </div>`;
+        return;
+      }
+      wrap2.innerHTML = `
+        <div style="text-align:center;padding:10px 0 4px">
+          <div style="font-size:13px;color:var(--green);font-weight:700;margin-bottom:10px"><i class="ri-checkbox-circle-fill"></i> Inspection complete${prog ? ` — ${prog.skuDone}/${prog.skuTotal} SKUs` : ''}</div>
           <div style="display:flex;gap:6px;margin-bottom:10px">
             <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','box',this)"><i class="ri-printer-line"></i> Packing Slip</button>
             <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat',this)"><i class="ri-file-list-3-line"></i> Flat List</button>
@@ -3254,7 +3273,6 @@ function onOrderChange(){
           </div>
           <button class="btn btn-sm" style="color:var(--t3)" onclick="if(confirm('이 오더는 이미 검수 완료되었습니다. 정말 다시 검수를 시작하시겠습니까?'))startWork();"><i class="ri-add-line"></i> Re-inspect (재검수 시작)</button>
         </div>`;
-      }
       return;
     }
     // v10.17 — auto-start Inspection the instant an order is picked from
@@ -6186,7 +6204,7 @@ window.renderEntries = function(){
         <td class="mono" style="color:var(--blue)">${w.pageFrom!=null?`${w.pageFrom}${w.pageTo&&w.pageTo!==w.pageFrom?'–'+w.pageTo:''}`:'—'}</td>
         <td class="mono" style="color:var(--amber)">${w.pallets!==null?fmtPallets(w.pallets):'—'}</td>
         <td>${w.stage==='INSP' && w.inspResult
-              ? `<span class="badge ${w.inspResult==='PASS'?'b-pass':'b-issue'}" style="font-size:10px;padding:2px 7px">${w.inspResult}</span> <span class="mono" style="font-size:11px">${w.scanQty!=null?w.scanQty:''}</span>`
+              ? `<span class="badge ${w.inspResult==='PASS'?'b-pass':'b-issue'}" style="font-size:10px;padding:2px 7px" title="${(w.inspNote||'').replace(/"/g,'&quot;') || 'Inspection result'}">${w.inspResult}</span> ${w.scanQty!=null?`<span class="mono" style="font-size:11px;color:var(--t3)" title="Quantity this session logged as scanned/packed">${w.scanQty} scanned</span>`:''}`
               : '—'}</td>
         <td class="mono">${w.startT||'—'}</td><td class="mono">${w.endT||'—'}</td>
         <td class="mono" style="color:var(--teal)">${fmtMin(w.netMin)}</td>
