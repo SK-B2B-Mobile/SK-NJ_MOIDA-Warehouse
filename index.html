@@ -2855,9 +2855,9 @@ function renderStageContent(){
             ? `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:8px 12px"><i class="ri-checkbox-circle-fill"></i> This order is fully accounted for (${readyInfo.total}/${readyInfo.total}, combining everyone's scans)</div>`
             : ''}
         ${s==='INSP' ? `<div style="display:flex;gap:6px;margin-bottom:8px">
-          <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${w.oid}','box')" title="Per box/pallet breakdown"><i class="ri-printer-line"></i> Packing Slip</button>
-          <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${w.oid}','flat')" title="Whole order, one combined list"><i class="ri-file-list-3-line"></i> Flat List</button>
-          <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${w.oid}')" title="Progress + shipping labels"><i class="ri-price-tag-3-line"></i> Labels</button>
+          <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${w.oid}','box',this)" title="Per box/pallet breakdown"><i class="ri-printer-line"></i> Packing Slip</button>
+          <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${w.oid}','flat',this)" title="Whole order, one combined list"><i class="ri-file-list-3-line"></i> Flat List</button>
+          <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${w.oid}',this)" title="Progress + shipping labels"><i class="ri-price-tag-3-line"></i> Labels</button>
         </div>` : ''}
         <button class="btn btn-green btn-block btn-lg${readyInfo && readyInfo.ready ? ' ready-to-finish' : ''}"
           onclick="endWork('${w.id}','${s}')" ${inf ? 'disabled' : ''}
@@ -3248,9 +3248,9 @@ function onOrderChange(){
         <div style="text-align:center;padding:10px 0 4px">
           <div style="font-size:13px;color:var(--green);font-weight:700;margin-bottom:10px"><i class="ri-checkbox-circle-fill"></i> Inspection complete — ${done} session${done>1?'s':''} closed out</div>
           <div style="display:flex;gap:6px;margin-bottom:10px">
-            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','box')"><i class="ri-printer-line"></i> Packing Slip</button>
-            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat')"><i class="ri-file-list-3-line"></i> Flat List</button>
-            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${oid}')"><i class="ri-price-tag-3-line"></i> Labels</button>
+            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','box',this)"><i class="ri-printer-line"></i> Packing Slip</button>
+            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat',this)"><i class="ri-file-list-3-line"></i> Flat List</button>
+            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${oid}',this)"><i class="ri-price-tag-3-line"></i> Labels</button>
           </div>
           <button class="btn btn-sm" style="color:var(--t3)" onclick="if(confirm('이 오더는 이미 검수 완료되었습니다. 정말 다시 검수를 시작하시겠습니까?'))startWork();"><i class="ri-add-line"></i> Re-inspect (재검수 시작)</button>
         </div>`;
@@ -3353,9 +3353,9 @@ async function loadOrderProgressPreview(oid){
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <span id="orderProgressLabel" style="font-size:11px;font-weight:700;color:${cached ? cached.labelColor : 'var(--t3)'}">${cached ? cached.labelText : 'Checking progress…'}</span>
       <span style="display:flex;gap:4px">
-        <button class="btn btn-sm" style="padding:3px 8px" onclick="printOrderPackingSlip('${oid}','box')" title="Per box/pallet breakdown"><i class="ri-printer-line"></i> Slip</button>
-        <button class="btn btn-sm" style="padding:3px 8px" onclick="printOrderPackingSlip('${oid}','flat')" title="Whole order, one combined list"><i class="ri-file-list-3-line"></i> Flat</button>
-        <button class="btn btn-sm" style="padding:3px 8px" onclick="showOrderProgressResult('${oid}')"><i class="ri-price-tag-3-line"></i> Labels</button>
+        <button class="btn btn-sm" style="padding:3px 8px" onclick="printOrderPackingSlip('${oid}','box',this)" title="Per box/pallet breakdown"><i class="ri-printer-line"></i> Slip</button>
+        <button class="btn btn-sm" style="padding:3px 8px" onclick="printOrderPackingSlip('${oid}','flat',this)" title="Whole order, one combined list"><i class="ri-file-list-3-line"></i> Flat</button>
+        <button class="btn btn-sm" style="padding:3px 8px" onclick="showOrderProgressResult('${oid}',this)"><i class="ri-price-tag-3-line"></i> Labels</button>
       </span>
     </div>
     <div id="orderProgressBars">${cached ? cached.barsHtml : ''}</div>
@@ -3812,7 +3812,7 @@ function fmtPallets(v){
   return Number.isInteger(n) ? n.toString() : n.toFixed(1);
 }
 
-window.endWork = function(wid, stage){
+window.endWork = async function(wid, stage){
   const w = S.works.find(x => x.id === wid); if (!w || _pending[wid]) return;
   if (stage === 'PICK') {
     doEndWork(wid, null);
@@ -3826,8 +3826,28 @@ window.endWork = function(wid, stage){
     // to print labels), the same place Confirm on that list used to lead.
     const items = _orderItemsCache[w.oid] || [];
     const st = loadScanState(wid);
-    if (items.length > 0 && st.mode === 'sku' && skuChecklistReadyInfo(w)?.ready) {
-      proceedToPrintOptions(wid);
+    if (items.length > 0 && st.mode === 'sku') {
+      // v14.8 — force a FRESH live-baseline fetch right here, awaited,
+      // before deciding anything. Everything downstream (the "already
+      // done" checklist, the Force-Complete gap math) reads from
+      // _liveBaseline[wid], which was previously whatever the last 5s
+      // poll happened to leave behind. If End Inspection was tapped right
+      // after starting/re-inspecting — before that first poll had a
+      // chance to land — _liveBaseline[wid] was still completely EMPTY,
+      // so every item looked untouched by anyone, and Force Complete then
+      // logged a FULL extra copy of the order's quantities on top of
+      // whatever was already saved. That's the actual mechanism behind a
+      // force-completed SKU's count climbing on every repeated test
+      // (54 → 72 → ...). Awaiting a real fetch here closes that window
+      // completely, at the cost of one extra round-trip when the modal
+      // opens.
+      toast('Checking latest progress...', '');
+      await refreshLiveBaseline(wid);
+      if (skuChecklistReadyInfo(w)?.ready) {
+        proceedToPrintOptions(wid);
+      } else {
+        openInspEndModal(wid);
+      }
     } else {
       openInspEndModal(wid);
     }
@@ -4354,11 +4374,28 @@ async function getOrderBoxGroups(oid){
   return { groups, unitType };
 }
 
+// v14.8 — Packing Slip / Flat List / Labels used to only show a toast
+// ("Preparing...") while loading, which fades on its own timer and is
+// easy to miss entirely — a worker tapping the button had no reliable way
+// to tell whether the tap registered. Disabling the actual button that
+// was tapped and swapping its own label for a spinner is feedback that
+// can't be missed, tied to the exact thing they pressed.
+async function withBtnBusy(btn, busyHtml, fn){
+  if (!btn) return fn();
+  const orig = btn.innerHTML, wasDisabled = btn.disabled;
+  btn.disabled = true;
+  btn.innerHTML = busyHtml;
+  try { return await fn(); }
+  finally { btn.disabled = wasDisabled; btn.innerHTML = orig; }
+}
+const BTN_BUSY_HTML = '<i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> Loading...';
+
 // ── Order-level combined progress — shown after any worker ends their
 // portion. The packing slip only unlocks once every SKU is accounted for
 // across ALL contributors, matching the "whoever notices it's done prints
 // it" workflow. ─────────────────────────────────────────────────────
-window.showOrderProgressResult = async function(oid){
+window.showOrderProgressResult = async function(oid, btn){ return withBtnBusy(btn, BTN_BUSY_HTML, () => _showOrderProgressResult(oid)); };
+async function _showOrderProgressResult(oid){
   toast('Checking order progress...', '');
   let p;
   try {
@@ -4440,7 +4477,8 @@ window.printLabelsForOrder = function(oid){
 // no box breakdown (mode:'flat'). Both pull from the SAME live-merged
 // data (getPrintReadyProgress) so their totals always match the on-screen
 // checklist, no matter who has or hasn't pressed End Inspection yet.
-window.printOrderPackingSlip = async function(oid, mode){
+window.printOrderPackingSlip = async function(oid, mode, btn){ return withBtnBusy(btn, BTN_BUSY_HTML, () => _printOrderPackingSlip(oid, mode)); };
+async function _printOrderPackingSlip(oid, mode){
   toast('Preparing packing slip...', '');
   let p;
   try {
@@ -6140,7 +6178,7 @@ window.renderEntries = function(){
   const ws = q ? S.works.filter(w => w.oid.toUpperCase().includes(q) || w.w.toUpperCase().includes(q)) : S.works.slice(0, 50);
   document.getElementById('entryTable').innerHTML = ws.length ?
     `<table class="mgr-tbl"><thead><tr><th>Order</th><th>Worker</th><th>Stage</th><th>Items</th><th>QTY</th><th>Pages</th><th>Pallets</th><th>Result</th><th>Start</th><th>End</th><th>Net</th><th></th></tr></thead><tbody>${
-      ws.map(w => `<tr>
+      ws.map(w => `<tr id="entryRow_${w.id}">
         <td class="mono">${w.oid}</td><td>${w.w}</td>
         <td><span style="color:${SCOL[w.stage]||'var(--t)'};font-weight:700;font-size:11px">${w.stage}</span></td>
         <td class="mono">${w.items!==null?w.items:'—'}</td>
@@ -6259,14 +6297,32 @@ window.saveEntryEdit = function(wid){
     }
   });
 };
-window.delEntry = function(wid){
+window.delEntry = async function(wid){
   if (!confirm('Delete this entry?\n(Archived, not erased — recoverable from Sheets.)')) return;
-  const bk = S.works.find(w => w.id === wid);
-  S.works = S.works.filter(w => w.id !== wid);
-  toast('Deleted', 'ok'); renderEntries();
-  mgrOp('deleteEntry', { entryId:wid }).then(out => {
-    if (!out.net || !out.res.ok) { if (bk) S.works.push(bk); toast('⚠ Delete failed', 'err'); renderEntries(); }
-  });
+  // v14.8 — this used to remove the row from the list optimistically
+  // (before the server confirmed anything) and only put it back if the
+  // call failed. Deleting an entry with many InspectionResults rows could
+  // take a moment even now that it's batched, and on a slow connection
+  // the request would time out client-side — the row would reappear with
+  // a "Delete failed" toast even on a delete that actually succeeded (or
+  // would succeed a moment later) server-side, which is exactly what
+  // looked like "deleted, then came back". Waiting for the real result
+  // before touching the list, with a visible busy state on the row's own
+  // buttons, removes that misleading flicker.
+  const row = document.getElementById('entryRow_' + wid);
+  const btns = row ? row.querySelectorAll('button') : [];
+  btns.forEach(b => b.disabled = true);
+  if (row) row.style.opacity = '.5';
+  toast('Deleting...', '');
+  const out = await mgrOp('deleteEntry', { entryId:wid }, 45000);
+  if (out.net && out.res.ok) {
+    S.works = S.works.filter(w => w.id !== wid);
+    toast('Deleted', 'ok'); renderEntries();
+  } else {
+    btns.forEach(b => b.disabled = false);
+    if (row) row.style.opacity = '1';
+    toast('⚠ Delete failed — connection issue, try again', 'err');
+  }
 };
 
 // ── Manager password — verified server-side ──
