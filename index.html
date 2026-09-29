@@ -2024,6 +2024,7 @@ function renderSkuChecklistUI(w, items, st){
     <div id="lastScanBanner_${w.id}">${lastScanHtml}</div>
     <div class="scan-input-row" style="display:flex;gap:6px">
       <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
+        oninput="armScanAutoTrigger('scanIn_${w.id}', () => scanHit('${w.id}'))"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
       <button type="button" class="btn btn-sm" style="flex-shrink:0" title="바코드/SKU 직접 입력 (스캔이 안 될 때)" onclick="openManualScanModal('${w.id}')"><i class="ri-keyboard-line"></i></button>
     </div>
@@ -2072,6 +2073,7 @@ function renderAggScanUI(w, st){
     <div class="scan-progress" style="margin-top:6px"><div class="scan-progress-fill" id="scanBar_${w.id}" style="width:${pct}%;background:${color}"></div></div>
     <div class="scan-input-row" style="margin-top:10px">
       <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
+        oninput="armScanAutoTrigger('scanIn_${w.id}', () => scanHit('${w.id}'))"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
     </div>
   </div>`;
@@ -2134,13 +2136,46 @@ window.submitManualScan = function(wid){
   registerSkuScan(wid, v);
 };
 
+// v14.26 — some rugged scanner handhelds' keyboard-emulation "wedge" can be
+// configured (or drift after an OS/firmware update) to send a terminator
+// other than a real Enter keypress — Tab, a different keycode, or none at
+// all. When that happens the digits still type into this box fine (the
+// scanner is just acting as a keyboard) but the onkeydown listener below
+// never sees event.key==='Enter', so the code just sits there and NOTHING
+// happens: no beep, no error, no visible clue why. This is what hit a
+// worker on IM00234239 (Sept 29) — barcode visibly typed into the scan
+// box, screen totally unresponsive, persisting across a full page reload
+// (ruling out a client-state glitch — the box was simply never told the
+// scan was "done").
+// Fix: don't rely solely on catching Enter. A real scanner burst-types its
+// whole code in a few ms, far faster than a human ever types, so if the
+// box goes quiet for a short moment right after new characters land,
+// treat that as "the scan is finished" and fire the same handler Enter
+// would have — regardless of whether a terminator ever arrives. The Enter
+// handler is untouched (still fires immediately for scanners that DO send
+// it); this is purely an additional safety net. See armScanAutoTrigger.
+let _scanAutoTimers = {};
+function armScanAutoTrigger(inputId, onFire){
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  clearTimeout(_scanAutoTimers[inputId]);
+  _scanAutoTimers[inputId] = setTimeout(() => {
+    if (inp.value.trim().length >= 4) onFire();
+  }, 150);
+}
+
 window.scanHit = function(wid){
   const inp = document.getElementById('scanIn_' + wid);
   const raw = inp ? inp.value.trim() : '';
+  // Nothing to process — most commonly a trailing Enter that arrives AFTER
+  // armScanAutoTrigger already handled this same scan and cleared the box
+  // (a scanner whose terminator shows up late relative to our idle-window
+  // fallback). Silently doing nothing here is correct, not a bug: a real
+  // empty scan attempt isn't a thing a barcode scanner can produce.
+  if (!raw) return;
   if (inp) inp.value = '';
   const st = loadScanState(wid);
   if (st.mode === 'sku') {
-    if (!raw) { toast('Scan a barcode first', 'err'); return; }
     registerSkuScan(wid, raw);
   } else {
     scanAdjust(wid, 1);
@@ -3541,6 +3576,7 @@ function renderInspScanStart(oid){
   wrap.innerHTML = `
     <div class="scan-input-row">
       <input class="fi" type="text" id="pickerScanIn" placeholder="Scan barcode to begin inspection" autocomplete="off" style="flex:1;font-size:15px;padding:12px 14px"
+        oninput="armScanAutoTrigger('pickerScanIn', startInspectionByScan)"
         onkeydown="if(event.key==='Enter'){event.preventDefault();startInspectionByScan()}">
       <button class="btn btn-purple" onclick="startInspectionByScan()" title="Begin"><i class="ri-play-circle-line"></i></button>
     </div>
