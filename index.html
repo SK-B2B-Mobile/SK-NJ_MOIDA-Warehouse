@@ -1953,9 +1953,10 @@ function renderSkuChecklistUI(w, items, st){
     </div>
 
     <div id="lastScanBanner_${w.id}">${lastScanHtml}</div>
-    <div class="scan-input-row">
+    <div class="scan-input-row" style="display:flex;gap:6px">
       <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
+      <button type="button" class="btn btn-sm" style="flex-shrink:0" title="바코드/SKU 직접 입력 (스캔이 안 될 때)" onclick="openManualScanModal('${w.id}')"><i class="ri-keyboard-line"></i></button>
     </div>
 
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
@@ -2032,6 +2033,36 @@ window.saveAggCountEdit = function(wid){
   closeModal();
   toast('Count updated', 'ok');
   renderStageContent();
+};
+
+// v14.3 — manual entry, for when the physical barcode is torn/unreadable
+// and the scanner can't pick it up. Same modal-driven pipeline as a real
+// scan (registerSkuScan), just fed a typed value instead of one from the
+// scanner. Deliberately focuses its own input (this is a keyboard flow
+// on purpose), unlike the scan-triggered qty modal.
+window.openManualScanModal = function(wid){
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+      <i class="ri-keyboard-line" style="color:var(--purple)"></i> 바코드/SKU 직접 입력
+    </div>
+    <div class="fg">
+      <input class="fi" type="text" id="manualScanVal" placeholder="바코드 또는 SKU"
+        style="font-size:18px;text-align:center;font-weight:700"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();submitManualScan('${wid}')}">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-purple btn-sm" onclick="submitManualScan('${wid}')"><i class="ri-check-line"></i> 확인</button>
+    </div>
+  `);
+  setTimeout(() => document.getElementById('manualScanVal')?.focus(), 60);
+};
+window.submitManualScan = function(wid){
+  const v = (document.getElementById('manualScanVal')?.value || '').trim();
+  if (!v) { toast('바코드 또는 SKU를 입력하세요', 'err'); return; }
+  closeModal();
+  registerSkuScan(wid, v);
 };
 
 window.scanHit = function(wid){
@@ -2744,11 +2775,13 @@ function renderStageContent(){
           <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${w.oid}')" title="Progress + shipping labels"><i class="ri-price-tag-3-line"></i> Labels</button>
         </div>` : ''}
         <button class="btn btn-green btn-block btn-lg${readyInfo && readyInfo.ready ? ' ready-to-finish' : ''}"
-          onclick="endWork('${w.id}','${s}')" ${(inf || notReadyYet) ? 'disabled' : ''}
-          ${notReadyYet ? 'style="opacity:.5;cursor:not-allowed"' : ''}
-          title="${notReadyYet ? 'Scan (or flag) every item first' : ''}">
-          <i class="ri-checkbox-circle-line"></i> ${notReadyYet ? `Scan all items to finish (${readyInfo.done}/${readyInfo.total})` : SELABEL[s]}
+          onclick="endWork('${w.id}','${s}')" ${inf ? 'disabled' : ''}
+          title="${notReadyYet ? 'Tap to finish early — you can flag or force-complete what\'s left' : ''}">
+          <i class="ri-checkbox-circle-line"></i> ${notReadyYet ? `Finish early (${readyInfo.done}/${readyInfo.total} scanned)` : SELABEL[s]}
         </button>
+        ${s==='INSP' ? `<button class="btn" style="width:100%;justify-content:center;margin-top:8px;padding:10px;font-size:12.5px;font-weight:600;color:var(--t2)" onclick="go('dash')" title="진행 상황은 그대로 저장되어 있고, 나중에 다시 들어와서 이어할 수 있습니다">
+          <i class="ri-logout-box-r-line" style="font-size:14px"></i> 나가기 (진행 상황 저장됨)
+        </button>` : ''}
       </div>`;
     }).join('');
     activeSect = `<div style="margin-bottom:6px">
