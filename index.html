@@ -6458,6 +6458,7 @@ window.renderEntries = function(){
         <td class="mono" style="color:var(--teal)">${fmtMin(w.netMin)}</td>
         <td style="white-space:nowrap">
           ${(w.stage==='INSP' && w.endT) ? `<button class="btn btn-sm" style="padding:2px 5px" title="Reprint packing slip" onclick="reprintPackingSlip('${w.id}')"><i class="ri-printer-line"></i></button>` : ''}
+          ${!w.endT ? `<button class="btn btn-sm" style="color:var(--amber);padding:2px 5px" title="Force end — closes this stuck/open session now (keeps its net time), freeing this worker to start other work" onclick="forceEndEntry('${w.id}')"><i class="ri-stop-circle-line"></i></button>` : ''}
           <button class="btn btn-sm" style="padding:2px 5px" title="Edit" onclick="editEntryModal('${w.id}')"><i class="ri-edit-line"></i></button>
           <button class="btn btn-sm" style="color:var(--red);padding:2px 5px" title="Delete" onclick="delEntry('${w.id}')"><i class="ri-delete-bin-line"></i></button>
         </td>
@@ -6603,6 +6604,32 @@ window.delEntry = async function(wid){
     btns.forEach(b => b.disabled = false);
     if (row) row.style.opacity = '1';
     toast('⚠ Delete failed — connection issue, try again', 'err');
+  }
+};
+
+// v14.24 — a session that's still open (no End time) but genuinely stuck
+// (worker forgot to tap "End", or exited via "나가기" and never came
+// back) silently blocks that worker from starting PICK anywhere — PICK
+// requires zero active sessions for that worker (see startWork_/
+// busy_active). Unlike Delete (which archives it and loses its Net
+// time), this properly closes it with a real EndTime/NetMin, exactly as
+// if the worker had tapped "End" themselves, so KPI stays accurate.
+window.forceEndEntry = async function(wid){
+  const w = S.works.find(x => x.id === wid);
+  if (!confirm(`Force-end this session now?\n${w ? w.oid + ' · ' + w.w + ' · ' + w.stage : ''}\n\nThis closes it with the current time as End time (keeps its Net time for KPI) and immediately frees this worker to start other work. Use this for a stuck/forgotten session — not one they're actually still working on.`)) return;
+  const row = document.getElementById('entryRow_' + wid);
+  const btns = row ? row.querySelectorAll('button') : [];
+  btns.forEach(b => b.disabled = true);
+  toast('Force-ending...', '');
+  const out = await mgrOp('forceEndEntry', { entryId:wid }, 45000);
+  if (out.net && out.res.ok) {
+    if (w) { w.endT = out.res.endTime; w.netMin = out.res.netMinutes; w.grossMin = out.res.grossMinutes; }
+    if (w) unhideInspSessionLocal(wid);
+    toast('✓ Session ended', 'ok');
+    renderEntries(); updateBadges();
+  } else {
+    btns.forEach(b => b.disabled = false);
+    toast('⚠ ' + (out.net && out.res.error === 'already_ended' ? 'Already ended — refresh' : 'Force-end failed, try again'), 'err');
   }
 };
 
