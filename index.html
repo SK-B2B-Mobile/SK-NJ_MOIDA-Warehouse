@@ -2398,6 +2398,11 @@ let _lastScanned = {}; // wid -> { sku, barcode, name, qty, req, at } — for th
 let _liveBaseline = {};      // wid -> { key: combinedQtyFromOthers }
 let _liveContributors = {};  // wid -> [{ worker, skuCounts }, ...] — raw, for naming who covered what
 let _liveSyncedOnce = {};    // wid -> true once the first live-baseline fetch has resolved
+// v14.13 — oid -> last getPrintReadyProgress() result for an already-done
+// INSP order, so the periodic 30s auto-refresh can redraw the "Inspection
+// complete" card instantly from cache instead of flashing a spinner and
+// hiding the Packing Slip/Labels buttons on every tick (see onOrderChange).
+let _inspProgCache = {};
 let _livePollTimers = {};    // wid -> intervalId
 let _livePushTimers = {};    // wid -> debounce timeoutId
 let _liveSyncStartedAt = {}; // wid -> Date.now() when its poll first started — powers the "stuck? retry" fallback below
@@ -3121,6 +3126,39 @@ function pageRangeOverlapsClaimed(oid, from, to){
   return getClaimedPickPages(oid).some(([cf, ct]) => from <= ct && to >= cf);
 }
 
+// v14.13 — shared by onOrderChange's initial render and its cached/
+// background-refresh re-render, so both paths draw the exact same card.
+function renderInspDoneCard(wrap, oid, prog){
+  if (!wrap) return;
+  if (prog && !prog.ready) {
+    // Genuinely partial — offer to CONTINUE (not "re-inspect from
+    // scratch"): startWork() opens a session whose checklist already
+    // shows everything already covered as done (via the live-baseline
+    // merge), so only the real gap is left to scan.
+    wrap.innerHTML = `
+    <div style="text-align:center;padding:10px 0 4px">
+      <div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:10px"><i class="ri-error-warning-line"></i> Partially complete — ${prog.skuDone}/${prog.skuTotal} SKUs accounted for</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','box',this)"><i class="ri-printer-line"></i> Packing Slip</button>
+        <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat',this)"><i class="ri-file-list-3-line"></i> Flat List</button>
+        <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${oid}',this)"><i class="ri-price-tag-3-line"></i> Labels</button>
+      </div>
+      <button class="btn ${SBTN[CS]} btn-block" onclick="startWork()"><i class="ri-play-circle-line"></i> Continue inspecting (남은 항목 계속 검수)</button>
+    </div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <div style="text-align:center;padding:10px 0 4px">
+      <div style="font-size:13px;color:var(--green);font-weight:700;margin-bottom:10px"><i class="ri-checkbox-circle-fill"></i> Inspection complete${prog ? ` — ${prog.skuDone}/${prog.skuTotal} SKUs` : ''}</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','box',this)"><i class="ri-printer-line"></i> Packing Slip</button>
+        <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat',this)"><i class="ri-file-list-3-line"></i> Flat List</button>
+        <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${oid}',this)"><i class="ri-price-tag-3-line"></i> Labels</button>
+      </div>
+      <button class="btn btn-sm" style="color:var(--t3)" onclick="if(confirm('이 오더는 이미 검수 완료되었습니다. 정말 다시 검수를 시작하시겠습니까?'))startWork();"><i class="ri-add-line"></i> Re-inspect (재검수 시작)</button>
+    </div>`;
+}
+
 async function onOrderChange(){
   const oid = document.getElementById('workOrder')?.value;
   const el = document.getElementById('workOrderInfo'); if (!el) return;
@@ -3238,7 +3276,23 @@ async function onOrderChange(){
     // what this checks now, instead of the cheap ended-session count.
     if (done > 0) {
       const wrap = document.getElementById('inspScanStartWrap');
-      if (wrap) wrap.innerHTML = `<div style="font-size:12px;color:var(--t3);text-align:center;padding:10px 0"><i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> Checking actual progress...</div>`;
+      // v14.13 — the 30s background auto-refresh (setInterval in init())
+      // calls renderStageContent() on a timer, which rebuilds this whole
+      // section from scratch and re-runs onOrderChange() for whatever
+      // order was still selected. Since this branch is async (it awaits
+      // getPrintReadyProgress), that meant every single 30s tick blanked
+      // the Packing Slip/Labels buttons back to a spinner while it
+      // re-checked — a visible flicker, and if a worker's tap landed at
+      // that instant the button they were reaching for had just vanished.
+      // Fix: render from the last known result for this order INSTANTLY
+      // (no spinner), then quietly re-check in the background and only
+      // update the card if the real state actually differs.
+      const cached = _inspProgCache[oid];
+      if (cached) {
+        renderInspDoneCard(wrap, oid, cached);
+      } else if (wrap) {
+        wrap.innerHTML = `<div style="font-size:12px;color:var(--t3);text-align:center;padding:10px 0"><i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> Checking actual progress...</div>`;
+      }
       let prog = null;
       try { prog = await getPrintReadyProgress(oid); } catch(e) { console.warn('getPrintReadyProgress failed', e); }
       // If the order changed again while this was in flight, don't clobber
@@ -3246,33 +3300,9 @@ async function onOrderChange(){
       if (document.getElementById('workOrder')?.value !== oid) return;
       const wrap2 = document.getElementById('inspScanStartWrap');
       if (!wrap2) return;
-      if (prog && !prog.ready) {
-        // Genuinely partial — offer to CONTINUE (not "re-inspect from
-        // scratch"): startWork() opens a session whose checklist already
-        // shows everything already covered as done (via the live-baseline
-        // merge), so only the real gap is left to scan.
-        wrap2.innerHTML = `
-        <div style="text-align:center;padding:10px 0 4px">
-          <div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:10px"><i class="ri-error-warning-line"></i> Partially complete — ${prog.skuDone}/${prog.skuTotal} SKUs accounted for</div>
-          <div style="display:flex;gap:6px;margin-bottom:10px">
-            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','box',this)"><i class="ri-printer-line"></i> Packing Slip</button>
-            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat',this)"><i class="ri-file-list-3-line"></i> Flat List</button>
-            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${oid}',this)"><i class="ri-price-tag-3-line"></i> Labels</button>
-          </div>
-          <button class="btn ${SBTN[CS]} btn-block" onclick="startWork()"><i class="ri-play-circle-line"></i> Continue inspecting (남은 항목 계속 검수)</button>
-        </div>`;
-        return;
-      }
-      wrap2.innerHTML = `
-        <div style="text-align:center;padding:10px 0 4px">
-          <div style="font-size:13px;color:var(--green);font-weight:700;margin-bottom:10px"><i class="ri-checkbox-circle-fill"></i> Inspection complete${prog ? ` — ${prog.skuDone}/${prog.skuTotal} SKUs` : ''}</div>
-          <div style="display:flex;gap:6px;margin-bottom:10px">
-            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','box',this)"><i class="ri-printer-line"></i> Packing Slip</button>
-            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat',this)"><i class="ri-file-list-3-line"></i> Flat List</button>
-            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${oid}',this)"><i class="ri-price-tag-3-line"></i> Labels</button>
-          </div>
-          <button class="btn btn-sm" style="color:var(--t3)" onclick="if(confirm('이 오더는 이미 검수 완료되었습니다. 정말 다시 검수를 시작하시겠습니까?'))startWork();"><i class="ri-add-line"></i> Re-inspect (재검수 시작)</button>
-        </div>`;
+      if (prog) _inspProgCache[oid] = prog;
+      else if (!cached) { wrap2.innerHTML = `<div style="font-size:12px;color:var(--red);text-align:center;padding:10px 0">⚠ Could not check progress — <span style="text-decoration:underline;cursor:pointer" onclick="onOrderChange()">retry</span></div>`; return; }
+      renderInspDoneCard(wrap2, oid, prog || cached);
       return;
     }
     // v10.17 — auto-start Inspection the instant an order is picked from
@@ -4814,7 +4844,13 @@ function doEndWork(wid, pallets, inspData){
   w.endT = hhmm; w.netMin = nm;
   w.endISO = todayStr() + 'T' + hhmm + ':00';
   if (pallets !== null) w.pallets = pallets;
-  if (inspData) { w.scanQty = inspData.scannedQty; w.inspResult = inspData.inspResult; w.inspNote = inspData.inspNote; w.issueQty = inspData.issueQty || 0; }
+  if (inspData) {
+    w.scanQty = inspData.scannedQty; w.inspResult = inspData.inspResult; w.inspNote = inspData.inspNote; w.issueQty = inspData.issueQty || 0;
+    // v14.13 — this order's cached "already done" progress card (see
+    // onOrderChange/renderInspDoneCard) is now stale: force the next
+    // check to hit the server instead of redrawing last known state.
+    delete _inspProgCache[w.oid];
+  }
 
   showCompletionCard(wid, w, nm, pallets, hhmm, inspData);
   updateBadges(); renderStageContent();
@@ -6349,6 +6385,12 @@ window.saveEntryEdit = function(wid){
 };
 window.delEntry = async function(wid){
   if (!confirm('Delete this entry?\n(Archived, not erased — recoverable from Sheets.)')) return;
+  // v14.13 — deleting a session can change whether its order is actually
+  // fully accounted for, so drop any cached "already done" progress card
+  // for it (see onOrderChange/renderInspDoneCard) rather than let a worker
+  // keep seeing a stale complete/partial state on the Work tab.
+  const _delW = S.works.find(x => x.id === wid);
+  if (_delW) delete _inspProgCache[_delW.oid];
   // v14.8 — this used to remove the row from the list optimistically
   // (before the server confirmed anything) and only put it back if the
   // call failed. Deleting an entry with many InspectionResults rows could
