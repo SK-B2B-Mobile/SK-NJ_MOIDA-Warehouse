@@ -2757,14 +2757,17 @@ function orderStageStatusTag(o, stage){
     return '';
   }
   // v14.4 — INSP allows several workers to inspect the same order at once
-  // by design, so naming other workers (or a raw "done ×N" count of every
-  // ended session across everyone) in the order-picker dropdown was just
-  // confusing noise for the worker choosing their NEXT order — it reads
-  // like someone else's work is "showing up" in their screen. The only
-  // thing that actually matters before picking an order to inspect is
-  // whether it's been picked yet at all; who else is inspecting it, and
-  // any per-worker detail, still shows inside the order once selected
-  // (the live-synced checklist), where it was explicitly asked for.
+  // by design, so naming other workers in the order-picker dropdown was
+  // just confusing noise for the worker choosing their NEXT order — it
+  // reads like someone else's work is "showing up" in their screen. Who
+  // else is inspecting it, and any per-worker detail, still shows inside
+  // the order once selected (the live-synced checklist), where it was
+  // explicitly asked for.
+  // v14.5 — a plain completion state (no worker names, no confusing ×N
+  // count) IS worth showing here though: without it, a genuinely finished
+  // order looked identical to one nobody had touched, so there was no way
+  // to tell from the dropdown which orders just needed a reprint.
+  if (done.length) return ' — ✅ Complete';
   const pick = orderStageWork(o.id, 'PICK');
   if (!pick.active.length && !pick.done.length) return ' — ⏳ not picked yet';
   return '';
@@ -3193,21 +3196,35 @@ function onOrderChange(){
       renderStageContent();
       return;
     }
-    // v14.4 — before auto-starting, check whether I've already FINISHED
-    // an inspection on this exact order. Previously this always fell
-    // through to startWork() below, so re-selecting an order I'd already
-    // completed silently created another ended work-entry every time —
-    // the direct cause of "INSP done ×4" piling up and the green Finish
-    // button reappearing on an order that was genuinely already done.
-    // Mirrors PICK's existing "already picked" gate a few lines up.
-    const myDoneHereInsp = ws.some(w => w.w === CW && w.endT);
-    if (myDoneHereInsp) {
+    // v14.5 — before auto-starting, check whether this order's inspection
+    // is already DONE (by me or anyone — the checklist/print math already
+    // combines everyone's scans, so once one ended session exists the
+    // order is genuinely finished). Previously this always fell through
+    // to startWork() below, so re-selecting a finished order silently
+    // created another ended work-entry every time — the direct cause of
+    // "INSP done ×4" piling up and the green Finish button reappearing on
+    // an order that was already done. v14.5 also fixes the follow-on bug:
+    // "Inspect again anyway" used to just call startWork() outright, which
+    // opened the FULL active session again (scan UI + live End Inspection
+    // button) — indistinguishable from a real in-progress inspection, and
+    // one accidental tap could re-trigger the whole finish flow on an
+    // order that was already correctly closed out. Now a finished order
+    // shows a clearly read-only "Complete" card with only the print
+    // actions (no scan UI, no End Inspection button); re-inspecting is a
+    // separate, explicitly confirmed action, not one tap away.
+    const orderDoneInsp = done > 0; // `done` here is the count of ended INSP sessions on this order (any worker)
+    if (orderDoneInsp) {
       const wrap = document.getElementById('inspScanStartWrap');
       if (wrap) {
         wrap.innerHTML = `
-        <div style="text-align:center;padding:8px 0">
-          <div style="font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px"><i class="ri-checkbox-circle-line"></i> You already finished inspecting this order</div>
-          <button class="btn btn-sm" style="color:var(--t3)" onclick="startWork()"><i class="ri-add-line"></i> Inspect again anyway</button>
+        <div style="text-align:center;padding:10px 0 4px">
+          <div style="font-size:13px;color:var(--green);font-weight:700;margin-bottom:10px"><i class="ri-checkbox-circle-fill"></i> Inspection complete — ${done} session${done>1?'s':''} closed out</div>
+          <div style="display:flex;gap:6px;margin-bottom:10px">
+            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','box')"><i class="ri-printer-line"></i> Packing Slip</button>
+            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat')"><i class="ri-file-list-3-line"></i> Flat List</button>
+            <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${oid}')"><i class="ri-price-tag-3-line"></i> Labels</button>
+          </div>
+          <button class="btn btn-sm" style="color:var(--t3)" onclick="if(confirm('이 오더는 이미 검수 완료되었습니다. 정말 다시 검수를 시작하시겠습니까?'))startWork();"><i class="ri-add-line"></i> Re-inspect (재검수 시작)</button>
         </div>`;
       }
       return;
