@@ -4325,10 +4325,19 @@ async function getOrderBoxGroups(oid){
   const entries = S.works.filter(w => w.oid === oid && w.stage === 'INSP' && w.endT);
   const multiWorker = new Set(entries.map(e => e.w)).size > 1;
   let unitType = 'box';
+  // v14.7 — this used to await one getInspectionResults call PER ended
+  // session, one after another. An order with several closed-out sessions
+  // (multi-worker, or several accidental re-inspections from the older
+  // auto-restart bug) turned Packing Slip / Labels into that many
+  // sequential round-trips — the direct cause of both feeling stuck for a
+  // long time. Firing them all at once and assembling the groups
+  // afterward, in the original entries order, cuts the wait to whichever
+  // single call is slowest instead of the sum of all of them.
+  const perEntry = await Promise.all(entries.map(e => apiOp('getInspectionResults', { entryId: e.id })));
   const groups = [];
-  for (const e of entries) {
-    const out = await apiOp('getInspectionResults', { entryId: e.id });
-    if (!out.net || !out.res.ok) continue;
+  entries.forEach((e, i) => {
+    const out = perEntry[i];
+    if (!out.net || !out.res.ok) return;
     const rows = out.res.rows || [];
     if (rows[0]?.unitType) unitType = rows[0].unitType;
     const byBox = {};
@@ -4341,7 +4350,7 @@ async function getOrderBoxGroups(oid){
       const label = multiWorker ? `${e.w} · ${unitWord(unitType, true)} ${bn}` : `${unitWord(unitType, true)} ${bn}`;
       groups.push({ label, items: byBox[bn] });
     });
-  }
+  });
   return { groups, unitType };
 }
 
