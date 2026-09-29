@@ -290,9 +290,17 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ── Worker login screen ── */
-.login{position:fixed;inset:0;background:var(--bg);z-index:250;display:none;align-items:center;justify-content:center;padding:20px;overflow-y:auto}
+/* v14.6 — centering an overflowing flex child (align-items:center +
+   overflow-y:auto on the SAME element) is a known trap: once the login
+   grid grows taller than the screen (more workers added), the browser
+   can center it so far up that the top (brand title / subtitle) sits
+   above the scrollable region and can never be scrolled back into view.
+   Moving the scroll + max-height onto .login-box itself instead means
+   the box is always fully reachable top-to-bottom by scrolling *inside*
+   it, whatever its content height ends up being. */
+.login{position:fixed;inset:0;background:var(--bg);z-index:250;display:none;align-items:center;justify-content:center;padding:20px}
 .login.show{display:flex}
-.login-box{width:100%;max-width:480px;padding:10px 0}
+.login-box{width:100%;max-width:480px;padding:10px 0;max-height:calc(100vh - 40px);overflow-y:auto}
 .login-brand{font-family:var(--mono);font-size:18px;font-weight:800;text-align:center;letter-spacing:-.3px}
 .login-sub{font-size:13px;color:var(--t3);text-align:center;margin:6px 0 26px}
 .login-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:18px}
@@ -1140,7 +1148,13 @@ window.doLogin = async function(){
   if (!_loginSel) { toast('Select your name', 'err'); return; }
   const wpin = document.getElementById('loginPin')?.value || '';
   const btn = document.getElementById('btnLogin');
-  btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line"></i> Signing in...';
+  // v14.6 — the loader glyph here was static (no spin animation, unlike
+  // every other "in progress" button in the app), and the disabled state's
+  // default .28 opacity made the button look inactive/broken rather than
+  // busy — together, tapping Sign In gave no visible feedback at all on a
+  // slow connection. Spinning icon + full opacity while disabled fixes both.
+  btn.disabled = true; btn.style.opacity = '1';
+  btn.innerHTML = '<i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> Signing in...';
   const out = await apiOp('verifyWorker', { worker:_loginSel, wpin });
   btn.disabled = false; btn.innerHTML = '<i class="ri-login-circle-line"></i> Sign in';
 
@@ -2435,10 +2449,24 @@ async function refreshLiveBaseline(wid){
     if (!_liveSyncedOnce[wid]) renderStageContent();
     return;
   }
+  // v14.6 — a live-scan cache entry (server-side, TTL-based) for a session
+  // that has ALREADY ENDED must never be counted here: its real numbers
+  // are already added below from endedOut.res.skus (the durable, saved
+  // InspectionResults row). If the clearLiveScan call after a finish ever
+  // doesn't land in time (network drop, or a session ended through a path
+  // that doesn't call it), the stale cache entry used to keep getting
+  // added ON TOP of that same session's saved row — double- (or, across
+  // several stale entries, triple-) counting one worker's real scans and
+  // making the checklist show something like "54/18" for an item that
+  // only ever had 18 required. Cross-checking against S.works (which
+  // knows every entryId's ended state) makes this safe even if the
+  // server-side cache cleanup is ever late or missed.
+  const endedEntryIds = new Set(S.works.filter(w => w.endT).map(w => w.id));
   const baseline = {};
   const rawLive = [];
   (liveOut.res.live || []).forEach(entry => {
     if (entry.entryId === wid) return; // exclude my own live entry
+    if (endedEntryIds.has(entry.entryId)) return; // already-ended session — counted via endedOut below instead
     rawLive.push(entry);
     Object.entries(entry.skuCounts || {}).forEach(([key, qty]) => {
       baseline[key] = (baseline[key] || 0) + (Number(qty) || 0);
