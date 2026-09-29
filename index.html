@@ -4615,34 +4615,41 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   const badgeClass = result === 'PASS' ? 'verify-ok' : 'verify-bad';
   const badgeText = result === 'PASS' ? '✓ INSPECTION PASSED — ALL ITEMS VERIFIED' : '⚠ INSPECTION COMPLETE — WITH ISSUES';
 
-  // v14.11 — v14.10 fixed actual clipping, but the layout still felt
-  // cramped edge-to-edge. Redone with one single, generous margin source
-  // (body padding — reliable regardless of the print dialog's own margin
-  // setting) and noticeably more breathing room between every section:
-  // header, info block, table rows, issues block, and the closing badge.
+  // v14.12 — found the actual bug behind the clipping: <body> padding is
+  // NOT a per-page margin. The browser slices one continuous flowed
+  // document into pages, and body's own top/bottom padding only appears
+  // once — at the very top of page 1 and the very bottom of the LAST
+  // page. Every page in between (2, 3, ...) had nothing but the 8mm
+  // @page margin protecting it, which is why the total row kept getting
+  // clipped at the bottom of exactly those middle pages. @page's margin
+  // is the only thing that reliably applies to EVERY page, so that's now
+  // the sole margin source (generous on all four sides), and body padding
+  // is cut back to a token amount. Header/info block spacing (between the
+  // company name and the barcode table) is also tightened back down per
+  // feedback — that gap, not the page edges, was too loose.
   const css = `
-    @page{ size: letter; margin: 8mm; }
+    @page{ size: letter; margin: 18mm 15mm 20mm; }
     *{box-sizing:border-box;}
     html, body{width:100%;}
-    body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; padding:16mm 15mm 20mm; max-width:100%; margin:0; font-size:12px; line-height:1.5;}
-    .slip-head{display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #111; padding-bottom:18px; margin-bottom:26px;}
-    .slip-logo{font-size:25px; font-weight:800; letter-spacing:-0.02em;}
-    .slip-addr{font-size:11.5px; color:#555; margin-top:6px; line-height:1.6;}
-    .slip-title{font-size:18px; font-weight:800; text-align:right;}
-    .slip-meta{font-size:11.5px; color:#555; text-align:right; margin-top:6px; line-height:1.6;}
-    .slip-info{display:grid; grid-template-columns:1fr 1fr; gap:16px 20px; margin-bottom:26px; font-size:12.5px;}
-    .slip-info div b{display:block; font-size:10.5px; color:#777; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;}
-    table.slip-table{width:100%; border-collapse:collapse; font-size:11.5px; margin-top:10px;}
-    table.slip-table th{background:#111; color:#fff; padding:8px 10px; text-align:left; font-size:10px; text-transform:uppercase;}
-    table.slip-table td{padding:7px 10px; border-bottom:1px solid #ddd;}
+    body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; padding:0; max-width:100%; margin:0; font-size:12px; line-height:1.45;}
+    .slip-head{display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #111; padding-bottom:10px; margin-bottom:14px;}
+    .slip-logo{font-size:23px; font-weight:800; letter-spacing:-0.02em;}
+    .slip-addr{font-size:11px; color:#555; margin-top:3px; line-height:1.4;}
+    .slip-title{font-size:17px; font-weight:800; text-align:right;}
+    .slip-meta{font-size:11px; color:#555; text-align:right; margin-top:3px; line-height:1.4;}
+    .slip-info{display:grid; grid-template-columns:1fr 1fr; gap:10px 20px; margin-bottom:14px; font-size:12px;}
+    .slip-info div b{display:block; font-size:10px; color:#777; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:2px;}
+    table.slip-table{width:100%; border-collapse:collapse; font-size:11.5px; margin-top:8px;}
+    table.slip-table th{background:#111; color:#fff; padding:7px 9px; text-align:left; font-size:10px; text-transform:uppercase;}
+    table.slip-table td{padding:6px 9px; border-bottom:1px solid #ddd;}
     table.slip-table tbody tr, table.slip-table tfoot tr{page-break-inside:avoid; break-inside:avoid;}
-    .slip-total-row td{border-top:2px solid #111; border-bottom:none; padding-top:12px; padding-bottom:12px; background:#f7f7f7;}
-    .issues-h4{margin-top:26px; margin-bottom:4px; font-size:12.5px; text-transform:uppercase; color:#555;}
-    .box-line{font-size:12.5px; margin:8px 0; page-break-inside:avoid; break-inside:avoid;}
-    .verify-badge{display:inline-block; padding:8px 16px; border-radius:6px; font-weight:800; font-size:12.5px; margin-top:26px; page-break-inside:avoid; break-inside:avoid;}
+    .slip-total-row td{border-top:2px solid #111; border-bottom:none; padding-top:10px; padding-bottom:10px; background:#f7f7f7;}
+    .issues-h4{margin-top:20px; margin-bottom:4px; font-size:12px; text-transform:uppercase; color:#555;}
+    .box-line{font-size:12px; margin:6px 0; page-break-inside:avoid; break-inside:avoid;}
+    .verify-badge{display:inline-block; padding:7px 15px; border-radius:6px; font-weight:800; font-size:12px; margin-top:20px; page-break-inside:avoid; break-inside:avoid;}
     .verify-ok{background:#ede9fe; color:#5b21b6; border:1px solid #8b5cf6;}
     .verify-bad{background:#fee2e2; color:#991b1b; border:1px solid #dc2626;}
-    .slip-footer{margin-top:28px; padding-top:14px; border-top:1px solid #ccc; font-size:10.5px; color:#777; display:flex; justify-content:space-between; page-break-inside:avoid; break-inside:avoid;}
+    .slip-footer{margin-top:20px; padding-top:12px; border-top:1px solid #ccc; font-size:10px; color:#777; display:flex; justify-content:space-between; page-break-inside:avoid; break-inside:avoid;}
     /* Keep the total row + badge + footer together as one unbreakable
        block whenever possible, so a page break can't land in the middle
        of the numbers a customer would actually check. */
