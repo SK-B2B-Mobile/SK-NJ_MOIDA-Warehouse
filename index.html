@@ -4554,8 +4554,13 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   const totalIssue   = rows.reduce((a,r) => a + (r.hasIssue ? (r.issue.qty||0) : 0), 0);
   const totalPacked  = rows.reduce((a,r) => a + (r.got), 0);
   const issueRows = rows.filter(r => r.hasIssue);
+  // v14.10 — separate "how many SKU lines had a problem" (a count, always
+  // small) from "how many units were short" (a quantity, can look alarming
+  // on its own, e.g. "18"). Printing both side by side on the slip avoids
+  // "ISSUE 18" reading as if 18 different products were wrong.
+  const shippedCleanCount = rows.length - issueRows.length;
   const issuesHtml = issueRows.length ? `
-    <h4 class="issues-h4">Issues / Shortages</h4>
+    <h4 class="issues-h4">Issues / Shortages — ${issueRows.length} SKU${issueRows.length===1?'':'s'} affected (${totalIssue} unit${totalIssue===1?'':'s'} total)</h4>
     <table class="slip-table"><thead><tr><th>Type</th><th>Product</th><th style="text-align:center">Qty</th><th>Note</th></tr></thead><tbody>
     ${issueRows.map(r => `<tr><td>${r.issue.type}</td><td>${r.name||r.sku||''}</td><td style="text-align:center">${r.issue.qty||0}</td><td>${r.issue.note||''}</td></tr>`).join('')}
     </tbody></table>` : '';
@@ -4602,20 +4607,31 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   const badgeClass = result === 'PASS' ? 'verify-ok' : 'verify-bad';
   const badgeText = result === 'PASS' ? '✓ INSPECTION PASSED — ALL ITEMS VERIFIED' : '⚠ INSPECTION COMPLETE — WITH ISSUES';
 
+  // v14.10 — printed slips were coming out cropped on the left/right and
+  // top/bottom, with the logo cut off on page 1. @page's own margin can
+  // be silently zeroed by the OS print dialog whenever "Margins: None" is
+  // selected there (common default on some printer drivers), which prints
+  // truly edge-to-edge into the printer's own unprintable border. Real
+  // padding on <body> is a second, independent safety margin that the
+  // print dialog's margin setting can't remove, so content stays inside
+  // the printable area even then. Also drops the type size a notch so a
+  // long 70+ SKU order has room to breathe instead of packing the page
+  // edge-to-edge.
   const css = `
-    @page{ size: letter; margin: 16mm 15mm; }
+    @page{ size: letter; margin: 14mm 12mm; }
     *{box-sizing:border-box;}
-    body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; padding:0; max-width:100%; margin:0; font-size:12.5px;}
-    .slip-head{display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #111; padding-bottom:14px; margin-bottom:18px;}
+    html, body{width:100%;}
+    body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; padding:8mm 6mm; max-width:100%; margin:0; font-size:11.5px;}
+    .slip-head{display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #111; padding-bottom:14px; margin-bottom:18px; margin-top:2mm;}
     .slip-logo{font-size:24px; font-weight:800; letter-spacing:-0.02em;}
     .slip-addr{font-size:11px; color:#555; margin-top:4px; line-height:1.5;}
     .slip-title{font-size:18px; font-weight:800; text-align:right;}
     .slip-meta{font-size:11px; color:#555; text-align:right; margin-top:4px;}
     .slip-info{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px; font-size:12.5px;}
     .slip-info div b{display:block; font-size:10.5px; color:#777; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:2px;}
-    table.slip-table{width:100%; border-collapse:collapse; font-size:12px; margin-top:8px;}
-    table.slip-table th{background:#111; color:#fff; padding:7px 9px; text-align:left; font-size:10.5px; text-transform:uppercase;}
-    table.slip-table td{padding:6px 9px; border-bottom:1px solid #ddd;}
+    table.slip-table{width:100%; border-collapse:collapse; font-size:11px; margin-top:8px;}
+    table.slip-table th{background:#111; color:#fff; padding:6px 8px; text-align:left; font-size:10px; text-transform:uppercase;}
+    table.slip-table td{padding:5px 8px; border-bottom:1px solid #ddd;}
     table.slip-table tbody tr, table.slip-table tfoot tr{page-break-inside:avoid; break-inside:avoid;}
     .slip-total-row td{border-top:2px solid #111; border-bottom:none; padding-top:9px; background:#f7f7f7;}
     .issues-h4{margin-top:16px; font-size:12.5px; text-transform:uppercase; color:#555;}
@@ -4644,7 +4660,7 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
     ${boxHtml}
     <table class="slip-table"><thead><tr><th>Barcode</th><th>Product</th><th style="text-align:center">Ordered</th><th style="text-align:center">Issue</th><th style="text-align:center">Packed</th></tr></thead>
     <tbody>${rowsHtml}</tbody>
-    <tfoot><tr class="slip-total-row"><td colspan="2"><b>TOTAL — ${rows.length} SKU${rows.length===1?'':'s'}</b></td><td style="text-align:center"><b>${totalOrdered}</b></td><td style="text-align:center"><b>${totalIssue}</b></td><td style="text-align:center"><b>${totalPacked}</b></td></tr></tfoot>
+    <tfoot><tr class="slip-total-row"><td colspan="2"><b>TOTAL — ${rows.length} SKU${rows.length===1?'':'s'}</b>${issueRows.length?`<div style="font-weight:400;font-size:10.5px;color:#555;margin-top:2px">${shippedCleanCount} shipped in full · ${issueRows.length} with issue</div>`:''}</td><td style="text-align:center"><b>${totalOrdered}</b></td><td style="text-align:center"><b>${totalIssue}</b></td><td style="text-align:center"><b>${totalPacked}</b></td></tr></tfoot>
     </table>
     ${issuesHtml}
     ${mcNote}
