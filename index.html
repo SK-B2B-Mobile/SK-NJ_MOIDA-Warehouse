@@ -1540,7 +1540,11 @@ R.work = function(){
 function updateTabStatus(){
   ['PICK','INSP','PALL'].forEach(s => {
     const el = document.getElementById('stabStatus_' + s); if (!el) return;
-    const mine = S.works.filter(w => w.w === CW && w.stage === s && !w.endT);
+    // v14.19 — a session hidden via 나가기 (see hideInspSession) should
+    // look, everywhere in the UI, like the worker has genuinely stepped
+    // away from it — not just missing from the session-card list while
+    // still silently counted here as "active".
+    const mine = S.works.filter(w => w.w === CW && w.stage === s && !w.endT && !(s === 'INSP' && isInspSessionHidden(w.id)));
     const tab = document.querySelector(`.stab.${s.toLowerCase()}`); if (!tab) return;
     const dot = tab.querySelector('.stab-dot');
     if (mine.length > 0) {
@@ -2898,7 +2902,7 @@ function renderStageContent(){
           title="${notReadyYet ? 'Tap to finish early — you can flag or force-complete what\'s left' : ''}">
           <i class="ri-checkbox-circle-line"></i> ${notReadyYet ? `Finish early (${readyInfo.done}/${readyInfo.total} scanned)` : SELABEL[s]}
         </button>
-        ${s==='INSP' ? `<button class="btn" style="width:100%;justify-content:center;margin-top:8px;padding:10px;font-size:12.5px;font-weight:600;color:var(--t2)" onclick="hideInspSession('${w.id}')" title="스캔 진행상황은 그대로 저장되고, 이 화면에서만 카드가 숨겨집니다 — 아래 '숨겨진 세션'에서 언제든 다시 불러올 수 있습니다">
+        ${s==='INSP' ? `<button class="btn" style="width:100%;justify-content:center;margin-top:8px;padding:10px;font-size:12.5px;font-weight:600;color:var(--t2)" onclick="hideInspSession('${w.id}')" title="이 오더에서 완전히 나갑니다 — 더 이상 Active로 표시되지 않습니다. 스캔 진행상황은 그대로 저장되어 있어서, 나중에 이 오더를 다시 선택하면 중단한 곳부터 이어집니다">
           <i class="ri-logout-box-r-line" style="font-size:14px"></i> 나가기 (진행 상황 저장됨)
         </button>` : ''}
       </div>`;
@@ -2950,7 +2954,16 @@ function renderStageContent(){
     // stays selectable so others can pick the remaining range.
     const fullyClaimed = s === 'PICK' && o.pages && !firstOpenPageGap(o.id, o.pages) && !myHere;
     if (fullyClaimed) return `<option value="${o.id}" disabled>${o.id} (${o.ch}·${o.cu}) — all pages assigned</option>`;
-    return `<option value="${o.id}">${o.id} (${o.ch}·${o.cu})${orderStageStatusTag(o, s)}${myHere?' ⚡ Active':''}${isSLA(o)?' ⚠ SLA':''}</option>`;
+    // v14.19 — an INSP session hidden via 나가기 is still technically open
+    // (server-side, untouched) so the worker can resume with everything
+    // scanned so far, but it should no longer LOOK active anywhere —
+    // including this "⚡ Active" tag, which used to show up for every
+    // order ever selected and never go away until the full checklist was
+    // finished. Only count non-hidden sessions toward the visible tag.
+    const myHereVisible = s === 'INSP'
+      ? S.works.filter(w => w.oid===o.id && w.w===CW && w.stage===s && !w.endT && !isInspSessionHidden(w.id)).length
+      : myHere;
+    return `<option value="${o.id}">${o.id} (${o.ch}·${o.cu})${orderStageStatusTag(o, s)}${myHereVisible?' ⚡ Active':''}${isSLA(o)?' ⚠ SLA':''}</option>`;
   }).join('');
 
   const pickFields = s === 'PICK' ? `
