@@ -4813,10 +4813,16 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
       // browser breaks the page cleanly BETWEEN items instead of through
       // one — however many items a single box ends up holding.
       boxHtml = `<h4 class="issues-h4">${uwCap} breakdown</h4>` + groups.map(g => {
-        const itemLines = Object.entries(g.items || {})
-          .map(([key, qty]) => `<div class="box-item">${nameByKey[key] || key} · ${qty}</div>`)
-          .join('') || `<div class="box-item">(no items recorded)</div>`;
-        return `<div class="box-group"><p class="box-line"><b>${g.label}</b></p>${itemLines}</div>`;
+        const entries = Object.entries(g.items || {});
+        const boxTotal = entries.reduce((s, [,qty]) => s + qty, 0);
+        const itemRows = entries
+          .map(([key, qty]) => `<tr><td class="box-bc">${key}</td><td>${nameByKey[key] || ''}</td><td style="text-align:center">${qty}</td></tr>`)
+          .join('') || `<tr><td colspan="3" style="color:#991b1b">(no items recorded)</td></tr>`;
+        return `<div class="box-group">
+          <div class="box-head"><span>${g.label}</span><span class="box-count">${entries.length} SKU${entries.length===1?'':'s'} · ${boxTotal} unit${boxTotal===1?'':'s'}</span></div>
+          <table class="box-table"><thead><tr><th>Barcode</th><th>Product</th><th style="text-align:center">Qty</th></tr></thead>
+          <tbody>${itemRows}</tbody></table>
+        </div>`;
       }).join('');
     } else {
       boxHtml = `<p style="font-size:11px;color:#991b1b;margin-top:10px">⚠ No ${uw} breakdown was recorded for this order — showing combined totals only.</p>`;
@@ -4856,13 +4862,24 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
     table.slip-table tbody tr, table.slip-table tfoot tr{page-break-inside:avoid; break-inside:avoid;}
     .slip-total-row td{border-top:2px solid #111; border-bottom:none; padding-top:10px; padding-bottom:10px; background:#f7f7f7;}
     .issues-h4{margin-top:20px; margin-bottom:4px; font-size:12px; text-transform:uppercase; color:#555;}
-    /* v14.28 — .box-line is now just the "Box N" heading (see box-item
-       below for why the item list moved out of it). Keeping the heading
-       glued to its first couple of items, not stranded alone at the
-       bottom of a page, is what page-break-after:avoid is for here. */
-    .box-group{margin:10px 0 4px;}
-    .box-line{font-size:12px; margin:0 0 2px; page-break-after:avoid; break-after:avoid;}
-    .box-item{font-size:12px; padding:1px 0 1px 14px; page-break-inside:avoid; break-inside:avoid;}
+    /* v14.29 — box breakdown as a real table (Barcode / Product / Qty)
+       instead of plain "name · qty" lines, per feedback that the barcode
+       needs to be shown and the layout should look more organized.
+       IMPORTANT: page-break-inside:avoid must stay OFF .box-group and
+       .box-table themselves — a box can hold 100+ rows, taller than one
+       printable page, and the v14.28 fix (see above in the JS) exists
+       precisely because forcing a too-tall block to stay together is
+       what caused the browser to clip mid-content. Instead, only the
+       header (kept with its table via page-break-after:avoid) and each
+       individual row (page-break-inside:avoid, trivially short) are
+       protected, so pages can still break cleanly BETWEEN rows. */
+    .box-group{margin:12px 0 16px;}
+    .box-head{display:flex; justify-content:space-between; align-items:center; background:#111; color:#fff; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; padding:6px 10px; border-radius:4px 4px 0 0; page-break-after:avoid; break-after:avoid;}
+    .box-count{font-weight:600; font-size:10px; opacity:.85; text-transform:none; letter-spacing:0;}
+    table.box-table{width:100%; border-collapse:collapse; font-size:11px;}
+    table.box-table th{background:#f3f3f3; color:#555; padding:5px 9px; text-align:left; font-size:9.5px; text-transform:uppercase; letter-spacing:.03em; border-bottom:1px solid #ddd;}
+    table.box-table td{padding:4px 9px; border-bottom:1px solid #eee; page-break-inside:avoid; break-inside:avoid;}
+    table.box-table td.box-bc{font-family:'Courier New',monospace; font-size:10px; color:#555; white-space:nowrap;}
     .verify-badge{display:inline-block; padding:7px 15px; border-radius:6px; font-weight:800; font-size:12px; margin-top:20px; page-break-inside:avoid; break-inside:avoid;}
     .verify-ok{background:#ede9fe; color:#5b21b6; border:1px solid #8b5cf6;}
     .verify-bad{background:#fee2e2; color:#991b1b; border:1px solid #dc2626;}
