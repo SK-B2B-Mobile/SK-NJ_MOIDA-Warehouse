@@ -351,11 +351,28 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
    tapped, so the modal never leaves our own UI. Sized for a 5.7" device:
    compact 3-column grid, big enough targets for a gloved/quick tap.*/
 .qty-numinput{cursor:pointer; caret-color:transparent; -webkit-user-select:none; user-select:none}
-.qty-numinput.numpad-active{border-color:var(--blue-bd); box-shadow:0 0 0 2px rgba(59,130,246,.18)}
-.numpad{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:8px 0 4px}
-.numpad-key{padding:12px 0; border-radius:var(--r); border:1px solid var(--bd2); background:var(--bg4); color:var(--t); font-family:var(--font); font-size:18px; font-weight:700; cursor:pointer; transition:all .1s}
+/* v14.43 — the visible qty display is now a div (.qty-field), not the
+   input itself (the input moved to a hidden helper carrying the real
+   value, so every existing .value read/oninput handler elsewhere in the
+   app keeps working unchanged — see qtyFieldHtml()/numpadFocus/numpadKey).
+   This is what makes a real blinking text cursor possible: a plain
+   readonly <input> can't host a child element, but a div can hold the
+   digits AND a caret span next to them. The active field also gets a
+   thicker, saturated border + tinted fill instead of a faint color-only
+   change, per the approved design (a border-color tweak alone was too
+   subtle to notice at a glance on the rugged handhelds this runs on). */
+.qty-field{display:flex;align-items:center;justify-content:center;gap:1px;width:100%;box-sizing:border-box;padding:10px 13px;border-radius:var(--r);border:2px solid transparent;background:var(--bg3);color:var(--t);font-family:var(--font);font-size:18px;font-weight:700;cursor:pointer;-webkit-user-select:none;user-select:none;transition:all .12s}
+.qty-field.numpad-active{border-color:var(--blue);background:var(--blue-bg);box-shadow:0 0 0 3px var(--blue-bd)}
+.qty-caret{display:none;width:2px;height:1.15em;background:var(--blue);margin-left:1px;animation:qcaretBlink 1s step-start infinite}
+.qty-field.numpad-active .qty-caret{display:inline-block}
+@keyframes qcaretBlink{0%,49%{opacity:1}50%,100%{opacity:0}}
+/* v14.43 — keypad buttons, shrunk one size down (padding + font) per
+   explicit feedback that the old ones were unnecessarily large and took
+   up too much of the screen; still comfortably tappable. */
+.numpad{display:grid; grid-template-columns:repeat(3,1fr); gap:5px; margin:8px 0 4px}
+.numpad-key{padding:8px 0; border-radius:var(--r); border:1px solid var(--bd2); background:var(--bg4); color:var(--t); font-family:var(--font); font-size:15px; font-weight:700; cursor:pointer; transition:all .1s}
 .numpad-key:active{background:var(--bg2); transform:scale(.96)}
-.numpad-key.numpad-c{color:var(--red); font-size:14px}
+.numpad-key.numpad-c{color:var(--red); font-size:12px}
 .numpad-key.numpad-bs{color:var(--amber)}
 
 /* Small credit line under header title */
@@ -989,13 +1006,30 @@ function openModal(html, opts){
   document.getElementById('modalBg').classList.add('show');
 }
 
-// ── In-modal numeric keypad — v14.31 (see .numpad CSS for the why) ─────
-// Any qty-entry field wired up to this keypad must be readonly + carry
-// class "qty-numinput" + onclick="numpadFocus('itsId')", and appear
-// alongside one numpadHtml() block per modal. Multiple qty-numinput
-// fields in the same modal (e.g. OK qty + issue qty side by side) can
-// share a single keypad — a tap on either field just moves the target.
+// ── In-modal numeric keypad — v14.31, redesigned v14.43 (see .qty-field/
+// .numpad CSS for the why) ─────────────────────────────────────────────
+// A qty field is now built with qtyFieldHtml(id, value, oninputAttr): a
+// visible div (.qty-field) showing the digits + a blinking caret, plus a
+// hidden <input> carrying the SAME id and value that every existing
+// .value read / oninput handler elsewhere in the app already expects —
+// so nothing downstream needed to change, only how the value is DISPLAYED.
+// Multiple fields in the same modal (e.g. OK qty + issue qty side by
+// side) can share a single numpadHtml() block — a tap on either field
+// just moves the target.
 let _numpadTarget = null;
+function qtyFieldHtml(id, value, oninputAttr){
+  return `<div class="qty-field" data-for="${id}" onclick="numpadFocus('${id}')">
+    <span id="${id}__val">${value}</span><span class="qty-caret"></span>
+    <input type="hidden" class="qty-numinput" id="${id}" value="${value}"${oninputAttr ? ` oninput="${oninputAttr}"` : ''}>
+  </div>`;
+}
+// Sets a qty field's value from OUTSIDE the keypad (e.g. a checkbox that
+// fills in a computed max) — keeps the hidden input's value and the
+// visible digits in sync, exactly like numpadKey does.
+window.setQtyField = function(id, val){
+  const el = document.getElementById(id); if (el) el.value = val;
+  const disp = document.getElementById(id + '__val'); if (disp) disp.textContent = val;
+};
 function numpadHtml(){
   const keys = ['1','2','3','4','5','6','7','8','9','C','0','⌫'];
   return `<div class="numpad">${keys.map(k => {
@@ -1006,7 +1040,7 @@ function numpadHtml(){
 }
 window.numpadFocus = function(id){
   _numpadTarget = id;
-  document.querySelectorAll('.qty-numinput').forEach(el => el.classList.toggle('numpad-active', el.id === id));
+  document.querySelectorAll('.qty-field').forEach(el => el.classList.toggle('numpad-active', el.dataset.for === id));
 };
 window.numpadKey = function(key){
   if (!_numpadTarget) return;
@@ -1016,7 +1050,9 @@ window.numpadKey = function(key){
   if (key === 'C') v = '0';
   else if (key === '⌫') v = v.length > 1 ? v.slice(0, -1) : '0';
   else { v = (v === '0' ? key : v + key); if (v.length > 5) v = v.slice(0, 5); }
-  el.value = String(Number(v) || 0);
+  const nv = String(Number(v) || 0);
+  el.value = nv;
+  const disp = document.getElementById(_numpadTarget + '__val'); if (disp) disp.textContent = nv;
   el.dispatchEvent(new Event('input', { bubbles:true }));
 };
 
@@ -2013,28 +2049,29 @@ window.openSkuIssueModal = function(wid, key){
   const defaultIssue = existing ? existing.qty : Math.max(0, maxTotal - mineBefore);
   const keyEsc = String(key).replace(/'/g, "\\'");
 
+  // v14.43 — the Required/Others logged/My max summary box (still shown
+  // in the "Correct scanned qty" pencil tool) is dropped here specifically
+  // per feedback that it pushed the actually-useful part of this modal
+  // (product identity + the two qty fields) further down the screen than
+  // it needed to be. The barcode/product-name line takes its place right
+  // under the title: barcode pinned on the left (it's the fixed-width,
+  // always-there identifier), product name flowing beside it.
   openModal(`
     <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
       <i class="ri-flag-2-line" style="color:var(--red)"></i> Report issue / 수량 조정
     </div>
-    <div style="font-size:12px;color:var(--t3);margin-bottom:14px" class="mono">${it.sku||'—'} · ${(it.name||'').replace(/</g,'&lt;')}</div>
-    <div style="display:flex;justify-content:space-between;gap:6px;font-size:11px;color:var(--t3);margin-bottom:14px;background:var(--bg3);border-radius:var(--r);padding:8px 10px;text-align:center">
-      <span style="flex:1">Required<br><b style="font-size:15px;color:var(--t)">${reqQty}</b></span>
-      <span style="flex:1">Others logged<br><b style="font-size:15px;color:var(--t)">${othersQty}</b></span>
-      <span style="flex:1">My max (OK+Issue)<br><b style="font-size:15px;color:var(--t)">${maxTotal}</b></span>
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:14px">
+      <span class="mono" style="font-size:11.5px;color:var(--t3);white-space:nowrap;flex-shrink:0;padding-top:2px">${it.barcode||it.sku||'—'}</span>
+      <span style="font-size:12.5px;color:var(--t);line-height:1.5;flex:1">${(it.name||'').replace(/</g,'&lt;')}</span>
     </div>
     <div style="display:flex;gap:10px">
       <div class="fg" style="flex:1">
         <label class="fl">정상 수량 (OK)</label>
-        <input class="fi qty-numinput" type="text" inputmode="none" readonly onfocus="this.blur()" onclick="numpadFocus('skuIssueOkQty')"
-          max="${maxTotal}" id="skuIssueOkQty" value="${mineBefore}"
-          style="font-size:18px;text-align:center;font-weight:700" oninput="_onSkuIssueSplitInput('${wid}','${keyEsc}')">
+        ${qtyFieldHtml('skuIssueOkQty', mineBefore, `_onSkuIssueSplitInput('${wid}','${keyEsc}')`)}
       </div>
       <div class="fg" style="flex:1">
         <label class="fl">이슈 수량 (Issue)</label>
-        <input class="fi qty-numinput" type="text" inputmode="none" readonly onfocus="this.blur()" onclick="numpadFocus('issueQty')"
-          max="${maxTotal}" id="issueQty" value="${defaultIssue}"
-          style="font-size:18px;text-align:center;font-weight:700" oninput="_onSkuIssueSplitInput('${wid}','${keyEsc}')">
+        ${qtyFieldHtml('issueQty', defaultIssue, `_onSkuIssueSplitInput('${wid}','${keyEsc}')`)}
       </div>
     </div>
     <div id="skuIssueSplitWarn" style="display:none;font-size:11px;color:var(--red);margin:-4px 0 8px;text-align:center">⚠ 정상 + 이슈 합이 ${maxTotal}을 초과할 수 없습니다</div>
@@ -2205,13 +2242,12 @@ window.openQtyEditModal = function(wid, key){
     ${issueLine}
     <div class="fg" style="margin-top:10px">
       <label class="fl">Set YOUR total to this number — <u>replaces</u> ${got}, does not add to it${reqQty ? ` (max ${maxMine} to reach ${reqQty} total)` : ''}</label>
-      <input class="fi qty-numinput" type="text" inputmode="none" readonly onfocus="this.blur()" onclick="numpadFocus('qtyEditVal')"
-        ${reqQty ? `max="${maxMine}"` : ''} id="qtyEditVal" value="${reqQty ? maxMine : got}" style="font-size:18px;text-align:center;font-weight:700">
+      ${qtyFieldHtml('qtyEditVal', reqQty ? maxMine : got)}
       ${numpadHtml()}
     </div>
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px;cursor:pointer">
       <input type="checkbox" id="qtyEditMC" style="width:auto" ${isMC?'checked':''}
-        onchange="if(this.checked) document.getElementById('qtyEditVal').value='${maxMine}';">
+        onchange="if(this.checked) setQtyField('qtyEditVal','${maxMine}');">
       Master case — one case barcode covers the full quantity, not scanned unit-by-unit
     </label>
     <div style="display:flex;gap:8px;margin-top:10px">
@@ -2398,8 +2434,7 @@ window.openAggCountEditModal = function(wid){
       <i class="ri-pencil-line" style="color:var(--purple)"></i> Correct scanned count
     </div>
     <div class="fg" style="margin-top:12px">
-      <input class="fi qty-numinput" type="text" inputmode="none" readonly onfocus="this.blur()" onclick="numpadFocus('aggCountEditVal')"
-        id="aggCountEditVal" value="${st.count}" style="font-size:18px;text-align:center;font-weight:700">
+      ${qtyFieldHtml('aggCountEditVal', st.count)}
       ${numpadHtml()}
     </div>
     <div style="display:flex;gap:8px;margin-top:10px">
@@ -2646,10 +2681,7 @@ window.openScanQtyModal = function(wid, key){
     </div>
     <div class="fg">
       <label class="fl">정상 수량 (normal / OK qty)</label>
-      <input class="fi qty-numinput" type="text" inputmode="none" readonly onfocus="this.blur()" onclick="numpadFocus('scanQtyOk')"
-        id="scanQtyOk" value="${maxMine}"
-        style="font-size:20px;text-align:center;font-weight:800"
-        oninput="_onScanQtyOkInput('${wid}','${keyEsc}')">
+      ${qtyFieldHtml('scanQtyOk', maxMine, `_onScanQtyOkInput('${wid}','${keyEsc}')`)}
       <div style="font-size:10.5px;color:var(--t3);margin-top:4px">전체 정상이면 그대로 Save, 아니면 아래 키패드로 수정</div>
       ${numpadHtml()}
     </div>
