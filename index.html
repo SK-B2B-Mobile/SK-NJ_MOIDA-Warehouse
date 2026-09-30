@@ -1772,8 +1772,19 @@ function renderDashTable(){
       }
       return `<span>${n}</span>`;
     }).join(', ');
-    const totalItems   = ws.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
-    const totalQty     = ws.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
+    // v14.51 — this used to sum every PICK session's items/qty for the
+    // order. That's fine for a single picker, but every PICK session
+    // (even a page-range split across several workers) stores the SAME
+    // whole-order items/qty on its own row — not "my portion" — so an
+    // order split across N pickers was showing N× its real Items/QTY
+    // here (surfaced when IM00234225's 4 historical page-split PICK
+    // sessions were restored: 311 real items displayed as 1244). The
+    // Orders sheet's own items/qty (o.items/o.qty) is the single source
+    // of truth and never multiplies, so use that directly; only fall
+    // back to the old sum for a legacy order that has no items/qty of
+    // its own recorded on the Orders row at all.
+    const totalItems = o.items || ws.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
+    const totalQty   = o.qty   || ws.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
     const totalNet     = ws.filter(w => w.endT&&w.netMin!==null).reduce((s,w)=>s+(w.netMin||0),0);
     const isMe  = ws.some(w => w.w === CW);
     const sla   = isSLA(o);
