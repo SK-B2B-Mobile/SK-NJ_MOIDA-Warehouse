@@ -633,6 +633,25 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
           <i class="ri-add-circle-line"></i> Add Order
         </button>
 
+        <!-- v14.49 — Sheet에서 직접 Archived 플래그만 지우는 식으로 오더를
+             "되살리면" WorkEntries(피킹/검수 기록)는 그대로 Archive에 남아
+             복구되지 않아 "아직 피킹 안 함"처럼 잘못 보이는 문제가 있었음.
+             restoreOrder_는 이미 서버에 구현되어 있었지만 호출하는 UI가
+             없었음 — 이 버튼이 Orders+WorkEntries를 함께 정식으로 복구한다.
+             이미 정상인 오더에 눌러도 안전(멱등) — 손댈 게 없으면 아무 일도
+             일어나지 않는다. -->
+        <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--bd2)">
+          <label class="fl"><i class="ri-history-line"></i> Archived 오더 복구 (Restore)</label>
+          <div style="font-size:11px;color:var(--t3);margin-bottom:8px;line-height:1.5">
+            시트에서 직접 되살린 오더가 "아직 피킹 안 함"처럼 잘못 표시될 때 사용 — 피킹/검수 기록까지 함께 정식으로 복구합니다.
+          </div>
+          <div style="display:flex;gap:7px">
+            <input class="fi" id="restoreOrderId" placeholder="e.g. IM00234225"
+              style="flex:1;font-family:var(--mono);font-size:13px;font-weight:700">
+            <button class="btn btn-sm" onclick="restoreOrderById(this)"><i class="ri-refresh-line"></i> 복구</button>
+          </div>
+        </div>
+
         <div class="section" style="margin-top:16px">All orders</div>
         <div id="orderList" style="max-height:300px;overflow-y:auto"></div>
       </div>
@@ -1137,7 +1156,7 @@ function expectedForOrder(oid){
 let _scanState = {};
 function loadScanState(wid){
   if (_scanState[wid]) return _scanState[wid];
-  let st = { mode:'agg', count:0, mult:1, skuCounts:{}, unknown:0, skuIssues:{}, currentBox:1, maxBox:1, boxScans:{}, unitType:'box', skuTouchOrder:{}, skuTouchSeq:0 };
+  let st = { mode:'agg', count:0, mult:1, skuCounts:{}, unknown:0, skuIssues:{}, currentBox:1, maxBox:1, boxScans:{}, unitType:'box', skuTouchOrder:{}, skuTouchSeq:0, reinspect:false };
   try { const raw = localStorage.getItem('wms_scan_' + wid); if (raw) st = Object.assign(st, JSON.parse(raw)); } catch(_){}
   if (!st.currentBox) st.currentBox = 1;
   if (!st.maxBox) st.maxBox = 1;
@@ -1160,6 +1179,25 @@ window.setUnitType = function(wid, type){
 };
 function saveScanState(wid, st){ _scanState[wid] = st; try { localStorage.setItem('wms_scan_' + wid, JSON.stringify(st)); } catch(_){} }
 function clearScanState(wid){ delete _scanState[wid]; try { localStorage.removeItem('wms_scan_' + wid); } catch(_){} }
+
+// v14.48 — "재검수(reinspect)" session: one explicitly (re-)started on an
+// order the server already considers 100% durably accounted for (every
+// required SKU already packed/issue-flagged in a PAST, already-ended
+// session — see isOrderFullyDone_ in Code.gs). The checklist should still
+// SHOW those items as already done (that context is exactly why this
+// exists — correcting or adding to a finished order), but that old total
+// must never BLOCK new input here: every room-cap check in this session
+// goes through this helper instead of reading _liveBaseline directly, so
+// "no room left" never stands in the way of a genuine correction. This
+// only affects the CAP on what can be typed/scanned in THIS entry's own
+// session — the SKU checklist's "done" badges (which read _liveBaseline
+// directly, not this) are untouched, and what actually gets saved at the
+// end is still only this entry's own qty, same as any other session.
+function othersQtyForCap(wid, key){
+  const st = loadScanState(wid);
+  if (st.reinspect) return 0;
+  return (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+}
 
 // ── v14.20 — "나가기" on an in-progress INSP session: a complete exit.
 // The session card disappears, and (as of v14.19/14.20) EVERY visible
@@ -2043,7 +2081,7 @@ window.openSkuIssueModal = function(wid, key){
   const st = loadScanState(wid);
   const existing = (st.skuIssues || {})[key] || null;
   const reqQty = it.reqQty || 0;
-  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const othersQty = othersQtyForCap(wid, key);
   const mineBefore = st.skuCounts[key] || 0;
   const maxTotal = Math.max(0, reqQty - othersQty);
   const defaultIssue = existing ? existing.qty : Math.max(0, maxTotal - mineBefore);
@@ -2103,7 +2141,7 @@ window._onSkuIssueSplitInput = function(wid, key){
   const items = _orderItemsCache[w.oid] || [];
   const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
   const reqQty = it.reqQty || 0;
-  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const othersQty = othersQtyForCap(wid, key);
   const maxTotal = Math.max(0, reqQty - othersQty);
   const okEl = document.getElementById('skuIssueOkQty');
   const issEl = document.getElementById('issueQty');
@@ -2124,7 +2162,7 @@ window.saveSkuIssue = async function(wid, key){
   const items = _orderItemsCache[w.oid] || [];
   const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
   const reqQty = it.reqQty || 0;
-  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const othersQty = othersQtyForCap(wid, key);
   const maxTotal = Math.max(0, reqQty - othersQty);
 
   let ok = Number(document.getElementById('skuIssueOkQty')?.value);
@@ -2197,7 +2235,7 @@ window.openQtyEditModal = function(wid, key){
   // ceiling for YOUR portion is what's left after everyone else's
   // already-logged contribution, not the full required qty.
   const reqQty = it.reqQty || 0;
-  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const othersQty = othersQtyForCap(wid, key);
   // v14.30 — an already-registered issue qty for this SKU also eats into
   // MY ceiling: without this, this tool and the Report Issue modal could
   // each independently allow up to (reqQty - othersQty), and combined the
@@ -2266,7 +2304,7 @@ window.saveQtyEdit = function(wid, key){
   const items = w ? (_orderItemsCache[w.oid] || []) : [];
   const it = items.find(x => (x.barcode||x.sku) === key);
   const reqQty = it ? (it.reqQty || 0) : 0;
-  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const othersQty = othersQtyForCap(wid, key);
   const st = loadScanState(wid);
   const myIssueQty = Number((st.skuIssues && st.skuIssues[key] && st.skuIssues[key].qty) || 0) || 0;
   const maxMine = Math.max(0, reqQty - othersQty - myIssueQty);
@@ -2595,7 +2633,7 @@ function _registerSkuScanInner(wid, code){
   // count stays exactly at reqQty (so "1/1" stays "1/1" for good), and
   // the worker gets a clear, unmissable "already scanned" signal instead
   // of a number that silently keeps climbing.
-  const othersQty = Number((_liveBaseline[wid] && _liveBaseline[wid][key]) || 0) || 0;
+  const othersQty = Number(othersQtyForCap(wid, key)) || 0;
   const reqQty = Number(match.reqQty || 0) || 0;
   const mineBefore = Number(st.skuCounts[key] || 0) || 0;
   // v14.4 — a shortfall already explained by a 🚩 issue flag (or the
@@ -2667,7 +2705,7 @@ window.openScanQtyModal = function(wid, key){
   const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
   const st = loadScanState(wid);
   const mineBefore = st.skuCounts[key] || 0;
-  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const othersQty = othersQtyForCap(wid, key);
   const reqQty = it.reqQty || 0;
   const existingIssue = (st.skuIssues || {})[key] || null;
   const myIssueQty = Number(existingIssue && existingIssue.qty || 0) || 0;
@@ -2723,7 +2761,7 @@ window._onScanQtyOkInput = function(wid, key){
   const items = _orderItemsCache[w.oid] || [];
   const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
   const st = loadScanState(wid);
-  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const othersQty = othersQtyForCap(wid, key);
   const mineBefore = st.skuCounts[key] || 0;
   const myIssueQty = Number((st.skuIssues && st.skuIssues[key] && st.skuIssues[key].qty) || 0) || 0;
   const reqQty = it.reqQty || 0;
@@ -2756,7 +2794,7 @@ window.saveScanQty = async function(wid, key){
   const items = _orderItemsCache[w.oid] || [];
   const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
   const st = loadScanState(wid);
-  const othersQty = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const othersQty = othersQtyForCap(wid, key);
   const mineBefore = st.skuCounts[key] || 0;
   const myIssueQty = Number((st.skuIssues && st.skuIssues[key] && st.skuIssues[key].qty) || 0) || 0;
   const reqQty = it.reqQty || 0;
@@ -3716,7 +3754,7 @@ function renderInspDoneCard(wrap, oid, prog){
         <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat',this)"><i class="ri-file-list-3-line"></i> Flat List</button>
         <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${oid}',this)"><i class="ri-price-tag-3-line"></i> Labels</button>
       </div>
-      <button class="btn btn-sm" style="color:var(--t3)" onclick="if(confirm('이 오더는 이미 검수 완료되었습니다. 정말 다시 검수를 시작하시겠습니까?'))startWork();"><i class="ri-add-line"></i> Re-inspect (재검수 시작)</button>
+      <button class="btn btn-sm" style="color:var(--t3)" onclick="if(confirm('이 오더는 이미 검수 완료되었습니다. 정말 다시 검수를 시작하시겠습니까?'))startReinspect('${oid}');"><i class="ri-add-line"></i> Re-inspect (재검수 시작)</button>
     </div>`;
   reconcileOrderInspSessionsOnce(oid);
 }
@@ -4314,7 +4352,26 @@ window._confirmedStart = function(oid, items, qty, pageFrom, pageTo){
     pageFrom === 'null' ? null : pageFrom, pageTo === 'null' ? null : pageTo);
 };
 
-function doStartWork(oid, items, qty, pageFrom, pageTo){
+// v14.49 — dedicated entry point for "재검수(reinspect)" sessions on an
+// order that's already fully done. Bypasses the normal active/completed
+// duplicate-session prompts (those are about accidentally double-starting
+// a NEW session; here the user explicitly asked to reopen a finished one)
+// and passes reinspect:true straight through so the server exempts this
+// session from the order_completed block and from the auto-close sweep
+// in reconcileOrderInspSessions_.
+window.startReinspect = function(oid){
+  if (!oid) { toast('Select an order', 'err'); return; }
+  const already = S.works.find(w => w.w===CW && w.oid===oid && w.stage==='INSP' && !w.endT);
+  if (already) {
+    toast('Resuming your session on ' + oid, '');
+    const el = document.getElementById('sc_' + already.id);
+    if (el) el.scrollIntoView({ behavior:'smooth', block:'center' });
+    return;
+  }
+  doStartWork(oid, null, null, null, null, true);
+};
+
+function doStartWork(oid, items, qty, pageFrom, pageTo, reinspect){
   _inspStartExpanded = false; // re-collapse the picker card once this session is up
   if (_startLock) { toast('Starting... please wait', ''); return; }
   _startLock = true;
@@ -4347,7 +4404,13 @@ function doStartWork(oid, items, qty, pageFrom, pageTo){
     pageFrom: pageFrom!==undefined?pageFrom:null, pageTo: pageTo!==undefined?pageTo:null
   };
   S.works.push(entry);
-  const reqData = { orderId:oid, worker:CW, wpin:(WS&&WS.wpin)||'', stage:CS, items, qty, pageFrom, pageTo };
+  if (reinspect) {
+    // v14.49 — mark this worker's LOCAL scan state as a reinspect session
+    // right away so every room-cap check (othersQtyForCap) stops treating
+    // old durable totals as "already filled" the instant scanning starts.
+    saveScanState(tid, Object.assign(loadScanState(tid), { reinspect:true }));
+  }
+  const reqData = { orderId:oid, worker:CW, wpin:(WS&&WS.wpin)||'', stage:CS, items, qty, pageFrom, pageTo, reinspect: !!reinspect };
 
   // Clear the picker's selection so the just-started order doesn't linger
   // there looking like it still needs starting — the new session already
@@ -5540,13 +5603,18 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
   const chunks = buildImportChunks(payload);
   if (!chunks.length) return true;
 
+  // v14.50 — "재검수(reinspect)" sessions ask the server for 덮어쓰기
+  // (overwrite-per-SKU) semantics instead of the normal additive sum
+  // across sessions — see the reinspect block in logInspectionResults_.
+  const isReinspect = !!(loadScanState(wid) || {}).reinspect;
+
   const MAX_ATTEMPTS = 3;
   async function sendChunk(rowsChunk, replace, chunkIndex){
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++){
       if (onProgress) onProgress(replace ? 'replace' : 'append', attempt, MAX_ATTEMPTS, chunkIndex, chunks.length);
       const out = await apiOp('logInspectionResults', {
         entryId: wid, orderId, result, rows: rowsChunk, replace,
-        unitType: unitType || 'box',
+        unitType: unitType || 'box', reinspect: isReinspect,
         worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
       }, 45000);
       if (out.net && out.res.ok) return true;
@@ -6453,6 +6521,31 @@ window.delOrder = function(id){
   toast(id + ' deleted', 'ok'); R.mgr();
   mgrOp('deleteOrder', { id }).then(out => {
     if (!out.net || !out.res.ok) { S.orders = bkO; S.works = bkW; toast('⚠ Delete failed', 'err'); R.mgr(); }
+  });
+};
+// v14.49 — see the "Archived 오더 복구" box in the Manager Orders card.
+// restoreOrder_ already existed server-side (un-archives Orders + WorkEntries,
+// pulling back from *_Archive sheets first if compacted) but nothing in the
+// client ever called it — an order revived by directly clearing its Sheet
+// row's Archived flag left WorkEntries still archived, which is exactly
+// what made a genuinely-picked order show "⏳ not picked yet" in the
+// dropdown (orderState() found zero WorkEntries rows for it at all). Safe
+// to run on an already-fine order too — restoreOrder_ is a plain idempotent
+// un-archive, not a data rewrite.
+window.restoreOrderById = function(btn){
+  const input = document.getElementById('restoreOrderId');
+  const id = (input?.value || '').trim();
+  if (!id) { toast('오더 번호를 입력하세요', 'err'); return; }
+  if (btn) { btn.disabled = true; btn.style.opacity = '.5'; }
+  mgrOp('restoreOrder', { id }).then(out => {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    if (out.net && out.res.ok) {
+      toast(`${id} 복구 완료 — 목록을 새로고침합니다`, 'ok');
+      if (input) input.value = '';
+      loadData().then(() => { updateBadges(); R.mgr(); renderStageContent(); });
+    } else {
+      toast('⚠ 복구 실패: ' + (out.res.error || 'unknown'), 'err');
+    }
   });
 };
 window.editOrder = function(oid){
