@@ -365,9 +365,17 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .live-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .live-label{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--green);text-transform:uppercase;padding:6px 4px;white-space:nowrap}
 .live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 1.6s infinite;flex-shrink:0}
-.live-chip{display:inline-flex;align-items:center;gap:7px;background:var(--bg2);border:1px solid var(--bd2);border-radius:20px;padding:7px 13px;font-family:var(--font);font-size:13px;color:var(--t);cursor:pointer;transition:all .13s;white-space:nowrap}
+/* v14.41 — unified WORKING NOW chip. Every chip now shares the exact same
+   border WIDTH, radius and padding no matter what state it shows (active
+   vs paused) — only the border STYLE (solid vs dashed) and its color/fill
+   vary. Previously a bare border-color override (no fixed width) plus an
+   ad-hoc opacity:.6 on paused chips made borders look inconsistently thick
+   /thin from one chip to the next, especially on rugged handhelds' lower-
+   DPI screens — this was the "줄이 다르다" (uneven ring) complaint. */
+.live-chip{display:inline-flex;align-items:center;gap:7px;background:var(--bg2);border:1.5px solid var(--bd2);border-radius:20px;padding:6.5px 13px;font-family:var(--font);font-size:13px;color:var(--t);cursor:pointer;transition:all .13s;white-space:nowrap}
 .live-chip:hover{background:var(--bg3);transform:translateY(-1px)}
 .live-chip b{font-weight:700}
+.live-chip-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .wdot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;animation:pulse 1.6s infinite;vertical-align:1px}
 
 /* Daily report modal */
@@ -1439,6 +1447,18 @@ const R = {};
 
 const SCOL   = {PICK:'var(--blue)',  INSP:'var(--purple)',  PALL:'var(--teal)'};
 const SBDCOL = {PICK:'var(--blue-bd)',INSP:'var(--purple-bd)',PALL:'var(--teal-bd)'};
+// v14.41 — stage fill tint (for an active-state chip's background), reusing
+// the same pre-defined rgba tokens as SBDCOL rather than computing alpha
+// from SCOL at render time (color-mix() isn't supported on the older
+// WebViews some rugged scanner handhelds ship with).
+const SFILLCOL = {PICK:'var(--blue-bg)',INSP:'var(--purple-bg)',PALL:'var(--teal-bg)'};
+// Pause-state colors, used consistently everywhere a chip/badge needs to
+// show "paused, and why" (WORKING NOW strip + dashboard WORKERS column):
+// manual 나가기 stays neutral gray, idle-timeout stays amber, so the same
+// two colors always mean the same two things across the app.
+const PCOL     = { manual: 'var(--t3)',                  idle_timeout: 'var(--amber)' };
+const PBDCOL   = { manual: 'rgba(107,122,141,.4)',        idle_timeout: 'var(--amber-bd)' };
+const PFILLCOL = { manual: 'rgba(107,122,141,.1)',        idle_timeout: 'var(--amber-bg)' };
 const SBTN   = {PICK:'btn-blue',     INSP:'btn-purple',     PALL:'btn-teal'};
 const SLABEL = {PICK:'Start Picking',INSP:'Start Inspection',PALL:'Start Palletizing'};
 const SELABEL= {PICK:'End Picking',  INSP:'End Inspection',  PALL:'End Palletizing'};
@@ -1549,26 +1569,31 @@ function renderLiveNow(){
     <span class="live-label"><span class="live-dot"></span>WORKING NOW</span>
     ${act.map(w => {
       const e = liveElapsed(w);
-      // v14.40 — a paused session (either 나가기 or idle-timeout) still has
-      // no endT, so it used to render here identically to someone actually
-      // working — misleading on a live floor view. Now it's visibly
-      // dimmed with its own badge, and the two pause reasons are
-      // distinguishable at a glance: idle-timeout (system-detected, so
-      // amber/caution) vs manual 나가기 (a deliberate, ordinary step-away,
-      // so neutral gray).
+      // v14.40/41 — a paused session (either 나가기 or idle-timeout) still
+      // has no endT, so it used to render here identically to someone
+      // actually working — misleading on a live floor view. Every chip
+      // (active or paused) now shares the exact same border WIDTH, radius
+      // and padding (see .live-chip) — only style (solid vs dashed) and
+      // color vary, so nothing ever looks "thicker/thinner" than any
+      // other chip; that inconsistency (not the colors themselves) was
+      // the "줄이 다르다" complaint. Active = solid stage-colored ring +
+      // stage-tinted fill + pulsing dot. Paused = dashed ring in the
+      // pause-reason's own color, no dot (nothing is actively happening),
+      // reason spelled out in the chip itself.
       const paused = !!w.pauseStarted;
-      const idleReason = paused && w.pauseReason === 'idle_timeout';
-      const pauseBadge = paused
-        ? `<span style="color:${idleReason?'var(--amber)':'var(--t2)'};font-weight:800;font-size:10.5px;letter-spacing:.03em;display:inline-flex;align-items:center;gap:3px">
-             <i class="${idleReason?'ri-time-line':'ri-pause-circle-line'}"></i> ${idleReason?'IDLE (auto)':'PAUSED (나가기)'}
-           </span>`
-        : (e ? `<span class="mono" style="color:var(--amber);font-size:11px"><i class="ri-timer-line"></i> ${e}</span>` : '');
-      return `<button class="live-chip" onclick="showOrderDetail('${w.oid}')" style="border-color:${SCOL[w.stage]}66;${paused?'opacity:.6':''}" title="${w.w} — ${w.stage} on ${w.oid}${paused?(idleReason?' (idle timeout)':' (paused via 나가기)'):''}">
-        <i class="${SICON[w.stage]}" style="color:${SCOL[w.stage]}"></i>
-        <b>${w.w}</b>
-        <span style="color:${SCOL[w.stage]};font-weight:800;font-size:11px;letter-spacing:.04em">${w.stage}</span>
+      const reason = paused ? (w.pauseReason === 'idle_timeout' ? 'idle_timeout' : 'manual') : null;
+      const col   = paused ? PCOL[reason]     : SCOL[w.stage];
+      const bdCol = paused ? PBDCOL[reason]   : SBDCOL[w.stage];
+      const fill  = paused ? PFILLCOL[reason] : SFILLCOL[w.stage];
+      const label = paused
+        ? (reason === 'idle_timeout' ? '⏱ 일시정지 · 자동(이석)' : '⏸ 일시정지 · 나가기')
+        : w.stage;
+      return `<button class="live-chip" onclick="showOrderDetail('${w.oid}')" style="border-style:${paused?'dashed':'solid'};border-color:${bdCol};background:${fill}" title="${w.w} — ${w.stage} on ${w.oid}${paused?(reason==='idle_timeout'?' (idle timeout)':' (paused via 나가기)'):''}">
+        ${paused ? '' : `<span class="live-chip-dot" style="background:${SCOL[w.stage]};animation:pulse 1.6s infinite"></span>`}
+        <b style="${paused?'opacity:.85':''}">${w.w}</b>
+        <span style="color:${col};font-weight:800;font-size:11px;letter-spacing:.04em">${label}</span>
         <span class="mono" style="color:var(--t2);font-size:12px">${w.oid}</span>
-        ${pauseBadge}
+        ${!paused && e ? `<span class="mono" style="color:var(--amber);font-size:11px"><i class="ri-timer-line"></i> ${e}</span>` : ''}
       </button>`;
     }).join('')}
   </div>`;
@@ -1627,21 +1652,29 @@ function renderDashTable(){
       if (activeBy[n]) {
         const a = activeBy[n];
         if (a.paused) {
-          // v14.40 — visibly distinct from an active worker AND from the
-          // other pause reason: idle-timeout (system-detected) vs a
-          // deliberate 나가기 (manual) read differently at a glance.
+          // v14.40/41 — visibly distinct from an active worker AND from
+          // the other pause reason: idle-timeout (system-detected) vs a
+          // deliberate 나가기 (manual) read differently at a glance, using
+          // the same PCOL tokens the WORKING NOW strip uses (so "gray =
+          // manual pause, amber = idle" means the same thing everywhere).
+          const reason = a.idle ? 'idle_timeout' : 'manual';
           const label = a.idle ? '일시정지(자동·이석)' : '일시정지(나가기)';
-          const col = a.idle ? 'var(--amber)' : 'var(--t2)';
-          return `<span style="color:${col};font-weight:700;white-space:nowrap;opacity:.85"><i class="${a.idle?'ri-time-line':'ri-pause-circle-line'}" style="font-size:11px"></i> ${n} · ${a.stage} ${label}</span>`;
+          return `<span style="color:${PCOL[reason]};font-weight:700;white-space:nowrap;opacity:.85"><i class="${a.idle?'ri-time-line':'ri-pause-circle-line'}" style="font-size:11px"></i> ${n} · ${a.stage} ${label}</span>`;
         }
         return `<span style="color:${SCOL[a.stage]};font-weight:700;white-space:nowrap"><span class="wdot" style="background:${SCOL[a.stage]}"></span>${n} · ${a.stage}</span>`;
       }
       const done = doneStagesBy[n] ? [...doneStagesBy[n]] : [];
-      // v14.34 — var(--t3) at 10px was too low-contrast against the dark
-      // background to actually read at a glance (the point of adding it in
-      // the first place). Bumped to var(--t2) + a green check + slightly
-      // larger, and dropped the parens (redundant once there's an icon).
-      if (done.length) return `<span style="white-space:nowrap">${n} <span style="font-size:10.5px;color:var(--t2);font-weight:600"><i class="ri-checkbox-circle-fill" style="color:var(--green);font-size:10px"></i> ${done.join('+')} done</span></span>`;
+      // v14.41 — each finished stage now keeps ITS OWN color (blue ✓PICK,
+      // purple ✓INSP) instead of one flat gray+green tick for everything,
+      // so which stage(s) a worker finished is visible by color alone —
+      // the same PICK=blue/INSP=purple convention an active worker already
+      // uses. (v14.34's fix — bumping contrast from var(--t3) to var(--t2)
+      // — is superseded by this, since each mark now carries its own
+      // stage color instead of a flat gray.)
+      if (done.length) {
+        const marks = done.map(s => `<span style="color:${SCOL[s]};font-weight:700;font-size:10.5px"><i class="ri-checkbox-circle-fill" style="font-size:9px"></i> ${s}</span>`).join(' ');
+        return `<span style="white-space:nowrap">${n} ${marks}</span>`;
+      }
       return `<span>${n}</span>`;
     }).join(', ');
     const totalItems   = ws.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
