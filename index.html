@@ -362,21 +362,34 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .hdr-credit{font-size:10px;color:var(--t2);opacity:.5;letter-spacing:.02em;margin-top:2px}
 
 /* WORKING NOW strip (v8.2) */
-.live-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.live-label{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--green);text-transform:uppercase;padding:6px 4px;white-space:nowrap}
+/* v14.42 — full redesign per the approved color-simulation: fixed-size
+   uniform CARDS in a grid instead of free-flowing pill buttons whose width
+   followed however long each name/order-id/elapsed-time string happened to
+   be. Every card is the exact same box (same width via the grid track,
+   same 2-line internal structure) no matter what it contains — a long
+   name truncates with an ellipsis rather than stretching its card wider
+   than its neighbors. This is the literal "칸 길이를 통일해달라" fix: the
+   uniformity comes from every card sharing one fixed shape, not from
+   guessing a width that fits the longest possible content. */
+.live-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:9px;margin-bottom:12px}
+.live-label{grid-column:1/-1;display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--green);text-transform:uppercase;padding:2px 0 2px;white-space:nowrap}
 .live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 1.6s infinite;flex-shrink:0}
-/* v14.41 — unified WORKING NOW chip. Every chip now shares the exact same
-   border WIDTH, radius and padding no matter what state it shows (active
-   vs paused) — only the border STYLE (solid vs dashed) and its color/fill
-   vary. Previously a bare border-color override (no fixed width) plus an
-   ad-hoc opacity:.6 on paused chips made borders look inconsistently thick
-   /thin from one chip to the next, especially on rugged handhelds' lower-
-   DPI screens — this was the "줄이 다르다" (uneven ring) complaint. */
-.live-chip{display:inline-flex;align-items:center;gap:7px;background:var(--bg2);border:1.5px solid var(--bd2);border-radius:20px;padding:6.5px 13px;font-family:var(--font);font-size:13px;color:var(--t);cursor:pointer;transition:all .13s;white-space:nowrap}
-.live-chip:hover{background:var(--bg3);transform:translateY(-1px)}
-.live-chip b{font-weight:700}
-.live-chip-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.live-card{display:flex;flex-direction:column;gap:6px;background:var(--bg2);border:1.5px solid var(--bd2);border-radius:12px;padding:9px 11px;font-family:var(--font);cursor:pointer;transition:all .13s;min-width:0;width:100%;box-sizing:border-box;text-align:left}
+.live-card:hover{background:var(--bg3);transform:translateY(-1px)}
+.live-card-top{display:flex;align-items:center;gap:6px;min-width:0}
+.live-card-name{font-weight:700;font-size:12.5px;color:var(--t);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.live-card-bottom{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0}
+.live-card-oid{font-size:11px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.live-card-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .wdot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;animation:pulse 1.6s infinite;vertical-align:1px}
+
+/* v14.42 — shared pill/badge used for stage + pause labels everywhere
+   (WORKING NOW cards, dashboard WORKERS column): the color-simulation's
+   "chip" look (border + tinted fill) instead of bare colored text, so a
+   stage/pause indicator always looks like the same kind of object no
+   matter where it appears. */
+.stat-badge{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 8px;font-size:10.5px;font-weight:800;white-space:nowrap;border-width:1.3px;border-style:solid;flex-shrink:0}
+.stat-badge.dashed{border-style:dashed}
 
 /* Daily report modal */
 .rep-h{font-family:var(--mono);font-weight:800;font-size:16px;display:flex;align-items:center;gap:8px;margin-bottom:2px}
@@ -1569,31 +1582,33 @@ function renderLiveNow(){
     <span class="live-label"><span class="live-dot"></span>WORKING NOW</span>
     ${act.map(w => {
       const e = liveElapsed(w);
-      // v14.40/41 — a paused session (either 나가기 or idle-timeout) still
-      // has no endT, so it used to render here identically to someone
-      // actually working — misleading on a live floor view. Every chip
-      // (active or paused) now shares the exact same border WIDTH, radius
-      // and padding (see .live-chip) — only style (solid vs dashed) and
-      // color vary, so nothing ever looks "thicker/thinner" than any
-      // other chip; that inconsistency (not the colors themselves) was
-      // the "줄이 다르다" complaint. Active = solid stage-colored ring +
-      // stage-tinted fill + pulsing dot. Paused = dashed ring in the
-      // pause-reason's own color, no dot (nothing is actively happening),
-      // reason spelled out in the chip itself.
+      // v14.42 — every card (active or paused) is the exact same fixed
+      // box: same width (grid track), same 2-line layout, same badge
+      // size — only its color/fill/border-style and the small bit of text
+      // inside change. Long names/order-ids ellipsis-truncate instead of
+      // stretching their own card wider than the rest (see .live-card* in
+      // CSS) — this is what makes every card genuinely the same size,
+      // matching the approved color-simulation instead of the free-
+      // flowing pill buttons from the previous round.
       const paused = !!w.pauseStarted;
       const reason = paused ? (w.pauseReason === 'idle_timeout' ? 'idle_timeout' : 'manual') : null;
       const col   = paused ? PCOL[reason]     : SCOL[w.stage];
       const bdCol = paused ? PBDCOL[reason]   : SBDCOL[w.stage];
       const fill  = paused ? PFILLCOL[reason] : SFILLCOL[w.stage];
-      const label = paused
-        ? (reason === 'idle_timeout' ? '⏱ 일시정지 · 자동(이석)' : '⏸ 일시정지 · 나가기')
+      const badgeLabel = paused
+        ? (reason === 'idle_timeout' ? '⏱ 이석' : '⏸ 나가기')
         : w.stage;
-      return `<button class="live-chip" onclick="showOrderDetail('${w.oid}')" style="border-style:${paused?'dashed':'solid'};border-color:${bdCol};background:${fill}" title="${w.w} — ${w.stage} on ${w.oid}${paused?(reason==='idle_timeout'?' (idle timeout)':' (paused via 나가기)'):''}">
-        ${paused ? '' : `<span class="live-chip-dot" style="background:${SCOL[w.stage]};animation:pulse 1.6s infinite"></span>`}
-        <b style="${paused?'opacity:.85':''}">${w.w}</b>
-        <span style="color:${col};font-weight:800;font-size:11px;letter-spacing:.04em">${label}</span>
-        <span class="mono" style="color:var(--t2);font-size:12px">${w.oid}</span>
-        ${!paused && e ? `<span class="mono" style="color:var(--amber);font-size:11px"><i class="ri-timer-line"></i> ${e}</span>` : ''}
+      const badge = `<span class="stat-badge${paused?' dashed':''}" style="color:${col};border-color:${bdCol};background:${fill}">${badgeLabel}</span>`;
+      return `<button class="live-card" onclick="showOrderDetail('${w.oid}')" style="border-style:${paused?'dashed':'solid'};border-color:${bdCol}" title="${w.w} — ${w.stage} on ${w.oid}${paused?(reason==='idle_timeout'?' (idle timeout)':' (paused via 나가기)'):''}">
+        <div class="live-card-top">
+          ${paused ? '' : `<span class="live-card-dot" style="background:${SCOL[w.stage]};animation:pulse 1.6s infinite"></span>`}
+          <span class="live-card-name" style="${paused?'opacity:.8':''}">${w.w}</span>
+          ${badge}
+        </div>
+        <div class="live-card-bottom">
+          <span class="live-card-oid mono">${w.oid}</span>
+          ${!paused && e ? `<span class="mono" style="color:var(--amber);font-size:11px;flex-shrink:0"><i class="ri-timer-line"></i> ${e}</span>` : ''}
+        </div>
       </button>`;
     }).join('')}
   </div>`;
@@ -1648,31 +1663,30 @@ function renderDashTable(){
     ws.filter(w => w.endT).forEach(w => {
       (doneStagesBy[w.w] = doneStagesBy[w.w] || new Set()).add(w.stage);
     });
+    // v14.42 — every stage/pause indicator here is now the same
+    // .stat-badge pill (border + tinted fill) the color-simulation showed,
+    // instead of bare colored text — a worker's name stays plain text and
+    // every state (active/done/paused) attaches its own small badge next
+    // to it, so the badge always looks like the same kind of object
+    // wherever it appears (this table, or the WORKING NOW cards above).
     const workersHtml = workers.map(n => {
       if (activeBy[n]) {
         const a = activeBy[n];
         if (a.paused) {
-          // v14.40/41 — visibly distinct from an active worker AND from
-          // the other pause reason: idle-timeout (system-detected) vs a
-          // deliberate 나가기 (manual) read differently at a glance, using
-          // the same PCOL tokens the WORKING NOW strip uses (so "gray =
-          // manual pause, amber = idle" means the same thing everywhere).
           const reason = a.idle ? 'idle_timeout' : 'manual';
-          const label = a.idle ? '일시정지(자동·이석)' : '일시정지(나가기)';
-          return `<span style="color:${PCOL[reason]};font-weight:700;white-space:nowrap;opacity:.85"><i class="${a.idle?'ri-time-line':'ri-pause-circle-line'}" style="font-size:11px"></i> ${n} · ${a.stage} ${label}</span>`;
+          const badgeLabel = a.idle ? '⏱ 이석' : '⏸ 나가기';
+          return `<span style="white-space:nowrap;opacity:.85"><span style="color:${PCOL[reason]};font-weight:600">${n}</span> <span class="stat-badge dashed" style="color:${PCOL[reason]};border-color:${PBDCOL[reason]};background:${PFILLCOL[reason]}">${a.stage} ${badgeLabel}</span></span>`;
         }
-        return `<span style="color:${SCOL[a.stage]};font-weight:700;white-space:nowrap"><span class="wdot" style="background:${SCOL[a.stage]}"></span>${n} · ${a.stage}</span>`;
+        return `<span style="white-space:nowrap"><span style="color:${SCOL[a.stage]};font-weight:700">${n}</span> <span class="stat-badge" style="color:${SCOL[a.stage]};border-color:${SBDCOL[a.stage]};background:${SFILLCOL[a.stage]}"><span class="wdot" style="background:${SCOL[a.stage]};margin-right:0"></span>${a.stage}</span></span>`;
       }
       const done = doneStagesBy[n] ? [...doneStagesBy[n]] : [];
-      // v14.41 — each finished stage now keeps ITS OWN color (blue ✓PICK,
+      // v14.41/42 — each finished stage keeps ITS OWN color (blue ✓PICK,
       // purple ✓INSP) instead of one flat gray+green tick for everything,
       // so which stage(s) a worker finished is visible by color alone —
-      // the same PICK=blue/INSP=purple convention an active worker already
-      // uses. (v14.34's fix — bumping contrast from var(--t3) to var(--t2)
-      // — is superseded by this, since each mark now carries its own
-      // stage color instead of a flat gray.)
+      // same PICK=blue/INSP=purple convention an active worker uses — now
+      // also drawn as the same bordered pill, not bare text.
       if (done.length) {
-        const marks = done.map(s => `<span style="color:${SCOL[s]};font-weight:700;font-size:10.5px"><i class="ri-checkbox-circle-fill" style="font-size:9px"></i> ${s}</span>`).join(' ');
+        const marks = done.map(s => `<span class="stat-badge" style="color:${SCOL[s]};border-color:${SBDCOL[s]};background:${SFILLCOL[s]}">✓ ${s}</span>`).join(' ');
         return `<span style="white-space:nowrap">${n} ${marks}</span>`;
       }
       return `<span>${n}</span>`;
