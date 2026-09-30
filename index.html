@@ -2360,13 +2360,19 @@ function renderSkuChecklistUI(w, items, st){
       <button type="button" class="scan-mult-btn${st.unitType!=='pallet'?' on':''}" style="flex:1" onclick="setUnitType('${w.id}','box')"><i class="ri-archive-2-line"></i> Box</button>
       <button type="button" class="scan-mult-btn${st.unitType==='pallet'?' on':''}" style="flex:1" onclick="setUnitType('${w.id}','pallet')"><i class="ri-truck-line"></i> Pallet</button>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--purple-bg);border:1px solid var(--purple-bd);border-radius:var(--r);padding:8px 12px;margin-bottom:10px">
-      <span style="font-size:12px;color:var(--purple);font-weight:700"><i class="ri-archive-2-line"></i> Current ${unitWord(st.unitType)}</span>
-      <span style="font-size:16px;font-weight:800">${st.currentBox || 1}</span>
+    <!-- v14.46 — was sequential-only (prev/next). Several workers can now
+         each own their own box/pallet number and jump straight to it
+         (tap the number), instead of clicking "next" N times to reach a
+         non-adjacent number. This is purely a local label — see
+         boxScans in loadScanState — so switching it around, any number
+         of times, in any order, never affects what gets saved. -->
+    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--purple-bg);border:2px solid var(--purple-bd);border-radius:var(--r);padding:8px 12px;margin-bottom:6px;cursor:pointer" onclick="openBoxNumberModal('${w.id}')" title="탭해서 ${unitWord(st.unitType)} 번호 직접 지정">
+      <span style="font-size:12px;color:var(--purple);font-weight:700"><i class="ri-archive-2-line"></i> ${unitWord(st.unitType,true)} 번호 (탭해서 변경)</span>
+      <span style="font-size:16px;font-weight:800">${st.currentBox || 1} <i class="ri-pencil-line" style="font-size:12px;opacity:.6"></i></span>
     </div>
+    ${boxChipsHtml(st, w.id) ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">${boxChipsHtml(st, w.id)}</div>` : ''}
     <div style="display:flex;gap:6px;margin-bottom:12px">
-      <button class="btn btn-sm" style="width:44px;justify-content:center;flex-shrink:0" title="Back to previous ${unitWord(st.unitType)}" onclick="prevBox('${w.id}')"><i class="ri-arrow-left-line"></i></button>
-      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="nextBox('${w.id}')"><i class="ri-inbox-archive-line"></i> Finish ${unitWord(st.unitType)}, start next</button>
+      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="nextBox('${w.id}')"><i class="ri-inbox-archive-line"></i> 이 ${unitWord(st.unitType)} 완료 (다음 번호로)</button>
     </div>
 
     <div id="lastScanBanner_${w.id}">${lastScanHtml}</div>
@@ -3086,9 +3092,57 @@ window.saveMyPageRange = async function(wid){
   }
 };
 
+// v14.46 — now jumps to a genuinely NEW number (maxBox+1), not just
+// "currentBox+1": since the number can be set directly via
+// openBoxNumberModal (below), a worker may have jumped back to an
+// earlier number to add more to it — "finish, start next" should still
+// mean "a fresh one I haven't used yet", not accidentally collide with
+// a number already in progress.
 window.nextBox = function(wid){
   const st = loadScanState(wid);
-  st.currentBox = (st.currentBox || 1) + 1;
+  st.currentBox = (st.maxBox || 1) + 1;
+  st.maxBox = st.currentBox;
+  saveScanState(wid, st);
+  renderStageContent();
+};
+// Quick per-box/pallet quantity summary chips, shown under the number
+// picker — lets a worker see at a glance how much is logged under each
+// number they've touched, and jump straight back to any of them.
+function boxChipsHtml(st, wid){
+  const used = Object.keys(st.boxScans || {}).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b);
+  if (!used.length) return '';
+  return used.map(n => {
+    const qty = Object.values(st.boxScans[n] || {}).reduce((s,v) => s + (Number(v)||0), 0);
+    const isCur = n === (st.currentBox || 1);
+    return `<span class="scan-mult-btn${isCur?' on':''}" style="cursor:pointer" onclick="setBoxNumber('${wid}',${n})">${n} · ${qty}개</span>`;
+  }).join('');
+}
+window.openBoxNumberModal = function(wid){
+  const st = loadScanState(wid);
+  const uw = unitWord(st.unitType), uwCap = unitWord(st.unitType, true);
+  const chips = boxChipsHtml(st, wid);
+  openModal(`<div class="end-modal-inner">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px;text-align:center"><i class="ri-archive-2-line"></i> ${uwCap} 번호 지정</div>
+    <div style="font-size:11.5px;color:var(--t3);text-align:center;margin-bottom:14px">원하는 ${uw} 번호를 입력하세요 — 이미 작업한 번호로 돌아가도 안전합니다</div>
+    ${chips ? `<div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:center;margin-bottom:14px">${chips}</div>` : ''}
+    <label class="fl" style="text-align:center;display:block">${uwCap} 번호</label>
+    ${qtyFieldHtml('boxNumberVal', st.currentBox || 1)}
+    ${numpadHtml()}
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">
+      <button class="btn btn-sm" onclick="closeModal()">취소</button>
+      <button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="confirmBoxNumber('${wid}')"><i class="ri-checkbox-circle-line"></i> 확인</button>
+    </div>
+  </div>`, { wide:true });
+  setTimeout(() => numpadFocus('boxNumberVal'), 0);
+};
+window.confirmBoxNumber = function(wid){
+  const val = Math.max(1, parseInt(document.getElementById('boxNumberVal')?.value) || 1);
+  setBoxNumber(wid, val);
+  closeModal();
+};
+window.setBoxNumber = function(wid, n){
+  const st = loadScanState(wid);
+  st.currentBox = Math.max(1, n);
   st.maxBox = Math.max(st.maxBox || 1, st.currentBox);
   saveScanState(wid, st);
   renderStageContent();
@@ -3344,6 +3398,7 @@ function renderStageContent(){
           title="${notReadyYet ? 'Tap to finish early — you can flag or force-complete what\'s left' : ''}">
           <i class="ri-checkbox-circle-line"></i> ${notReadyYet ? `Finish early (${readyInfo.done}/${readyInfo.total} scanned)` : SELABEL[s]}
         </button>
+        ${s==='INSP' ? `<div style="font-size:10.5px;color:var(--t3);text-align:center;margin-top:6px;line-height:1.4"><i class="ri-information-line"></i> 같은 오더를 여러 명이 나눠서 검수 중이라면, <b style="color:var(--t2)">각자 자기 화면에서 직접 눌러야</b> 내 몫이 저장됩니다</div>` : ''}
         ${s==='INSP' ? `<button class="btn" style="width:100%;justify-content:center;margin-top:8px;padding:10px;font-size:12.5px;font-weight:600;color:var(--t2)" onclick="hideInspSession('${w.id}')" title="이 오더에서 완전히 나갑니다 — 더 이상 Active로 표시되지 않습니다. 스캔 진행상황은 그대로 저장되어 있어서, 나중에 이 오더를 다시 선택하면 중단한 곳부터 이어집니다">
           <i class="ri-logout-box-r-line" style="font-size:14px"></i> 나가기 (진행 상황 저장됨)
         </button>` : ''}
@@ -4851,21 +4906,33 @@ window.finalizeInspEnd = async function(wid){
   // disconnected" with no feedback right when the worker most needed to
   // see something was happening. A blocking spinner modal stays up for
   // the whole wait and is explicitly closed once the result is known.
+  // v14.47 — now shows live retry status (see logInspectionResultsToServer's
+  // onProgress) instead of a bare spinner, so a worker watching the screen
+  // during a flaky-WiFi retry sees exactly what's happening instead of
+  // wondering if the app froze.
   openModal(`<div class="end-modal-inner" style="text-align:center;padding:8px 0">
     <div class="spinner" style="margin:0 auto 14px"></div>
     <div style="font-size:14px;font-weight:700;color:var(--t)">스캔 결과 저장 중...</div>
-    <div style="font-size:11.5px;color:var(--t3);margin-top:4px">잠시만 기다려주세요 — 화면을 벗어나지 마세요</div>
+    <div id="inspSaveStatus_${wid}" style="font-size:11.5px;color:var(--t3);margin-top:4px">잠시만 기다려주세요 — 화면을 벗어나지 마세요</div>
   </div>`, { closable:false });
 
-  const ok = await logInspectionResultsToServer(wid, w.oid, pend.rows, pend.result, pend.boxScans, unitType);
+  const ok = await logInspectionResultsToServer(wid, w.oid, pend.rows, pend.result, pend.boxScans, unitType,
+    (phase, attempt, maxAttempts, chunkIndex, chunkTotal) => {
+      const el = document.getElementById(`inspSaveStatus_${wid}`);
+      if (!el) return;
+      const partLabel = chunkTotal > 1 ? ` (${chunkIndex+1}/${chunkTotal})` : '';
+      el.innerHTML = attempt > 1
+        ? `<span style="color:var(--amber);font-weight:700">자동 재시도 중 ${attempt}/${maxAttempts}${partLabel}</span> — 화면을 벗어나지 마세요`
+        : `잠시만 기다려주세요${partLabel} — 화면을 벗어나지 마세요`;
+    });
   if (!ok) {
     openModal(`<div class="end-modal-inner">
       <i class="ri-error-warning-line" style="font-size:28px;color:var(--red);display:block;margin-bottom:8px"></i>
-      <div style="font-size:15px;font-weight:800;margin-bottom:8px;color:var(--red)">저장 실패 — 다시 시도해주세요</div>
-      <div style="font-size:13px;color:var(--t2);margin-bottom:16px;line-height:1.5">네트워크 문제로 스캔 결과가 서버에 저장되지 못했습니다.<br><b style="color:var(--t)">세션은 아직 종료되지 않았고, 스캔한 내용도 모두 그대로 남아있습니다</b> — 안심하고 연결 상태를 확인한 뒤 다시 시도하세요.</div>
+      <div style="font-size:15px;font-weight:800;margin-bottom:8px;color:var(--red)">저장 실패 — 3회 자동 재시도했지만 실패했습니다</div>
+      <div style="font-size:13px;color:var(--t2);margin-bottom:16px;line-height:1.5">네트워크 문제로 스캔 결과가 서버에 저장되지 못했습니다.<br><b style="color:var(--t)">세션은 아직 종료되지 않았고, 스캔한 내용도 모두 그대로 남아있습니다</b> — 연결 상태를 확인한 뒤 다시 시도하세요.<br><b style="color:var(--amber)">⚠ 지금 닫고 그냥 나가면, 이 기록은 서버에 저장되지 않은 채로 남습니다 — 나중에 반드시 이 세션으로 돌아와 다시 시도해주세요.</b></div>
       <div style="display:flex;gap:8px;justify-content:center">
-        <button class="btn btn-sm" onclick="closeModal()">닫기</button>
-        <button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="finalizeInspEnd('${wid}')"><i class="ri-refresh-line"></i> 다시 시도</button>
+        <button class="btn btn-sm" onclick="closeModal()">나중에 다시 시도</button>
+        <button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="finalizeInspEnd('${wid}')"><i class="ri-refresh-line"></i> 지금 다시 시도</button>
       </div>
     </div>`);
     return;
@@ -5409,18 +5476,44 @@ function printLabels(w, meta, count){
   setTimeout(() => { win.focus(); win.print(); }, 400);
 }
 
+function _sleep(ms){ return new Promise(res => setTimeout(res, ms)); }
+
 // Reuses the same adaptive byte-length chunking as pick-list import, since
 // this goes over the same JSONP URL-length-limited transport.
-// v14.2 — now returns true/false so the caller (finalizeInspEnd) knows
-// whether it's actually safe to clear local state and end the session.
-// Each chunk gets a longer timeout (this write is heavier than a normal
-// read) but is NOT itself retried here: the first chunk always goes with
-// replace:true, which wipes any previously-logged rows for this entry —
-// so retrying the WHOLE function (which finalizeInspEnd's error screen
-// does) is naturally self-cleaning, whereas silently re-sending a single
-// later chunk on an ambiguous timeout risks appending the same rows
-// twice if that chunk had actually gone through just before the timeout.
-async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans, unitType){
+//
+// v14.47 — CRITICAL RELIABILITY REWRITE. Root cause of a real incident
+// (an entire order's InspectionResults rows found completely gone from
+// the sheet, confirmed by direct inspection of the sheet itself, after
+// 4 workers inspected the same order concurrently and one worker's
+// session covered 3 pallets in a row — meaning a much bigger payload,
+// more chunks, more chances to fail under heavy simultaneous load):
+//
+//   1. Chunk 0 (replace:true — wipes this entry's previously-saved rows
+//      before writing the new ones) used to be followed by every
+//      remaining chunk firing IN PARALLEL (Promise.all). Under 4 workers
+//      hammering the same Apps Script document lock at once, some of
+//      those parallel appends could fail while chunk 0's replace had
+//      ALREADY wiped the old data — leaving the sheet holding only a
+//      partial rewrite. The old code correctly told the caller not to
+//      clear local state, but nothing forced the worker to actually
+//      retry: a dismissed error screen left that partial state sitting
+//      on the server indefinitely.
+//   2. Repeated manual retries each re-fire chunk 0's replace:true again
+//      — on a flaky warehouse connection, several retries in a row that
+//      each wipe-then-partially-fail is exactly what makes the saved
+//      count visibly shrink over time instead of recovering.
+//
+// Fix: every chunk (including chunk 0) now gets up to MAX_ATTEMPTS tries
+// with a short backoff BEFORE the whole thing is reported as failed —
+// most transient lock-contention/network blips now resolve themselves
+// without the worker ever seeing an error. Chunks are also sent
+// SEQUENTIALLY, not in parallel, so this worker's own save doesn't pile
+// multiple simultaneous lock waits on top of the other 3 workers' — it
+// was the parallel fan-out that made contention (and therefore partial-
+// failure) more likely in the first place. `onProgress(phase, attempt,
+// maxAttempts, chunkIndex, chunkTotal)` lets the caller show live retry
+// status instead of a silent spinner.
+async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans, unitType, onProgress){
   const payload = rows.map(r => ({
     sku:r.sku, barcode:r.barcode, name:r.name, reqQty:r.req,
     packedQty: r.got,
@@ -5446,36 +5539,35 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
   }
   const chunks = buildImportChunks(payload);
   if (!chunks.length) return true;
-  // v14.4 — chunk 0 carries replace:true (clears prior rows for this
-  // entryId server-side) so it MUST land first and MUST be confirmed
-  // before anything else writes, or a race could wipe rows an append
-  // chunk just wrote. Every chunk after that is append-only and order
-  // doesn't matter between them, so they go out together — this is what
-  // was making "End Inspection" on a large order feel stuck: every chunk
-  // was paying a full round-trip + Apps Script doc-lock wait, one after
-  // another, when only the first one actually needs to be sequential.
-  const first = await apiOp('logInspectionResults', {
-    entryId: wid, orderId, result, rows: chunks[0], replace: true,
-    unitType: unitType || 'box',
-    worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
-  }, 45000);
-  if (!first.net || !first.res.ok) {
-    console.warn('logInspectionResults chunk failed', 0, first);
+
+  const MAX_ATTEMPTS = 3;
+  async function sendChunk(rowsChunk, replace, chunkIndex){
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++){
+      if (onProgress) onProgress(replace ? 'replace' : 'append', attempt, MAX_ATTEMPTS, chunkIndex, chunks.length);
+      const out = await apiOp('logInspectionResults', {
+        entryId: wid, orderId, result, rows: rowsChunk, replace,
+        unitType: unitType || 'box',
+        worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
+      }, 45000);
+      if (out.net && out.res.ok) return true;
+      console.warn('logInspectionResults chunk failed', chunkIndex, 'attempt', attempt, out);
+      if (attempt < MAX_ATTEMPTS) await _sleep(1000 * attempt); // short backoff: 1s, 2s
+    }
     return false;
   }
-  if (chunks.length === 1) return true;
-  const rest = await Promise.all(chunks.slice(1).map(rowsChunk =>
-    apiOp('logInspectionResults', {
-      entryId: wid, orderId, result, rows: rowsChunk, replace: false,
-      unitType: unitType || 'box',
-      worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
-    }, 45000)
-  ));
-  for (let i = 0; i < rest.length; i++) {
-    if (!rest[i].net || !rest[i].res.ok) {
-      console.warn('logInspectionResults chunk failed', i + 1, rest[i]);
-      return false;
-    }
+
+  // Chunk 0 (replace:true) MUST land first and MUST be confirmed before
+  // anything else writes, or a race could wipe rows an append chunk just
+  // wrote. It now gets its own retry budget before giving up.
+  const ok0 = await sendChunk(chunks[0], true, 0);
+  if (!ok0) return false;
+  // Every remaining chunk is append-only. Sent ONE AT A TIME (not
+  // Promise.all) — order between them still doesn't matter, but this
+  // worker no longer opens several simultaneous lock waits of its own
+  // on top of whatever the other workers are doing right now.
+  for (let i = 1; i < chunks.length; i++){
+    const ok = await sendChunk(chunks[i], false, i);
+    if (!ok) return false;
   }
   return true;
 }
