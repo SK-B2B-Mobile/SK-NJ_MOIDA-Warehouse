@@ -2652,6 +2652,16 @@ let _liveSyncStartedAt = {}; // wid -> Date.now() when its poll first started �
 // collapsed automatically the next time a session successfully starts.
 let _inspStartExpanded = false;
 let _pickPagesFullyClaimed = false; // whether the currently-selected PICK order has no open page range left
+// v14.37 — which order the Page from/to fields currently belong to. The
+// auto-fill only overwrites those fields when they're EMPTY, so it can
+// tell "worker hasn't typed anything yet" from "worker deliberately typed
+// a range" — but switching the dropdown directly from order A to order B
+// (without going back through the blank "— Select order —" first) never
+// cleared them, so order A's leftover range (typed or auto-filled) just
+// sat there looking like a value for order B, silently blocking B's own
+// auto-fill from ever running. Tracking which oid the fields belong to
+// means any genuine switch to a DIFFERENT order clears them first.
+let _lastPageFieldsOid = null;
 
 function liveContributorNames(wid, key){
   const list = _liveContributors[wid] || [];
@@ -3464,6 +3474,7 @@ async function onOrderChange(){
     if (pf0) { pf0.disabled = false; pf0.value = ''; }
     if (pt0) { pt0.disabled = false; pt0.value = ''; }
     if (sp0) { sp0.disabled = false; sp0.checked = false; }
+    _lastPageFieldsOid = null;
     resetPickStartBtn();
     return;
   }
@@ -3494,6 +3505,16 @@ async function onOrderChange(){
     const pf = document.getElementById('wPageFrom'), pt = document.getElementById('wPageTo');
     const sp = document.getElementById('wSinglePage');
     const fullyClaimed = !!(o && o.pages && !firstOpenPageGap(oid, o.pages));
+    // v14.37 — a genuine switch to a different order (not just a
+    // background re-render of the same one) clears any leftover range
+    // from whatever was previously selected, so THIS order's own auto-fill
+    // below isn't blocked by another order's stale value sitting in the
+    // fields. See _lastPageFieldsOid declaration for the full story.
+    if (oid !== _lastPageFieldsOid) {
+      if (pf) pf.value = '';
+      if (pt) pt.value = '';
+      _lastPageFieldsOid = oid;
+    }
     if (o && o.pages) {
       const gap = firstOpenPageGap(oid, o.pages);
       if (pf) pf.max = o.pages;
