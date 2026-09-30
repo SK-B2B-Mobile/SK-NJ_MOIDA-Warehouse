@@ -2324,7 +2324,7 @@ function lastScanBannerHtml(ls){
 }
 
 function renderSkuChecklistUI(w, items, st){
-  const pageSizes = [10,20,30,40];
+  const pageSizes = [20,40,50];
   const ui = skuUI(w.id);
   const others = _liveBaseline[w.id] || {};
   let doneCount = 0;
@@ -2377,24 +2377,24 @@ function renderSkuChecklistUI(w, items, st){
       <button type="button" class="btn btn-sm" style="flex-shrink:0" title="바코드/SKU 직접 입력 (스캔이 안 될 때)" onclick="openManualScanModal('${w.id}')"><i class="ri-keyboard-line"></i></button>
     </div>
 
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-      <div style="position:relative;flex:1;min-width:140px">
+    <div style="margin-bottom:8px">
+      <div style="position:relative;margin-bottom:6px">
         <i class="ri-search-line" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:13px"></i>
         <input class="fi" id="skuSearch_${w.id}" placeholder="Search SKU / name / barcode / rack" autocomplete="off"
           oninput="setSkuSearch('${w.id}', this.value)" value="${(ui.q||'').replace(/"/g,'&quot;')}"
-          style="padding-left:30px;font-size:12px">
+          style="padding-left:30px;font-size:12px;width:100%;box-sizing:border-box">
       </div>
-      <div style="display:flex;gap:3px;align-items:center">
-        <span style="font-size:10px;color:var(--t3);font-weight:600;margin-right:1px">Show:</span>
-        ${pageSizes.map(n => `<button type="button" id="skuSizeBtn_${w.id}_${n}" class="scan-mult-btn${ui.size===n?' on':''}" onclick="setSkuPageSize('${w.id}',${n})">${n}</button>`).join('')}
+      <!-- v14.45 — explicit ask: Show(20/40/50) and the "SKU done/total"
+           badge must sit on the SAME row, with the badge pinned to the far
+           right (search box now gets its own full-width row above so this
+           row never wraps and pushes the badge underneath). -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+        <div style="display:flex;gap:3px;align-items:center;flex-shrink:0">
+          <span style="font-size:10px;color:var(--t3);font-weight:600;margin-right:1px">Show:</span>
+          ${pageSizes.map(n => `<button type="button" id="skuSizeBtn_${w.id}_${n}" class="scan-mult-btn${ui.size===n?' on':''}" onclick="setSkuPageSize('${w.id}',${n})">${n}</button>`).join('')}
+        </div>
+        <span id="skuProgressBadge_${w.id}" style="font-size:13px;font-weight:800;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-bd);border-radius:999px;padding:4px 12px;white-space:nowrap;flex-shrink:0">SKU ${doneCount}/${items.length}</span>
       </div>
-      <!-- v14.44 — explicit ask: "총 SKU 몇개 중에 몇개 스캔했는지" needs to
-           be prominent, right next to the Show controls, not buried in the
-           small uppercase label above. This is the same doneCount/
-           items.length this function already computes for that label —
-           just surfaced here too, bigger and in a colored badge so it's
-           readable at a glance while scanning. -->
-      <span id="skuProgressBadge_${w.id}" style="font-size:13px;font-weight:800;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-bd);border-radius:999px;padding:4px 12px;white-space:nowrap">SKU ${doneCount}/${items.length}</span>
     </div>
 
     <div class="sku-list" id="skuListBody_${w.id}">${rows}</div>
