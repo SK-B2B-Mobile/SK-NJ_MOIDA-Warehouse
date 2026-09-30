@@ -3365,33 +3365,36 @@ async function onOrderChange(){
       // immediately, instead of leaving them looking at an empty screen
       // because the card is still filtered out of mySessions.
       //
-      // v14.27 — before unhiding, tell the server to actually resume any
-      // paused session (see pauseWork_/resumeWork_) so its clock stops
-      // excluding time from now on, AND so we find out here — not after
-      // showing a stale scan screen — if someone else finished this order
-      // entirely while this worker was away doing something else. A
-      // completed order can't be re-entered for any stage, paused session
-      // or not.
-      const pausedHere = myActiveHere.filter(w => isInspSessionHidden(w.id));
-      if (pausedHere.length) {
-        const worker = WS ? WS.worker : CW, wpin = WS ? WS.wpin : '';
-        const results = await Promise.all(pausedHere.map(w => apiOp('resumeWork', { entryId: w.id, worker, wpin })));
-        const blocked = results.find(out => out.net && out.res && out.res.ok === false && out.res.error === 'order_completed');
-        if (blocked) {
-          const wrap = document.getElementById('inspScanStartWrap');
-          if (wrap) wrap.innerHTML = `<div style="text-align:center;padding:16px 10px">
-            <div style="font-size:13px;color:var(--green);font-weight:700;margin-bottom:4px"><i class="ri-checkbox-circle-fill"></i> 이 오더는 이미 완료되었습니다</div>
-            <div style="font-size:11.5px;color:var(--t3)">다른 작업자가 검수를 마쳤습니다 — 더 이상 들어갈 수 없습니다.</div>
-          </div>`;
-          return;
-        }
-        // A network/server hiccup on resumeWork itself (not an
-        // order_completed refusal) fails OPEN here — the worker's own
-        // still-genuinely-open session must not get stranded behind a
-        // flaky connection. Worst case, this one pause's duration doesn't
-        // get excluded from NetMinutes, which is a minor KPI nit, not a
-        // safety problem.
+      // v14.27 — tell the server to (re-)confirm this session is still
+      // legitimately open (see pauseWork_/resumeWork_'s order_completed
+      // check), for EVERY open session of mine here — not only ones
+      // hidden via "나가기". Checking only the paused ones missed the
+      // exact case that actually bit a manager in production: their own
+      // INSP entry was still sitting open (never explicitly exited), but
+      // OTHER workers had since fully finished this order's inspection —
+      // reselecting it just walked straight back into the live scan
+      // screen (checklist reading "149/149 — fully accounted for" right
+      // next to a still-clickable "End Inspection" button) instead of
+      // showing it as done. resumeWork_ checks order-completion before it
+      // even looks at whether THIS entry was paused, so calling it here
+      // unconditionally closes that gap for both cases at once.
+      const worker = WS ? WS.worker : CW, wpin = WS ? WS.wpin : '';
+      const results = await Promise.all(myActiveHere.map(w => apiOp('resumeWork', { entryId: w.id, worker, wpin })));
+      const blocked = results.find(out => out.net && out.res && out.res.ok === false && out.res.error === 'order_completed');
+      if (blocked) {
+        const wrap = document.getElementById('inspScanStartWrap');
+        if (wrap) wrap.innerHTML = `<div style="text-align:center;padding:16px 10px">
+          <div style="font-size:13px;color:var(--green);font-weight:700;margin-bottom:4px"><i class="ri-checkbox-circle-fill"></i> 이 오더는 이미 완료되었습니다</div>
+          <div style="font-size:11.5px;color:var(--t3)">다른 작업자가 검수를 마쳤습니다 — 더 이상 들어갈 수 없습니다.</div>
+        </div>`;
+        return;
       }
+      // A network/server hiccup on resumeWork itself (not an
+      // order_completed refusal) fails OPEN here — the worker's own
+      // still-genuinely-open session must not get stranded behind a
+      // flaky connection. Worst case, a paused entry's gap doesn't get
+      // excluded from NetMinutes this one time, which is a minor KPI nit,
+      // not a safety problem.
       myActiveHere.forEach(w => unhideInspSessionLocal(w.id));
       // v10.11 — selecting an order I'm already actively inspecting has
       // nothing left for the picker card to do (the real scan UI is
@@ -4797,11 +4800,23 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
     const nameByKey = {};
     rows.forEach(r => { nameByKey[r.barcode || r.sku] = r.name || r.sku || ''; });
     if (groups.length) {
+      // v14.28 — a box with many SKUs used to render as ONE giant
+      // comma-joined paragraph, with page-break-inside:avoid on the whole
+      // thing (.box-line). That rule only works when the element actually
+      // fits on a page; a paragraph listing 100+ items is routinely taller
+      // than a full printable page, so the browser had no choice but to
+      // break — and clip — somewhere in the middle of it anyway, which is
+      // exactly the "잘린다"/garbled-looking print this was reported as.
+      // Fix: one short block PER ITEM instead of one huge block per box.
+      // Every individual item line trivially fits on a page, so
+      // page-break-inside:avoid on each one actually holds, and the
+      // browser breaks the page cleanly BETWEEN items instead of through
+      // one — however many items a single box ends up holding.
       boxHtml = `<h4 class="issues-h4">${uwCap} breakdown</h4>` + groups.map(g => {
-        const lines = Object.entries(g.items || {})
-          .map(([key, qty]) => `${nameByKey[key] || key} · ${qty}`)
-          .join(', ');
-        return `<p class="box-line"><b>${g.label}</b> — ${lines || '(no items recorded)'}</p>`;
+        const itemLines = Object.entries(g.items || {})
+          .map(([key, qty]) => `<div class="box-item">${nameByKey[key] || key} · ${qty}</div>`)
+          .join('') || `<div class="box-item">(no items recorded)</div>`;
+        return `<div class="box-group"><p class="box-line"><b>${g.label}</b></p>${itemLines}</div>`;
       }).join('');
     } else {
       boxHtml = `<p style="font-size:11px;color:#991b1b;margin-top:10px">⚠ No ${uw} breakdown was recorded for this order — showing combined totals only.</p>`;
@@ -4841,7 +4856,13 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
     table.slip-table tbody tr, table.slip-table tfoot tr{page-break-inside:avoid; break-inside:avoid;}
     .slip-total-row td{border-top:2px solid #111; border-bottom:none; padding-top:10px; padding-bottom:10px; background:#f7f7f7;}
     .issues-h4{margin-top:20px; margin-bottom:4px; font-size:12px; text-transform:uppercase; color:#555;}
-    .box-line{font-size:12px; margin:6px 0; page-break-inside:avoid; break-inside:avoid;}
+    /* v14.28 — .box-line is now just the "Box N" heading (see box-item
+       below for why the item list moved out of it). Keeping the heading
+       glued to its first couple of items, not stranded alone at the
+       bottom of a page, is what page-break-after:avoid is for here. */
+    .box-group{margin:10px 0 4px;}
+    .box-line{font-size:12px; margin:0 0 2px; page-break-after:avoid; break-after:avoid;}
+    .box-item{font-size:12px; padding:1px 0 1px 14px; page-break-inside:avoid; break-inside:avoid;}
     .verify-badge{display:inline-block; padding:7px 15px; border-radius:6px; font-weight:800; font-size:12px; margin-top:20px; page-break-inside:avoid; break-inside:avoid;}
     .verify-ok{background:#ede9fe; color:#5b21b6; border:1px solid #8b5cf6;}
     .verify-bad{background:#fee2e2; color:#991b1b; border:1px solid #dc2626;}
