@@ -1128,7 +1128,12 @@ window.hideInspSession = function(wid){
   // should never wait on a network call just to leave this screen.
   apiOp('pauseWork', { entryId: wid, worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : '' });
   updateBadges();
-  go('dash');
+  // v14.39 — this used to drop the worker onto the Dashboard, an extra
+  // tap away from picking their next task. "나가기" means "I'm stepping
+  // away from THIS session to go do other work" — the Work tab (where
+  // PICK/INSPECTION selection lives) is where that next task actually
+  // gets picked, so that's where this should land instead.
+  go('work');
 };
 
 /** Returns cached SKU-level pick list for an order, or null while it's still loading (fetch kicked off in background). */
@@ -3427,11 +3432,21 @@ function renderInspDoneCard(wrap, oid, prog){
     ? (issueSkus.length ? ` — ${shippedClean} shipped · ${issueSkus.length} issue (${prog.skuTotal} SKUs total)` : ` — ${prog.skuTotal}/${prog.skuTotal} SKUs`)
     : '';
   if (prog && !prog.ready) {
-    // Genuinely partial — offer to CONTINUE (not "re-inspect from
-    // scratch"): startWork() opens a session whose checklist already
-    // shows everything already covered as done (via the live-baseline
-    // merge), so only the real gap is left to scan.
-    wrap.innerHTML = `
+    // v14.38 — this used to say "Continue inspecting" and offer Packing
+    // Slip/Flat List/Labels for EVERY not-yet-ready order, including one
+    // that's never been touched at all (0/297 — nobody has scanned a
+    // single item). "Continue" implies resuming existing progress, and a
+    // packing slip for zero scanned items is just an empty/misleading
+    // printout — both read as wrong for a brand-new order. Split the two
+    // cases: truly nothing done yet gets a plain "Start Inspection" with
+    // no print buttons; genuine partial progress (skuDone > 0) keeps the
+    // original "continue + print what's there so far" behavior.
+    const brandNew = !prog.skuDone;
+    wrap.innerHTML = brandNew ? `
+    <div style="text-align:center;padding:10px 0 4px">
+      <div style="font-size:12.5px;color:var(--t3);margin-bottom:10px"><i class="ri-information-line"></i> Not started yet — 0/${prog.skuTotal} SKUs</div>
+      <button class="btn ${SBTN[CS]} btn-block" onclick="startWork()"><i class="ri-play-circle-line"></i> Start Inspection</button>
+    </div>` : `
     <div style="text-align:center;padding:10px 0 4px">
       <div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:10px"><i class="ri-error-warning-line"></i> Partially complete — ${prog.skuDone}/${prog.skuTotal} SKUs accounted for</div>
       <div style="display:flex;gap:6px;margin-bottom:10px">
@@ -3453,6 +3468,22 @@ function renderInspDoneCard(wrap, oid, prog){
       </div>
       <button class="btn btn-sm" style="color:var(--t3)" onclick="if(confirm('이 오더는 이미 검수 완료되었습니다. 정말 다시 검수를 시작하시겠습니까?'))startWork();"><i class="ri-add-line"></i> Re-inspect (재검수 시작)</button>
     </div>`;
+  reconcileOrderInspSessionsOnce(oid);
+}
+
+// v14.38 — fire-and-forget cleanup: the moment ANY worker's screen shows
+// an order as fully done (this function), also ask the server to close
+// out any stray still-open INSP session for it (see
+// reconcileOrderInspSessions_ in Code.gs for why this can't just wait for
+// the session's own owner to come back). Guarded per-oid per-page-load so
+// this doesn't refire on every 30s background poll — one attempt per
+// order per session is plenty, since it's a no-op after the first success.
+const _reconciledOids = new Set();
+function reconcileOrderInspSessionsOnce(oid){
+  if (!oid || _reconciledOids.has(oid)) return;
+  _reconciledOids.add(oid);
+  apiOp('reconcileOrderInspSessions', { orderId: oid, worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : '' })
+    .catch(() => {});
 }
 
 async function onOrderChange(){
