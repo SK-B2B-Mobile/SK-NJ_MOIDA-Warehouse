@@ -1990,7 +1990,7 @@ window.updateSkuListView = function(wid){
   if (prevBtn) prevBtn.disabled = ui.page <= 0;
   if (nextBtn) nextBtn.disabled = ui.page >= totalPages - 1;
 
-  [10,20,30,40].forEach(n => {
+  [20,40,50].forEach(n => {
     const b = document.getElementById('skuSizeBtn_' + wid + '_' + n);
     if (b) b.classList.toggle('on', ui.size === n);
   });
