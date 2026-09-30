@@ -1512,10 +1512,22 @@ function renderDashTable(){
     // v8.2: which workers are active on this order right now, and in which stage
     const activeBy = {};
     ws.filter(w => !w.endT).forEach(w => { if (!activeBy[w.w]) activeBy[w.w] = w.stage; });
-    const workersHtml = workers.map(n => activeBy[n]
-      ? `<span style="color:${SCOL[activeBy[n]]};font-weight:700;white-space:nowrap"><span class="wdot" style="background:${SCOL[activeBy[n]]}"></span>${n} · ${activeBy[n]}</span>`
-      : `<span>${n}</span>`
-    ).join(', ');
+    // v14.33 — a worker whose session(s) here have ALL ended used to show
+    // up as a bare name, no context at all — unlike an active worker,
+    // which already shows "name · STAGE" in color. Track every DISTINCT
+    // stage each worker has at least one ENDED entry for on this order,
+    // so a finished worker shows what they actually finished (e.g. "Jin
+    // Eop Park (PICK+INSP done)") instead of just a name with no story.
+    const doneStagesBy = {};
+    ws.filter(w => w.endT).forEach(w => {
+      (doneStagesBy[w.w] = doneStagesBy[w.w] || new Set()).add(w.stage);
+    });
+    const workersHtml = workers.map(n => {
+      if (activeBy[n]) return `<span style="color:${SCOL[activeBy[n]]};font-weight:700;white-space:nowrap"><span class="wdot" style="background:${SCOL[activeBy[n]]}"></span>${n} · ${activeBy[n]}</span>`;
+      const done = doneStagesBy[n] ? [...doneStagesBy[n]] : [];
+      if (done.length) return `<span style="white-space:nowrap">${n} <span style="font-size:10px;color:var(--t3)">(${done.join('+')} done)</span></span>`;
+      return `<span>${n}</span>`;
+    }).join(', ');
     const totalItems   = ws.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.items||0),0);
     const totalQty     = ws.filter(w => w.stage==='PICK').reduce((s,w)=>s+(w.qty||0),0);
     const totalNet     = ws.filter(w => w.endT&&w.netMin!==null).reduce((s,w)=>s+(w.netMin||0),0);
@@ -3021,7 +3033,17 @@ function orderStageStatusTag(o, stage){
   // count) IS worth showing here though: without it, a genuinely finished
   // order looked identical to one nobody had touched, so there was no way
   // to tell from the dropdown which orders just needed a reprint.
-  if (done.length) return ' — ✅ Complete';
+  // v14.32 — this used to flag "✅ Complete" the moment ANY INSP session
+  // for the order had an EndTime — even with other sessions still open
+  // and the SKU checklist nowhere near done. That's a much weaker bar
+  // than what orderState()/the dashboard call "done" (every session
+  // across every stage ended), and the mismatch is exactly what surfaced
+  // as "dropdown says Complete, but the panel below says 0/297 accounted
+  // for, and the dashboard still shows 75%" — three places disagreeing
+  // about the same order. Reusing orderState() here means the dropdown,
+  // the dashboard progress bar, and the dashboard's Waiting/Picking/
+  // Inspection/Completed counts can never contradict each other again.
+  if (orderState(o.id) === 'done') return ' — ✅ Complete';
   const pick = orderStageWork(o.id, 'PICK');
   if (!pick.active.length && !pick.done.length) return ' — ⏳ not picked yet';
   return '';
@@ -6965,8 +6987,14 @@ window.changePin = async function(){
   setInterval(() => { if (navigator.onLine !== false) flushQueue(); }, 20000);
   flushQueue();
 
+  // v14.32 — this used to wipe ALL caches on every single load, as a
+  // workaround for sw.js caching index.html cache-first (see sw.js v3
+  // notes): that made every deploy take two loads to actually show up.
+  // Now that sw.js itself fetches the page network-first, this workaround
+  // is gone — each load already gets the live deployed code directly, and
+  // clearing caches every time would have just meant re-downloading the
+  // font/icon CDN assets on every load for no reason.
   if ('serviceWorker' in navigator) {
-    if ('caches' in window) caches.keys().then(ns => ns.forEach(n => caches.delete(n)));
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 })();
