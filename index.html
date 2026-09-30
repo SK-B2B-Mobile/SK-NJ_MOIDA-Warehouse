@@ -2388,6 +2388,13 @@ function renderSkuChecklistUI(w, items, st){
         <span style="font-size:10px;color:var(--t3);font-weight:600;margin-right:1px">Show:</span>
         ${pageSizes.map(n => `<button type="button" id="skuSizeBtn_${w.id}_${n}" class="scan-mult-btn${ui.size===n?' on':''}" onclick="setSkuPageSize('${w.id}',${n})">${n}</button>`).join('')}
       </div>
+      <!-- v14.44 — explicit ask: "총 SKU 몇개 중에 몇개 스캔했는지" needs to
+           be prominent, right next to the Show controls, not buried in the
+           small uppercase label above. This is the same doneCount/
+           items.length this function already computes for that label —
+           just surfaced here too, bigger and in a colored badge so it's
+           readable at a glance while scanning. -->
+      <span id="skuProgressBadge_${w.id}" style="font-size:13px;font-weight:800;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-bd);border-radius:999px;padding:4px 12px;white-space:nowrap">SKU ${doneCount}/${items.length}</span>
     </div>
 
     <div class="sku-list" id="skuListBody_${w.id}">${rows}</div>
@@ -2970,6 +2977,8 @@ function updateSkuChecklistLive(wid){
   const headerEl = document.getElementById('skuDoneCount_' + wid);
   if (headerEl) headerEl.innerHTML = `SKU checklist · ${doneCount}/${items.length} complete
     ${Object.keys(others).length ? `<span style="color:var(--blue);text-transform:none;font-weight:600;margin-left:4px"><i class="ri-refresh-line"></i> live-synced</span>` : ''}`;
+  const progressBadgeEl = document.getElementById('skuProgressBadge_' + wid);
+  if (progressBadgeEl) progressBadgeEl.textContent = `SKU ${doneCount}/${items.length}`;
   updateSkuListView(wid);
 
   const bannerEl = document.getElementById('lastScanBanner_' + wid);
