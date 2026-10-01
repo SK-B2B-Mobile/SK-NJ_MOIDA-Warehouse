@@ -1835,17 +1835,23 @@ function renderDashTable(){
 // so there's nothing here to confuse with a real registered issue.
 function renderInspNoteHtml(note){
   if (!note) return '';
-  const parts = String(note).split(' — ').filter(Boolean);
-  const issuePart = parts.find(p => p.startsWith('Issues: '));
-  const otherParts = parts.filter(p => p !== issuePart);
+  // v14.66 — note is now a series of blocks joined by a BLANK line (see
+  // proceedToPrintOptions): reason / forced-note / "Issues (N):\n<one line
+  // per SKU>" / free note. Find the Issues block specifically and turn its
+  // lines back into clean per-SKU rows; every other block renders as
+  // plain muted text, same as before.
+  const blocks = String(note).split('\n\n').filter(Boolean);
+  const issueBlock = blocks.find(b => /^Issues \(\d+\):/.test(b));
+  const otherBlocks = blocks.filter(b => b !== issueBlock);
   let html = '';
-  if (otherParts.length) {
-    html += `<div style="color:var(--t3);margin-top:2px">${otherParts.join(' — ')}</div>`;
+  if (otherBlocks.length) {
+    html += `<div style="color:var(--t3);margin-top:2px;white-space:pre-wrap">${otherBlocks.join('\n\n')}</div>`;
   }
-  if (issuePart) {
-    const items = issuePart.slice('Issues: '.length).split(', ').filter(Boolean).map(seg => {
-      const m = seg.match(/^(.+?):([A-Za-z]+)(?:×(\d+))?$/);
-      return m ? { sku: m[1], type: m[2], qty: m[3] || '' } : { sku: seg, type: '', qty: '' };
+  if (issueBlock) {
+    const lines = issueBlock.split('\n').slice(1).filter(Boolean);
+    const items = lines.map(line => {
+      const m = line.match(/^([A-Za-z]+):\s*(.+?)(?:\s*×\s*(\d+)\s*pcs)?$/);
+      return m ? { type: m[1], sku: m[2], qty: m[3] || '' } : { type: '', sku: line, qty: '' };
     });
     html += `<div style="margin-top:5px;background:var(--red-bg);border:1px solid var(--red-bd);border-radius:var(--r);padding:7px 9px">
       <div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px"><i class="ri-error-warning-line"></i> Issues · ${items.length}</div>
@@ -5137,14 +5143,28 @@ window.proceedToPrintOptions = function(wid){
   // registered Issues are. (allClean/result above are intentionally left
   // alone — a short session still isn't a clean PASS — only the NOTE TEXT
   // changes.)
-  const issueSummary = issueRows.slice(0, 6).map(r => `${r.sku}:${r.issue.type}${r.issue.qty?('×'+r.issue.qty):''}`).join(', ');
+  // v14.66 — the comma-joined "Issues: A:EXP×5, B:EXP×6, ..." one-liner
+  // was still a wall of text once it had more than 2-3 items (exactly
+  // what the user flagged as "still not clean" after Short was removed —
+  // the Google Sheet's InspNote column showed the raw joined string
+  // verbatim, unreadable at a glance). Each issue now gets its OWN line
+  // ("Issues (6):\n" + one "TYPE: SKU × QTY pcs" line per item), and the
+  // whole note's top-level sections (reason / forced-note / issue block /
+  // free note) are joined with a blank line instead of ' — ', so the
+  // Google Sheet cell (InspNote column, wrapped) reads as a short
+  // multi-line list instead of one run-on sentence. Both showOrderDetail's
+  // in-app rendering (renderInspNoteHtml) AND Code.gs's hover-note builder
+  // (applyInspResultNote_) parse this exact '\n\n' / '\n' structure — all
+  // three need to move together if this format ever changes again.
+  const issueLines = issueRows.slice(0, 20).map(r => `${r.issue.type || 'ISSUE'}: ${r.sku}${r.issue.qty ? ` × ${r.issue.qty} pcs` : ''}`);
+  const issueBlock = issueLines.length ? `Issues (${issueLines.length}):\n${issueLines.join('\n')}` : '';
   const forcedNote = forcedRows.length ? `FORCE-COMPLETED ${forcedRows.length} item(s) by ${WS ? WS.worker : CW} at ${new Date().toLocaleString('en-US')}` : '';
   const fullNote = allClean && !forcedNote ? '' : [
     reason === 'FORCE_COMPLETE' ? '' : reason,
     forcedNote,
-    issueSummary ? 'Issues: ' + issueSummary : '',
+    issueBlock,
     note
-  ].filter(Boolean).join(' — ');
+  ].filter(Boolean).join('\n\n');
 
   _pendingInspEnd[wid] = {
     rows, totalScanned, result, fullNote, issueCount: issueRows.length,
