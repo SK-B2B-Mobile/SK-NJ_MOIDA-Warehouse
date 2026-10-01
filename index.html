@@ -5641,6 +5641,11 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   // slipMode==='box'. Wording follows the unit chosen during scanning
   // (Box for parcel carriers like UPS, Pallet for freight like TK).
   let boxHtml = '';
+  // v14.61 — same box-breakdown data, reshaped for the Excel export (see
+  // the export toolbar below) so the workbook's "Box Breakdown" sheet
+  // matches the printed table exactly instead of being recomputed
+  // separately from a different code path.
+  let boxExportGroups = [];
   const uw = unitWord(meta.unitType);
   const uwCap = unitWord(meta.unitType, true);
   if (slipMode === 'box') {
@@ -5685,6 +5690,12 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
           <tbody>${itemRows}</tbody></table>
         </div>`;
       }).join('');
+      boxExportGroups = groups.map(g => ({
+        label: g.label,
+        items: Object.entries(g.items || {}).map(([key, qty]) => ({
+          barcode: key, sku: skuByKey[key] || '', name: nameByKey[key] || '', qty
+        }))
+      }));
     } else {
       boxHtml = `<p style="font-size:11px;color:#991b1b;margin-top:10px">⚠ No ${uw} breakdown was recorded for this order — showing combined totals only.</p>`;
     }
@@ -5692,6 +5703,29 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
 
   const badgeClass = result === 'PASS' ? 'verify-ok' : 'verify-bad';
   const badgeText = result === 'PASS' ? '✓ INSPECTION PASSED — ALL ITEMS VERIFIED' : '⚠ INSPECTION COMPLETE — WITH ISSUES';
+
+  // v14.61 — "⬇ Excel" download button on the packing slip screen. The
+  // slip opens in its own popup window/document (document.write'd below),
+  // completely separate from the main app's DOM/scripts, so it needs its
+  // own copy of the data (as inline JSON) and its own copy of the XLSX
+  // library (same cdnjs build the main app already loads) to build the
+  // workbook client-side with no server round-trip.
+  const xlsxExportData = {
+    oid: w.oid,
+    rows: rows.map(r => ({
+      barcode: r.barcode || '', sku: r.sku || '', name: r.name || '',
+      req: r.req || 0, issueQty: r.hasIssue ? (r.issue.qty || 0) : 0, got: r.got || 0
+    })),
+    issues: issueRows.map(r => ({
+      type: r.issue.type || '', barcode: r.barcode || '', sku: r.sku || '',
+      name: r.name || r.sku || '', qty: r.issue.qty || 0, note: r.issue.note || ''
+    })),
+    boxGroups: boxExportGroups
+  };
+  // Escape "</" so the embedded JSON can never prematurely close the
+  // <script> tag it's sitting inside (a barcode/name/note containing
+  // that sequence would otherwise break the popup's HTML).
+  const xlsxDataJson = JSON.stringify(xlsxExportData).replace(/<\//g, '<\\/');
 
   // v14.12 — found the actual bug behind the clipping: <body> padding is
   // NOT a per-page margin. The browser slices one continuous flowed
@@ -5769,9 +5803,22 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
        block whenever possible, so a page break can't land in the middle
        of the numbers a customer would actually check. */
     .slip-closing{page-break-inside:avoid; break-inside:avoid;}
+    /* v14.61 — on-screen toolbar for downloading instead of only printing.
+       display:none under @media print so it never appears on the actual
+       paper/PDF output — only the slip content itself does. */
+    .slip-toolbar{display:flex; gap:8px; margin-bottom:14px; font-family:-apple-system,'Segoe UI',Roboto,sans-serif;}
+    .slip-toolbar button{cursor:pointer; border:none; border-radius:6px; padding:10px 16px; font-size:13px; font-weight:700; font-family:inherit;}
+    .slip-btn-print{background:#111; color:#fff;}
+    .slip-btn-xlsx{background:#15803d; color:#fff;}
+    .slip-toolbar button:disabled{opacity:.6; cursor:default;}
+    @media print{ .slip-toolbar{display:none !important;} }
   `;
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Packing Slip · ${w.oid}</title><style>${css}</style></head><body>
+    <div class="slip-toolbar">
+      <button class="slip-btn-print" onclick="window.print()">🖨 인쇄 / PDF로 저장</button>
+      <button class="slip-btn-xlsx" id="slipXlsxBtn" onclick="downloadSlipExcel()">⬇ Excel 다운로드</button>
+    </div>
     <div class="slip-head">
       <div><div class="slip-logo">StyleKorean</div><div class="slip-addr">NJ/MOIDA</div></div>
       <div><div class="slip-title">PACKING SLIP</div><div class="slip-meta">Order ${w.oid}<br>Printed ${printedAt}</div></div>
@@ -5795,6 +5842,51 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
       <div class="verify-badge ${badgeClass}">${badgeText}</div>
       <div class="slip-footer"><span>Verified by: ${worker} · ${printedAt}</span><span>StyleKorean NJ/MOIDA Warehouse System</span></div>
     </div>
+    <script type="application/json" id="slipXlsxData">${xlsxDataJson}<\/script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" onerror="document.getElementById('slipXlsxBtn').disabled=true; document.getElementById('slipXlsxBtn').textContent='⬇ Excel (오프라인 — 다운로드 불가)';"><\/script>
+    <script>
+      // v14.61 — builds the same three sections as the printed slip
+      // (Packing List / Issues / Box Breakdown) as real .xlsx sheets,
+      // using the data this popup was opened with (see slipXlsxData
+      // above) — no server round-trip, works offline except for loading
+      // the XLSX library itself.
+      function downloadSlipExcel(){
+        if (typeof XLSX === 'undefined') { alert('Excel 라이브러리를 불러오지 못했습니다 — 인터넷 연결을 확인하고 다시 열어주세요.'); return; }
+        var data = JSON.parse(document.getElementById('slipXlsxData').textContent);
+        var wb = XLSX.utils.book_new();
+
+        var mainAOA = [['Barcode','SKU','Product','Ordered','Issue','Packed']];
+        var totalReq = 0, totalIssue = 0, totalGot = 0;
+        data.rows.forEach(function(r){
+          mainAOA.push([r.barcode, r.sku, r.name, r.req, r.issueQty, r.got]);
+          totalReq += r.req || 0; totalIssue += r.issueQty || 0; totalGot += r.got || 0;
+        });
+        mainAOA.push(['', '', 'TOTAL', totalReq, totalIssue, totalGot]);
+        var ws1 = XLSX.utils.aoa_to_sheet(mainAOA);
+        ws1['!cols'] = [{wch:16},{wch:14},{wch:42},{wch:10},{wch:8},{wch:10}];
+        XLSX.utils.book_append_sheet(wb, ws1, 'Packing List');
+
+        if (data.issues && data.issues.length) {
+          var issAOA = [['Type','Barcode','SKU','Product','Qty','Note']];
+          data.issues.forEach(function(r){ issAOA.push([r.type, r.barcode, r.sku, r.name, r.qty, r.note]); });
+          var ws2 = XLSX.utils.aoa_to_sheet(issAOA);
+          ws2['!cols'] = [{wch:12},{wch:16},{wch:14},{wch:42},{wch:8},{wch:26}];
+          XLSX.utils.book_append_sheet(wb, ws2, 'Issues');
+        }
+
+        if (data.boxGroups && data.boxGroups.length) {
+          var boxAOA = [['Box','Barcode','SKU','Product','Qty']];
+          data.boxGroups.forEach(function(g){
+            (g.items || []).forEach(function(it){ boxAOA.push([g.label, it.barcode, it.sku, it.name, it.qty]); });
+          });
+          var ws3 = XLSX.utils.aoa_to_sheet(boxAOA);
+          ws3['!cols'] = [{wch:18},{wch:16},{wch:14},{wch:42},{wch:8}];
+          XLSX.utils.book_append_sheet(wb, ws3, 'Box Breakdown');
+        }
+
+        XLSX.writeFile(wb, 'PackingSlip_' + (data.oid || 'order') + '.xlsx');
+      }
+    <\/script>
   </body></html>`;
 
   const win = window.open('', '_blank', 'width=820,height=1000');
