@@ -3828,6 +3828,43 @@ function pageRangeOverlapsClaimed(oid, from, to){
   return getClaimedPickPages(oid).some(([cf, ct]) => from <= ct && to >= cf);
 }
 
+// v14.56 — "Partially complete — X/Y SKUs accounted for" used to give no
+// way to tell WHICH SKU still needs attention short of a manager digging
+// into the dashboard separately (see the IM00234231 incident). Once every
+// INSP session on this order has ended (nobody left who could still cover
+// the gap — the same test attentionCandidates() uses on the dashboard),
+// this is no longer "still legitimately in progress", it's the exact
+// moment a worker needs the specific SKU name/barcode/rack, right where
+// they're already looking (this is the order-lookup screen itself, not a
+// popup) — and it shows every single time anyone looks this order up
+// here, not as a one-off toast, until the gap is actually scanned (or
+// flagged as an issue) and the session that covers it is ended. While
+// someone is still actively scanning elsewhere, allEnded is false and
+// this stays hidden — "Partially complete" alone is the right message for
+// genuinely still-in-progress work.
+function missingSkuPanelHtml(oid, prog){
+  const insp = orderStageSummary(oid).INSP;
+  const allEnded = insp.length > 0 && insp.every(w => w.endT);
+  if (!allEnded) return '';
+  const missing = (prog.skus || []).filter(s => !s.done);
+  if (!missing.length) return '';
+  const rows = missing.map((s, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;${i < missing.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,.05)' : ''}">
+      <div style="width:8px;height:8px;border-radius:50%;background:var(--amber);flex-shrink:0"></div>
+      <div style="flex:1;min-width:0;text-align:left">
+        <div style="font-family:var(--mono);font-weight:700;font-size:12px">${s.sku || '—'}${s.name ? ' · ' + s.name : ''}</div>
+        <div style="color:var(--t3);font-size:11px">${s.packedQty || 0}/${s.reqQty || 0} scanned${s.rack ? ' · Rack ' + s.rack : ''}${s.barcode ? ' · ' + s.barcode : ''}</div>
+      </div>
+    </div>`).join('');
+  return `
+  <div style="background:var(--red-bg);border:1px solid var(--red-bd);border-radius:var(--r);padding:10px 12px;margin-bottom:10px;text-align:left">
+    <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">
+      <i class="ri-error-warning-line"></i><span>아직 스캔되지 않은 SKU · ${missing.length}개</span>
+    </div>
+    <div style="background:var(--bg4);border-radius:var(--r);overflow:hidden">${rows}</div>
+  </div>`;
+}
+
 // v14.13 — shared by onOrderChange's initial render and its cached/
 // background-refresh re-render, so both paths draw the exact same card.
 function renderInspDoneCard(wrap, oid, prog){
@@ -3862,6 +3899,7 @@ function renderInspDoneCard(wrap, oid, prog){
     </div>` : `
     <div style="text-align:center;padding:10px 0 4px">
       <div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:10px"><i class="ri-error-warning-line"></i> Partially complete — ${prog.skuDone}/${prog.skuTotal} SKUs accounted for</div>
+      ${missingSkuPanelHtml(oid, prog)}
       <div style="display:flex;gap:6px;margin-bottom:10px">
         <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','box',this)"><i class="ri-printer-line"></i> Packing Slip</button>
         <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat',this)"><i class="ri-file-list-3-line"></i> Flat List</button>
