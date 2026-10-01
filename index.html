@@ -1156,7 +1156,7 @@ function expectedForOrder(oid){
 let _scanState = {};
 function loadScanState(wid){
   if (_scanState[wid]) return _scanState[wid];
-  let st = { mode:'agg', count:0, mult:1, skuCounts:{}, unknown:0, skuIssues:{}, currentBox:1, maxBox:1, boxScans:{}, unitType:'box', skuTouchOrder:{}, skuTouchSeq:0, reinspect:false };
+  let st = { mode:'agg', count:0, mult:1, skuCounts:{}, unknown:0, skuIssues:{}, currentBox:1, maxBox:1, boxScans:{}, unitType:'box', skuTouchOrder:{}, skuTouchSeq:0, skuScannedAt:{}, reinspect:false };
   try { const raw = localStorage.getItem('wms_scan_' + wid); if (raw) st = Object.assign(st, JSON.parse(raw)); } catch(_){}
   if (!st.currentBox) st.currentBox = 1;
   if (!st.maxBox) st.maxBox = 1;
@@ -1164,6 +1164,14 @@ function loadScanState(wid){
   if (!st.unitType) st.unitType = 'box';
   if (!st.skuTouchOrder) st.skuTouchOrder = {};
   if (!st.skuTouchSeq) st.skuTouchSeq = 0;
+  // v14.57 — per-SKU wall-clock time of the most recent scan/issue-flag
+  // touch, stamped by touchSkuOrder below. skuTouchOrder only ever tracked
+  // RELATIVE order (a bare sequence counter) for sorting the checklist —
+  // nothing carried the actual clock time through to the saved row, so
+  // InspectionResults' CreatedAt ended up being the single "End
+  // Inspection" save moment, identical across every row from that
+  // session, not when each item was actually scanned.
+  if (!st.skuScannedAt) st.skuScannedAt = {};
   _scanState[wid] = st;
   return st;
 }
@@ -2079,6 +2087,12 @@ function touchSkuOrder(st, key){
   st.skuTouchSeq = (st.skuTouchSeq || 0) + 1;
   st.skuTouchOrder = st.skuTouchOrder || {};
   st.skuTouchOrder[key] = st.skuTouchSeq;
+  // v14.57 — stamp the actual wall-clock moment of this scan/issue touch,
+  // so it can ride along to the server on save (see proceedToPrintOptions'
+  // row builder and logInspectionResultsToServer) instead of every row
+  // only ever getting the single "End Inspection" save timestamp.
+  st.skuScannedAt = st.skuScannedAt || {};
+  st.skuScannedAt[key] = new Date().toISOString();
 }
 function skuRowHtml(it, st, wid){
   const key = it.barcode || it.sku;
@@ -5071,7 +5085,9 @@ window.proceedToPrintOptions = function(wid){
     // r.got is MY OWN portion only — this is what gets logged to the
     // server as this entry's packedQty. Using the combined figure here
     // would double-count once merged with everyone else's own logged rows.
-    return { sku:it.sku, name:it.name, barcode:it.barcode, got: mine, req:it.reqQty||0, issue, ok: fullyScanned && !issue, hasIssue: !!issue, mc: isMC, fc: isFC };
+    // v14.57 — scannedAt rides along so the server can record when THIS
+    // item was actually touched, not just when the whole session was saved.
+    return { sku:it.sku, name:it.name, barcode:it.barcode, got: mine, req:it.reqQty||0, issue, ok: fullyScanned && !issue, hasIssue: !!issue, mc: isMC, fc: isFC, scannedAt: (st.skuScannedAt || {})[key] || '' };
   });
   const shortRows = rows.filter(r => !r.ok && !r.hasIssue);
   const issueRows = rows.filter(r => r.hasIssue);
@@ -5788,10 +5804,16 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
     issueQty:  r.hasIssue ? (r.issue.qty||0) : 0,
     issueNote: r.hasIssue ? (r.issue.note||'') : '',
     masterCase: !!r.mc,
-    forceCompleted: !!r.fc
+    forceCompleted: !!r.fc,
+    // v14.57 — ISO timestamp of this item's most recent scan/issue touch
+    // (see touchSkuOrder), so the server can record it separately from the
+    // batch "End Inspection" save time.
+    scannedAt: r.scannedAt || ''
   }));
   // Box-detail rows (boxNum set, no reqQty/issue — those live on the
   // summary row above) — lets a reprint reconstruct the box breakdown.
+  // v14.57 — scannedAt still carries over from the summary row's own touch
+  // time (box splits don't track a separate timestamp per box).
   if (boxScans) {
     Object.entries(boxScans).forEach(([bn, skuMap]) => {
       Object.entries(skuMap || {}).forEach(([key, qty]) => {
@@ -5799,7 +5821,8 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
         payload.push({
           sku: src ? src.sku : key, barcode: src ? src.barcode : '',
           name: src ? src.name : key, reqQty: '', packedQty: qty,
-          issueType: '', issueQty: 0, issueNote: '', boxNum: Number(bn)
+          issueType: '', issueQty: 0, issueNote: '', boxNum: Number(bn),
+          scannedAt: src ? (src.scannedAt || '') : ''
         });
       });
     });
