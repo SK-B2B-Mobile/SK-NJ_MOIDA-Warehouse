@@ -5677,14 +5677,23 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
       // page-break-inside:avoid on each one actually holds, and the
       // browser breaks the page cleanly BETWEEN items instead of through
       // one — however many items a single box ends up holding.
-      boxHtml = `<h4 class="issues-h4">${uwCap} breakdown</h4>` + groups.map(g => {
+      // v14.62 — the browser's own print header/footer ("1/9" etc.) is
+      // being turned off (its position is fixed by the browser, not by
+      // this page, and can't be moved to bottom-center). In its place,
+      // each box/pallet section now numbers itself against the total
+      // section count right in its own title bar (e.g. "… · Box 1  ·  1/3"),
+      // so there's still a clear "where am I" marker while flipping pages —
+      // it counts box/pallet SECTIONS, not physical printed pages, since a
+      // single box can itself span several pages when it holds many SKUs.
+      const groupTotal = groups.length;
+      boxHtml = `<h4 class="issues-h4">${uwCap} breakdown</h4>` + groups.map((g, gi) => {
         const entries = Object.entries(g.items || {});
         const boxTotal = entries.reduce((s, [,qty]) => s + qty, 0);
         const itemRows = entries
           .map(([key, qty]) => `<tr><td class="box-bc">${key}</td><td class="box-bc">${skuByKey[key] || ''}</td><td>${nameByKey[key] || ''}</td><td style="text-align:center">${qty}</td></tr>`)
           .join('') || `<tr><td colspan="4" style="color:#991b1b">(no items recorded)</td></tr>`;
         return `<div class="box-group">
-          <div class="box-head"><span>${g.label}</span><span class="box-count">${entries.length} SKU${entries.length===1?'':'s'} · ${boxTotal} unit${boxTotal===1?'':'s'}</span></div>
+          <div class="box-head"><span>${g.label} <span class="box-seq">· ${gi+1}/${groupTotal}</span></span><span class="box-count">${entries.length} SKU${entries.length===1?'':'s'} · ${boxTotal} unit${boxTotal===1?'':'s'}</span></div>
           <table class="box-table"><colgroup><col class="c-bc"><col class="c-sku"><col class="c-name"><col class="c-qty"></colgroup>
           <thead><tr><th>Barcode</th><th>SKU</th><th>Product</th><th style="text-align:center">Qty</th></tr></thead>
           <tbody>${itemRows}</tbody></table>
@@ -5741,6 +5750,16 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   // feedback — that gap, not the page edges, was too loose.
   const css = `
     @page{ size: letter; margin: 18mm 15mm 20mm; }
+    /* v14.62 — most browsers default to NOT printing background-color/
+       background-image at all (Chrome's "Background graphics" checkbox is
+       OFF by default) — so anything relying purely on a fill color for
+       contrast (white text on a dark bar, etc.) can print as blank/invisible
+       even though it looks correct on screen. This forces background
+       colors to print when the setting allows it, but every label below is
+       ALSO redesigned to use borders + dark text as the real source of
+       contrast, since borders always print regardless of this setting or
+       of whether the person remembered to turn it on. */
+    *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact; }
     *{box-sizing:border-box;}
     html, body{width:100%;}
     body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; padding:0; max-width:100%; margin:0; font-size:12px; line-height:1.45;}
@@ -5771,7 +5790,12 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
     table.issue-slip-table col.c-itype{width:11%;} table.issue-slip-table col.c-ibc{width:16%;}
     table.issue-slip-table col.c-isku{width:13%;} table.issue-slip-table col.c-iname{width:28%;}
     table.issue-slip-table col.c-iqty{width:8%;} table.issue-slip-table col.c-inote{width:24%;}
-    table.slip-table th{background:#111; color:#fff; padding:7px 8px; text-align:left; font-size:10px; text-transform:uppercase;}
+    /* v14.62 — was white text on a #111 fill, which went blank on any
+       printer/setting that drops background colors. Switched to dark text
+       on a light fill, with a heavy border doing the real contrast work —
+       that combination stays legible whether or not the fill itself
+       prints. */
+    table.slip-table th{background:#eee; color:#111; padding:7px 8px; text-align:left; font-size:10.5px; font-weight:800; text-transform:uppercase; border-top:2px solid #111; border-bottom:3px solid #111;}
     table.slip-table td{padding:6px 8px; border-bottom:1px solid #ddd; overflow-wrap:break-word; word-break:break-word;}
     table.slip-table tbody tr, table.slip-table tfoot tr{page-break-inside:avoid; break-inside:avoid;}
     .slip-total-row td{border-top:2px solid #111; border-bottom:none; padding-top:10px; padding-bottom:10px; background:#f7f7f7;}
@@ -5788,13 +5812,23 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
        individual row (page-break-inside:avoid, trivially short) are
        protected, so pages can still break cleanly BETWEEN rows. */
     .box-group{margin:12px 0 16px;}
-    .box-head{display:flex; justify-content:space-between; align-items:center; background:#111; color:#fff; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; padding:6px 10px; border-radius:4px 4px 0 0; page-break-after:avoid; break-after:avoid;}
-    .box-count{font-weight:600; font-size:10px; opacity:.85; text-transform:none; letter-spacing:0;}
+    /* v14.62 — this used to be white text on a #111 fill (same issue as
+       the main table header above): with background graphics off, the
+       whole bar — box/pallet label AND the SKU-count/unit-count on the
+       right — printed as nothing at all. Now dark bold text on a light
+       fill, with a heavy top+bottom border carrying the real contrast. */
+    .box-head{display:flex; justify-content:space-between; align-items:center; background:#eee; color:#111; font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; padding:8px 10px; border-top:3px solid #111; border-bottom:3px solid #111; page-break-after:avoid; break-after:avoid;}
+    .box-count{font-weight:700; font-size:12px; color:#111; opacity:1; text-transform:none; letter-spacing:0;}
+    .box-seq{font-weight:700; opacity:.75;}
     table.box-table{width:100%; border-collapse:collapse; font-size:11.5px; table-layout:fixed;}
     table.box-table col.c-bc{width:22%;} table.box-table col.c-sku{width:19%;} table.box-table col.c-name{width:46%;} table.box-table col.c-qty{width:13%;}
-    table.box-table th{background:#f3f3f3; color:#555; padding:5px 8px; text-align:left; font-size:9.5px; text-transform:uppercase; letter-spacing:.03em; border-bottom:1px solid #ddd;}
+    table.box-table th{background:#f3f3f3; color:#111; padding:5px 8px; text-align:left; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; border-bottom:2px solid #111;}
     table.box-table td{padding:4px 8px; border-bottom:1px solid #eee; page-break-inside:avoid; break-inside:avoid; overflow-wrap:break-word; word-break:break-word;}
-    .box-bc{font-family:'Courier New',monospace; font-size:10.5px; color:#555; letter-spacing:-.02em;}
+    /* v14.62 — #555 on white read as too faint on a physically printed
+       page (the exact complaint); darkened to near-black and bolded. Used
+       for every Barcode/SKU cell across the main table, Issues table, and
+       Box Breakdown table. */
+    .box-bc{font-family:'Courier New',monospace; font-size:11px; font-weight:700; color:#111; letter-spacing:-.02em;}
     .verify-badge{display:inline-block; padding:7px 15px; border-radius:6px; font-weight:800; font-size:12px; margin-top:20px; page-break-inside:avoid; break-inside:avoid;}
     .verify-ok{background:#ede9fe; color:#5b21b6; border:1px solid #8b5cf6;}
     .verify-bad{background:#fee2e2; color:#991b1b; border:1px solid #dc2626;}
@@ -5815,9 +5849,12 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   `;
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Packing Slip · ${w.oid}</title><style>${css}</style></head><body>
-    <div class="slip-toolbar">
-      <button class="slip-btn-print" onclick="window.print()">🖨 인쇄 / PDF로 저장</button>
-      <button class="slip-btn-xlsx" id="slipXlsxBtn" onclick="downloadSlipExcel()">⬇ Excel 다운로드</button>
+    <div class="slip-toolbar" style="flex-direction:column; align-items:flex-start; gap:6px;">
+      <div style="display:flex; gap:8px;">
+        <button class="slip-btn-print" onclick="window.print()">🖨 인쇄 / PDF로 저장</button>
+        <button class="slip-btn-xlsx" id="slipXlsxBtn" onclick="downloadSlipExcel()">⬇ Excel 다운로드</button>
+      </div>
+      <div style="font-size:11px; color:#991b1b; font-weight:600;">⚠ 인쇄 대화상자에서 "머리글과 바닥글(Headers and footers)"을 꺼주세요 — 꺼야 브라우저가 자체적으로 붙이는 페이지 번호가 안 나오고, 아래 각 박스 제목의 번호(예: 1/3)만 깔끔하게 보입니다.</div>
     </div>
     <div class="slip-head">
       <div><div class="slip-logo">StyleKorean</div><div class="slip-addr">NJ/MOIDA</div></div>
