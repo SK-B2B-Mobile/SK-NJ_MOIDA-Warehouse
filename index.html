@@ -3149,15 +3149,21 @@ function startLivePoll(wid){
   if (_livePollTimers[wid]) return;
   if (!_liveSyncStartedAt[wid]) _liveSyncStartedAt[wid] = Date.now();
   refreshLiveBaseline(wid);
-  // v14.53 — was 5000ms. Every active INSP worker's device independently
-  // fires getLiveScans + getOrderProgress on this timer, so with several
-  // workers inspecting at once this is the single biggest source of
-  // background call volume against the spreadsheet — and today's repeated
-  // 20-140s doGet executions line up with that volume, not with any one
-  // order's data size. Slowing this down to 12s cuts that background load
-  // by more than half; cross-worker counts are still refreshed often
-  // enough to be useful, just not quite as instantaneous.
-  _livePollTimers[wid] = setInterval(() => refreshLiveBaseline(wid), 12000);
+  // v14.53 slowed this from 5000ms to 12000ms as a stopgap during the
+  // IM00234231 incident, because every active INSP worker's device fires
+  // getLiveScans + getOrderProgress on this timer, and that was the
+  // visible background load at the time. v14.54 found and fixed the real
+  // cause of that incident: getOrderProgress_/getResultRowsForOrder_ in
+  // Code.gs were building a RangeList of one single-row range PER MATCHED
+  // ROW and reading each individually — O(n) separate reads that scaled
+  // with an order's total scan history (1335 rows ≈ 45-140s). That's now
+  // a single bulk min..max getValues() call per request, filtered in
+  // memory, so each getOrderProgress call is cheap regardless of order
+  // size. With the per-call cost fixed, 12s of extra polling latency was
+  // pure cost with no safety benefit, so this goes back to 5000ms —
+  // cross-worker "X/Y scanned" counts converge in ~5s instead of ~12s,
+  // closer to what workers expect from a "shared" number.
+  _livePollTimers[wid] = setInterval(() => refreshLiveBaseline(wid), 5000);
 }
 function stopLivePoll(wid){
   clearInterval(_livePollTimers[wid]);
