@@ -1630,88 +1630,6 @@ function orderProgressBar(oid){
 // ── DASHBOARD ──
 const D_PER = 20;
 
-// v14.55 — "완료" tag/tile only ever meant "every INSP session someone
-// started has an EndTime" — never "every SKU the order actually needs was
-// accounted for". Those usually match, but a split-between-N-workers order
-// where each worker's own portion is genuinely done still shows ✅ Complete
-// even when nobody happened to touch one particular SKU (see IM00234231,
-// 2026-09-30: all 3 sessions ended clean, dashboard said Complete, nobody
-// noticed 1 of 334 SKUs had zero combined scans from anyone until a manager
-// happened to dig into it manually). getOrderProgress_ already knows the
-// real truth (skuDone vs skuTotal) and is now fast (see the v14.52-14.54
-// notes in Code.gs), so this proactively checks every order whose INSP
-// sessions have ALL ended, and surfaces any that are secretly short — a
-// manager no longer has to think to go look.
-let _attentionCache = {};   // oid -> { skuTotal, skuDone, missing:[{sku,barcode,name,rack,reqQty,packedQty}] }
-let _attentionChecked = {}; // oid -> timestamp of last check, so a steady 30s dashboard refresh doesn't re-hit every candidate order every single time
-const ATTENTION_RECHECK_MS = 20000;
-
-function attentionCandidates(){
-  // An order is worth checking once its INSP sessions are all closed out
-  // (nobody could still be about to cover the gap) and at least one INSP
-  // session actually happened (never-started orders aren't "short", they're
-  // just not done yet — that's the existing Waiting/Inspection tiles' job).
-  return S.orders
-    .filter(o => (orderStageSummary(o.id).INSP || []).length > 0)
-    .filter(o => orderStageSummary(o.id).INSP.every(w => w.endT))
-    .map(o => o.id);
-}
-
-async function refreshAttentionOrders(){
-  const now = Date.now();
-  const candidates = attentionCandidates()
-    .filter(oid => !_attentionChecked[oid] || (now - _attentionChecked[oid]) > ATTENTION_RECHECK_MS);
-  if (!candidates.length) return;
-  // Sequential, not Promise.all — this piggybacks on ordinary dashboard
-  // traffic rather than firing a burst of simultaneous requests.
-  for (const oid of candidates) {
-    _attentionChecked[oid] = Date.now();
-    const out = await apiOp('getOrderProgress', { oid }, 45000);
-    if (!out.net || !out.res.ok) continue; // best-effort — try again next cycle
-    const p = out.res;
-    if (p.ready || !p.skuTotal) { delete _attentionCache[oid]; continue; }
-    _attentionCache[oid] = {
-      skuTotal: p.skuTotal, skuDone: p.skuDone,
-      missing: (p.skus || []).filter(s => !s.done).map(s => ({
-        sku: s.sku, barcode: s.barcode, name: s.name, rack: s.rack,
-        reqQty: s.reqQty, packedQty: s.packedQty
-      }))
-    };
-  }
-  if (curPage() === 'dash') renderAttentionTile();
-}
-
-function renderAttentionTile(){
-  const el = document.getElementById('dashAttentionTile'); if (!el) return;
-  const n = Object.keys(_attentionCache).length;
-  el.outerHTML = `<div class="mc rd${n>0?' alert':''}" id="dashAttentionTile" style="${n>0?'cursor:pointer':''}" ${n>0?'onclick="openAttentionModal()"':''}>
-    <div class="mc-l">⚠ Needs attention</div><div class="mc-v" style="color:var(--red)">${n}</div>
-  </div>`;
-}
-
-window.openAttentionModal = function(){
-  const entries = Object.entries(_attentionCache);
-  if (!entries.length) return;
-  const html = entries.map(([oid, info]) => `
-    <div style="margin-bottom:14px">
-      <div style="font-weight:700;font-size:13px;margin-bottom:4px">${oid} <span style="font-weight:400;color:var(--t3);font-size:11px">— ${info.skuDone}/${info.skuTotal} SKUs accounted for</span></div>
-      <div class="sku-list" style="text-align:left">
-        ${info.missing.map(m => `<div class="sku-row warn">
-          <div class="sku-check"></div>
-          <div class="sku-row-name">
-            <div class="sku-row-sku">${m.sku||'—'}${m.name?' · '+m.name:''}</div>
-            <div class="sku-row-nm" style="color:var(--t3)">${m.packedQty||0}/${m.reqQty||0} scanned${m.rack?' · Rack '+m.rack:''}${m.barcode?' · '+m.barcode:''}</div>
-          </div>
-        </div>`).join('')}
-      </div>
-    </div>`).join('');
-  openModal(`<div class="end-modal-inner" style="text-align:left">
-    <div style="font-size:15px;font-weight:700;margin-bottom:10px;text-align:center"><i class="ri-error-warning-line" style="color:var(--red)"></i> Needs attention — ${entries.length} order${entries.length>1?'s':''}</div>
-    <div style="max-height:60vh;overflow-y:auto">${html}</div>
-    <div style="display:flex;justify-content:center;margin-top:12px"><button class="btn btn-sm" onclick="closeModal()">Close</button></div>
-  </div>`, { wide:true });
-};
-
 R.dash = function(){
   let wait=0, pickA=0, inspA=0, pallA=0, done=0, slaN=0;
   S.orders.forEach(o => {
@@ -1728,19 +1646,14 @@ R.dash = function(){
     else if (a.PICK.some(w => !w.endT)) pickA++;
   });
 
-  document.getElementById('dashMetrics').innerHTML = `<div class="g7">
+  document.getElementById('dashMetrics').innerHTML = `<div class="g6">
     ${[{l:'Waiting',v:wait,c:'am'},{l:'Picking',v:pickA,c:'bl'},{l:'Inspection',v:inspA,c:'pu'},
        {l:'Completed',v:done,c:'gr'},
        {l:'SLA risk',v:slaN,c:'rd',alert:slaN>0},{l:'Total',v:S.orders.length,c:'cy'}]
     .map(m => `<div class="mc ${m.c}${m.alert?' alert':''}"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${{am:'amber',bl:'blue',pu:'purple',tl:'teal',gr:'green',cy:'cyan',rd:'red'}[m.c]})">${m.v}</div></div>`).join('')}
-    <div class="mc rd" id="dashAttentionTile"><div class="mc-l">⚠ Needs attention</div><div class="mc-v" style="color:var(--red)">${Object.keys(_attentionCache).length}</div></div>
   </div>`;
-  renderAttentionTile(); // reapplies the click handler/styling consistently with however many are cached right now
   renderLiveNow();
   renderDashTable();
-  // v14.55 — fire-and-forget: don't block the rest of the dashboard
-  // render on this, it fills in / updates the tile whenever it resolves.
-  refreshAttentionOrders();
 };
 
 // ── v8.2: WORKING NOW — who is doing what, right now ──
@@ -1885,8 +1798,9 @@ function renderDashTable(){
     const isMe  = ws.some(w => w.w === CW);
     const sla   = isSLA(o);
     const ageH  = orderAgeH(o);
+    const isDone = orderState(o.id) === 'done';
     return `<tr class="${sla?'sla-row':''}"${isMe?' style="background:rgba(59,130,246,.04)"':''}>
-      <td><span class="oid">${o.id}</span>${sla?' <span class="badge b-sla" style="font-size:10px;padding:2px 8px">SLA</span>':''}</td>
+      <td><span class="oid"${isDone?' style="color:var(--green)"':''}>${o.id}</span>${sla?' <span class="badge b-sla" style="font-size:10px;padding:2px 8px">SLA</span>':''}</td>
       <td><span class="dim">${o.ch}</span></td>
       <td><span class="dim">${o.cu}</span></td>
       <td><span class="num" style="${sla?'color:var(--red);font-weight:800':'color:var(--t2)'}">${fmtAge(ageH)}</span></td>
@@ -1909,6 +1823,39 @@ function renderDashTable(){
   pg.innerHTML = pages > 1
     ? `<button class="btn btn-sm" onclick="_dp--;renderDashTable()" ${_dp===0?'disabled':''}><i class="ri-arrow-left-s-line"></i></button><span style="font-size:11px;color:var(--t2)">${_dp+1}/${pages} (${total})</span><button class="btn btn-sm" onclick="_dp++;renderDashTable()" ${_dp>=pages-1?'disabled':''}><i class="ri-arrow-right-s-line"></i></button>`
     : `<span style="font-size:11px;color:var(--t3)">${total} order${total>1?'s':''}</span>`;
+}
+
+// v14.65 — inspNote is still stored/sent as one flattened string (reason /
+// FORCE-COMPLETED note / "Issues: SKU:TYPE×QTY, ..." / free text, joined
+// with ' — ' — see proceedToPrintOptions in the Work page code, and the
+// InspNote column in the Google Sheet, which has nowhere else to put it).
+// This turns the "Issues: ..." segment back into clean, separated per-SKU
+// rows instead of one undifferentiated red line — "Short" is no longer
+// part of this string at all (see v14.65 note at its construction site),
+// so there's nothing here to confuse with a real registered issue.
+function renderInspNoteHtml(note){
+  if (!note) return '';
+  const parts = String(note).split(' — ').filter(Boolean);
+  const issuePart = parts.find(p => p.startsWith('Issues: '));
+  const otherParts = parts.filter(p => p !== issuePart);
+  let html = '';
+  if (otherParts.length) {
+    html += `<div style="color:var(--t3);margin-top:2px">${otherParts.join(' — ')}</div>`;
+  }
+  if (issuePart) {
+    const items = issuePart.slice('Issues: '.length).split(', ').filter(Boolean).map(seg => {
+      const m = seg.match(/^(.+?):([A-Za-z]+)(?:×(\d+))?$/);
+      return m ? { sku: m[1], type: m[2], qty: m[3] || '' } : { sku: seg, type: '', qty: '' };
+    });
+    html += `<div style="margin-top:5px;background:var(--red-bg);border:1px solid var(--red-bd);border-radius:var(--r);padding:7px 9px">
+      <div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px"><i class="ri-error-warning-line"></i> Issues · ${items.length}</div>
+      ${items.map(it => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;padding:2px 0">
+        <span style="font-family:var(--mono);font-weight:700">${it.sku}</span>
+        <span style="display:flex;align-items:center;gap:6px">${it.type?`<span style="font-size:9.5px;font-weight:800;text-transform:uppercase;color:#d8b4fe;background:rgba(168,85,247,.18);padding:1px 6px;border-radius:5px">${it.type}</span>`:''}${it.qty?`<span style="font-family:var(--mono);color:var(--red);font-weight:700">× ${it.qty}</span>`:''}</span>
+      </div>`).join('')}
+    </div>`;
+  }
+  return html;
 }
 
 window.showOrderDetail = function(oid){
@@ -1940,7 +1887,8 @@ window.showOrderDetail = function(oid){
           <span style="font-weight:600">${w.w}</span>
           <span>${done?`<span class="badge b-done">Done · ${fmtMin(w.netMin)}</span>`:`<span class="badge b-live">Active</span>`}${inspBadge}</span>
         </div>
-        <div style="color:var(--t3);margin-top:2px">${w.startT}${done?' → '+w.endT:' → now'} · ${detail}${stage==='INSP'&&done&&w.inspNote?` · <span style="color:var(--red)">${w.inspNote}</span>`:''}</div>
+        <div style="color:var(--t3);margin-top:2px">${w.startT}${done?' → '+w.endT:' → now'} · ${detail}</div>
+        ${stage==='INSP'&&done&&w.inspNote ? renderInspNoteHtml(w.inspNote) : ''}
       </div>`;
     });
     html += '</div>';
@@ -3927,8 +3875,7 @@ function pageRangeOverlapsClaimed(oid, from, to){
 // way to tell WHICH SKU still needs attention short of a manager digging
 // into the dashboard separately (see the IM00234231 incident). Once every
 // INSP session on this order has ended (nobody left who could still cover
-// the gap — the same test attentionCandidates() uses on the dashboard),
-// this is no longer "still legitimately in progress", it's the exact
+// the gap), this is no longer "still legitimately in progress", it's the exact
 // moment a worker needs the specific SKU name/barcode/rack, right where
 // they're already looking (this is the order-lookup screen itself, not a
 // popup) — and it shows every single time anyone looks this order up
@@ -5177,19 +5124,30 @@ window.proceedToPrintOptions = function(wid){
 
   const totalScanned = rows.reduce((s,r) => s + r.got, 0);
   const result = allClean ? 'PASS' : 'ISSUE';
-  const shortSummary = shortRows.slice(0, 6).map(r => `${r.sku}:${r.got}/${r.req}`).join(', ');
+  // v14.65 — "Short" (this worker's own scan fell short of the required
+  // qty, but nothing was individually flagged) used to be folded into the
+  // same note text as real registered Issues ("Short: A:0/20 — Issues:
+  // B:EXP×5"), which read as one undifferentiated, confusing block and
+  // made people ask "wait, is Short also an issue?". It isn't — it's
+  // usually just a split-inspection artifact, and whichever SKUs are
+  // genuinely still outstanding (across EVERYONE's sessions, not just
+  // this one) are already surfaced separately and far more usefully by
+  // missingSkuPanelHtml() on the order-lookup screen. So Short is no
+  // longer written into inspNote/InspNote at all — only real, individually
+  // registered Issues are. (allClean/result above are intentionally left
+  // alone — a short session still isn't a clean PASS — only the NOTE TEXT
+  // changes.)
   const issueSummary = issueRows.slice(0, 6).map(r => `${r.sku}:${r.issue.type}${r.issue.qty?('×'+r.issue.qty):''}`).join(', ');
   const forcedNote = forcedRows.length ? `FORCE-COMPLETED ${forcedRows.length} item(s) by ${WS ? WS.worker : CW} at ${new Date().toLocaleString('en-US')}` : '';
   const fullNote = allClean && !forcedNote ? '' : [
     reason === 'FORCE_COMPLETE' ? '' : reason,
     forcedNote,
-    shortSummary ? 'Short: ' + shortSummary : '',
     issueSummary ? 'Issues: ' + issueSummary : '',
     note
   ].filter(Boolean).join(' — ');
 
   _pendingInspEnd[wid] = {
-    rows, totalScanned, result, fullNote,
+    rows, totalScanned, result, fullNote, issueCount: issueRows.length,
     maxBox: st.maxBox || 1,
     boxScans: JSON.parse(JSON.stringify(st.boxScans || {})),
     unitType: st.unitType || 'box'
@@ -5314,7 +5272,7 @@ window.finalizeInspEnd = async function(wid){
   // measure the KPI tab now uses for INSP-stage ranking/speed, instead of
   // pallets (which INSP-only "scanning" workers may never even enter).
   const scanCountForEntry = pend.rows.filter(r => r.got > 0 || r.hasIssue).length;
-  doEndWork(wid, null, { scannedQty:pend.totalScanned, inspResult:pend.result, inspNote:pend.fullNote, issueQty:totalIssueQty, scanCount:scanCountForEntry });
+  doEndWork(wid, null, { scannedQty:pend.totalScanned, inspResult:pend.result, inspNote:pend.fullNote, issueQty:totalIssueQty, scanCount:scanCountForEntry, issueCount:pend.issueCount||0 });
   delete _pendingInspEnd[wid];
 
   // v13.8 — used to force-open the Labels progress modal right here. Now
@@ -6273,7 +6231,7 @@ function doEndWork(wid, pallets, inspData){
 
   const reqData = Object.assign(
     { entryId:wid, pallets:pallets!==null?pallets:undefined, wpin:(WS&&WS.wpin)||'' },
-    inspData ? { scannedQty:inspData.scannedQty, inspResult:inspData.inspResult, inspNote:inspData.inspNote, issueQty:inspData.issueQty||0, scanCount:(inspData.scanCount!==undefined&&inspData.scanCount!==null)?inspData.scanCount:undefined } : {}
+    inspData ? { scannedQty:inspData.scannedQty, inspResult:inspData.inspResult, inspNote:inspData.inspNote, issueQty:inspData.issueQty||0, scanCount:(inspData.scanCount!==undefined&&inspData.scanCount!==null)?inspData.scanCount:undefined, issueCount:inspData.issueCount||0 } : {}
   );
   // v10.7 — carried into the queue so loadData() can re-apply it if a
   // server refresh happens before this op actually syncs (see loadData()).
