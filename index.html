@@ -2344,8 +2344,30 @@ window.saveSkuIssue = async function(wid, key, btn){
       scannedAt: new Date().toISOString(),
       result: qty > 0 ? 'ISSUE' : (ok >= reqQty ? 'OK' : 'SHORT')
     };
+    // v14.60 — this save must NOT be attributed to the correcting worker's
+    // own active entryId (wid). Two bugs came from doing that:
+    //   1. getOrderProgress_ sums every InspectionResults row for the order
+    //      regardless of whether that entryId's session has ended — so the
+    //      instant this row landed durably, it was already part of the
+    //      "others" total merged into everyone's live baseline (including
+    //      the corrector's own). We then ALSO kept the corrected value in
+    //      this worker's local st.skuCounts and pushed it to the live-scan
+    //      cache (pushMyLiveScan) — so the same single correction counted
+    //      twice: once as the durable row, once as a "live, not-yet-saved"
+    //      contribution on top of it. That's exactly the 70+64+6 packing
+    //      slip the user reported.
+    //   2. The worker's own later, completely normal End Inspection save
+    //      (replace scoped to their own entryId) would land under the same
+    //      entryId as this correction and could end up overwriting it with
+    //      whatever their local skuCounts held by then.
+    // A dedicated synthetic entryId sidesteps both: the reinspect purge
+    // still removes every OTHER entryId's row(s) for this exact SKU (so the
+    // old split-session rows are replaced, not added to), but this
+    // worker's own entryId never holds a row for this key, so neither their
+    // live push nor their eventual session-end save can touch or double it.
+    const fixEntryId = 'FIX' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     const out = await apiOp('logInspectionResults', {
-      entryId: wid, orderId: w.oid, result: qty > 0 ? 'ISSUE' : 'PASS',
+      entryId: fixEntryId, orderId: w.oid, result: qty > 0 ? 'ISSUE' : 'PASS',
       rows: [row], replace: false, reinspect: true,
       unitType: st.unitType || 'box',
       worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
@@ -2355,7 +2377,13 @@ window.saveSkuIssue = async function(wid, key, btn){
       return;
     }
 
-    st.skuCounts[key] = ok;
+    // Local state deliberately left untouched for this key — st.skuCounts
+    // and the live-scan cache are this worker's OWN not-yet-durable scan
+    // progress only. The corrected total is now the authoritative durable
+    // record (above) and will show up for everyone, including this worker,
+    // purely through the "others" merge below. We still track the issue
+    // flag locally so this worker's own checklist shows the 🔧 icon right
+    // away, but that's a display-only flag — it adds no quantity.
     st.skuIssues = st.skuIssues || {};
     if (qty > 0) st.skuIssues[key] = { type, qty, note };
     else delete st.skuIssues[key];
@@ -2365,9 +2393,9 @@ window.saveSkuIssue = async function(wid, key, btn){
     closeModal();
     toast(qty > 0 ? `Issue recorded: ${type} (${qty}) — 전체 기록 교체됨` : '정상 수량으로 교체 저장됨', 'ok');
     renderStageContent();
-    pushMyLiveScan(wid);
     // Pull the now-corrected authoritative total back down right away,
-    // instead of waiting for the next 5s live-poll tick.
+    // instead of waiting for the next 5s live-poll tick. Deliberately NOT
+    // calling pushMyLiveScan here — see the note above.
     refreshLiveBaseline(wid);
 
     // Audit log (SkuIssues sheet) — unchanged, best-effort.
