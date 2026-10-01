@@ -5117,6 +5117,12 @@ async function getPrintReadyProgress(oid){
   // surface as "Could not check progress".
   if (!hasActiveInsp) {
     const endedOnly = await apiOp('getOrderProgress', { oid }, 45000);
+    // v14.53 — route_ on the server now always returns ok:false + the real
+    // error/stack instead of letting an exception crash the whole request
+    // (see Code.gs). Surface it here so the browser console shows the
+    // actual cause directly, instead of just "null" / "could not check".
+    if (!endedOnly.net) console.warn('getOrderProgress: network/timeout failure', oid);
+    else if (!endedOnly.res.ok) console.warn('getOrderProgress: server returned an error', oid, endedOnly.res);
     return (endedOnly.net && endedOnly.res.ok) ? endedOnly.res : null;
   }
 
@@ -5124,6 +5130,8 @@ async function getPrintReadyProgress(oid){
     apiOp('getLiveScans', { orderId: oid }),
     apiOp('getOrderProgress', { oid }, 45000)
   ]);
+  if (!endedOut.net) console.warn('getOrderProgress: network/timeout failure', oid);
+  else if (!endedOut.res.ok) console.warn('getOrderProgress: server returned an error', oid, endedOut.res);
   if (!endedOut.net || !endedOut.res.ok) return null;
   const p = endedOut.res;
   if (!liveOut.net || !liveOut.res.ok) return p; // live merge is best-effort only
