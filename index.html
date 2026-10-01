@@ -3061,7 +3061,15 @@ function startLivePoll(wid){
   if (_livePollTimers[wid]) return;
   if (!_liveSyncStartedAt[wid]) _liveSyncStartedAt[wid] = Date.now();
   refreshLiveBaseline(wid);
-  _livePollTimers[wid] = setInterval(() => refreshLiveBaseline(wid), 5000);
+  // v14.53 — was 5000ms. Every active INSP worker's device independently
+  // fires getLiveScans + getOrderProgress on this timer, so with several
+  // workers inspecting at once this is the single biggest source of
+  // background call volume against the spreadsheet — and today's repeated
+  // 20-140s doGet executions line up with that volume, not with any one
+  // order's data size. Slowing this down to 12s cuts that background load
+  // by more than half; cross-worker counts are still refreshed often
+  // enough to be useful, just not quite as instantaneous.
+  _livePollTimers[wid] = setInterval(() => refreshLiveBaseline(wid), 12000);
 }
 function stopLivePoll(wid){
   clearInterval(_livePollTimers[wid]);
