@@ -1910,10 +1910,18 @@ window.showOrderDetail = function(oid){
         : (w.pallets!==null&&done?`${fmtPallets(w.pallets)} pallets`:'');
       const inspBadge = stage==='INSP' && done && w.inspResult
         ? ` <span class="badge ${w.inspResult==='PASS'?'b-pass':'b-issue'}" style="font-size:10px;padding:2px 8px">${w.inspResult}</span>` : '';
+      // v14.68 — lets a worker correct their OWN already-saved session's
+      // pallet/box assignment (or a manager, any session) even after the
+      // session has fully ended and its box-detail rows are already on
+      // InspectionResults — see openPostSessionBoxList. Shown only when
+      // there's a real chance of something to edit (INSP + ended) and the
+      // viewer is either that session's own worker or a logged-in manager.
+      const boxEditBtn = stage==='INSP' && done && (w.w===CW || _mgrOK)
+        ? `<button class="btn btn-sm" style="padding:2px 7px;margin-left:6px;color:var(--purple);border-color:var(--purple-bd)" title="박스/팔렛 배정 수정" onclick="event.stopPropagation();openPostSessionBoxList('${w.id}')"><i class="ri-archive-2-line"></i></button>` : '';
       html += `<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 11px;margin-bottom:4px;font-size:12px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">${w.w}</span>
-          <span>${done?`<span class="badge b-done">Done · ${fmtMin(w.netMin)}</span>`:`<span class="badge b-live">Active</span>`}${inspBadge}</span>
+          <span>${done?`<span class="badge b-done">Done · ${fmtMin(w.netMin)}</span>`:`<span class="badge b-live">Active</span>`}${inspBadge}${boxEditBtn}</span>
         </div>
         <div style="color:var(--t3);margin-top:2px">${w.startT}${done?' → '+w.endT:' → now'} · ${detail}</div>
         ${stage==='INSP'&&done&&w.inspNote ? renderInspNoteHtml(w.inspNote) : ''}
@@ -2677,6 +2685,172 @@ window.saveSkuBoxSplit = function(){
   closeModal();
   toast(`${uwCap2} 배정이 저장되었습니다`, 'ok');
   renderStageContent();
+};
+
+// ── Post-session-end pallet/box reassignment — v14.68 ──────────────
+// Same redistribution idea as openSkuBoxModal just above, but for a
+// session that's ALREADY ended and saved to InspectionResults — reached
+// from showOrderDetail's per-entry row via the archive icon next to
+// "Done" (own entries only, unless a manager is logged in). Unlike
+// openSkuBoxModal, there's no local scan state to keep in sync: every
+// open re-fetches live from the server (same call reprintPackingSlip
+// uses) and every save writes straight back to the sheet via the
+// updateBoxAssignment_ server op, which enforces the same "rows must sum
+// to exactly the recorded total" rule server-side too (there's no
+// client-side cap to lean on once a session has already ended).
+let _postBoxList = null;
+let _postBoxEdit = null;
+window.openPostSessionBoxList = async function(entryId){
+  const w = S.works.find(x => x.id === entryId); if (!w) return;
+  if (!(w.w === CW || _mgrOK)) { toast('본인이 끝낸 세션이거나 매니저 로그인이 필요합니다', 'err'); return; }
+  toast('불러오는 중...', '');
+  const out = await apiOp('getInspectionResults', { entryId });
+  if (!out.net || !out.res.ok) { toast('⚠ 불러오지 못했습니다', 'err'); return; }
+  const boxRows = (out.res.rows || []).filter(r => r.boxNum);
+  if (!boxRows.length) { toast('이 세션에 저장된 박스/팔렛 데이터가 없습니다', 'err'); return; }
+  const byKey = {};
+  boxRows.forEach(r => {
+    const key = r.barcode || r.sku;
+    byKey[key] = byKey[key] || { sku:r.sku, barcode:r.barcode, name:r.name, total:0, rows:[] };
+    byKey[key].total += (r.packedQty || 0);
+    byKey[key].rows.push({ n:r.boxNum, q:r.packedQty||0 });
+  });
+  _postBoxList = { entryId, items: Object.keys(byKey).map(k => byKey[k]) };
+  renderPostBoxList();
+};
+function renderPostBoxList(){
+  const st = _postBoxList; if (!st) return;
+  const html = `
+    <div style="font-size:15px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+      <i class="ri-archive-2-line" style="color:var(--purple)"></i> 박스/팔렛 배정 수정
+    </div>
+    <div style="font-size:10.5px;color:var(--t3);background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 10px;margin-bottom:12px;line-height:1.6">
+      <i class="ri-information-line"></i> 이미 저장된 기록을 지금 막 다시 불러온 것 — 태그를 눌러 팔렛을 다시 나눌 수 있습니다. 저장하면 구글시트에 바로 반영됩니다.
+    </div>
+    ${st.items.map(it => {
+      const keyEsc = String(it.barcode||it.sku).replace(/'/g, "\\'");
+      return `<div style="padding:9px 2px;border-bottom:1px solid var(--bd)">
+        <div style="font-family:var(--mono);font-size:12px;font-weight:700">${it.sku||'—'}${it.barcode?` <span style="color:var(--t3);font-weight:500">· ${it.barcode}</span>`:''}</div>
+        <div style="font-size:10.5px;color:var(--t3);margin:1px 0 6px">${(it.name||'').replace(/</g,'&lt;')}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="display:flex;gap:4px;flex-wrap:wrap">${it.rows.sort((a,b)=>a.n-b.n).map(r => `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 7px;cursor:pointer;background:var(--blue-bg);border:1px solid var(--blue-bd);color:var(--blue)" onclick="openPostSessionBoxModal('${keyEsc}')"><i class="ri-archive-2-line"></i> ${r.n} · ${r.q}</span>`).join('')}</div>
+          <span style="font-family:var(--mono);font-weight:800;color:var(--green);font-size:12px">${it.total.toLocaleString()}</span>
+        </div>
+      </div>`;
+    }).join('')}
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <div style="flex:1"></div>
+      <button class="btn btn-sm" onclick="closeModal()">닫기</button>
+    </div>
+  `;
+  openModal(html, { wide:true });
+}
+window.openPostSessionBoxModal = function(key){
+  const listSt = _postBoxList; if (!listSt) return;
+  const it = listSt.items.find(x => (x.barcode||x.sku) === key); if (!it) return;
+  _postBoxEdit = { entryId: listSt.entryId, key, sku: it.sku, barcode: it.barcode, name: it.name, total: it.total, rows: it.rows.map(r => ({...r})) };
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
+      <i class="ri-archive-2-line" style="color:var(--purple)"></i> 팔렛 재배정
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
+      <span class="mono" style="font-size:11.5px;color:var(--t3);white-space:nowrap;flex-shrink:0;padding-top:2px">${it.barcode||it.sku||'—'}</span>
+      <span style="font-size:12.5px;color:var(--t);line-height:1.5;flex:1">${(it.name||'').replace(/</g,'&lt;')}</span>
+    </div>
+    <div style="background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber);border-radius:var(--r);padding:8px 10px;font-size:10.5px;line-height:1.5;margin-bottom:12px">
+      <i class="ri-error-warning-line"></i> 이미 완료되어 저장된 기록을 직접 고치는 것입니다 — 저장하면 즉시 구글시트에 반영됩니다.
+    </div>
+    <div style="font-size:11.5px;color:var(--t3);margin-bottom:10px;text-align:center">기록된 총 <b style="color:var(--t)">${it.total.toLocaleString()}</b>개를 다시 나눠보세요</div>
+    <div id="postBoxRows"></div>
+    <button type="button" class="btn btn-sm" style="width:100%;border-style:dashed;color:var(--blue);margin-bottom:10px" onclick="addPostBoxRow()"><i class="ri-add-line"></i> 번호 추가</button>
+    <div id="postBoxSumline"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-sm" onclick="closeModal()">취소</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-purple btn-sm" id="postBoxSaveBtn" onclick="savePostBoxSplit()"><i class="ri-check-line"></i> 서버에 저장</button>
+    </div>
+  `);
+  renderPostBoxEdit();
+};
+function renderPostBoxEdit(){
+  const ed = _postBoxEdit; if (!ed) return;
+  const rowsEl = document.getElementById('postBoxRows');
+  if (rowsEl) rowsEl.innerHTML = ed.rows.map((r,i) => `
+    <div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:7px 9px;margin-bottom:7px">
+      <div style="display:flex;align-items:center;gap:5px;font-weight:700;font-size:12.5px;flex-shrink:0">
+        <i class="ri-archive-2-line" style="color:var(--purple)"></i>
+        <input type="number" min="1" value="${r.n}" style="width:44px;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-weight:700;text-align:center;padding:4px 2px" oninput="updatePostBoxRowNum(${i},this.value)">
+      </div>
+      <input type="number" min="0" value="${r.q}" style="flex:1;min-width:0;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-family:var(--mono);font-weight:700;padding:7px 9px;text-align:right" oninput="updatePostBoxRowQty(${i},this.value)">
+      <button type="button" style="width:26px;height:26px;border-radius:50%;border:none;background:transparent;color:var(--t3);font-size:15px;flex-shrink:0" onclick="removePostBoxRow(${i})">✕</button>
+    </div>`).join('');
+  const sum = ed.rows.reduce((s,r) => s + (Number(r.q)||0), 0);
+  const diff = ed.total - sum;
+  const sumEl = document.getElementById('postBoxSumline');
+  const saveBtn = document.getElementById('postBoxSaveBtn');
+  if (sumEl) {
+    if (diff === 0) {
+      sumEl.style.cssText = 'display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;padding:9px 10px;border-radius:var(--r);background:var(--green-bg);color:var(--green)';
+      sumEl.innerHTML = `<span>✓ 기록된 수량과 일치</span><span class="mono">${sum.toLocaleString()} / ${ed.total.toLocaleString()}</span>`;
+    } else {
+      sumEl.style.cssText = 'display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;padding:9px 10px;border-radius:var(--r);background:var(--red-bg);color:var(--red)';
+      sumEl.innerHTML = `<span>⚠ ${Math.abs(diff).toLocaleString()}개 ${diff>0?'부족':'초과'}</span><span class="mono">${sum.toLocaleString()} / ${ed.total.toLocaleString()}</span>`;
+    }
+  }
+  if (saveBtn) saveBtn.disabled = (diff !== 0) || ed.rows.some(r => !r.n || r.n < 1);
+}
+window.updatePostBoxRowNum = function(i, v){
+  const ed = _postBoxEdit; if (!ed) return;
+  ed.rows[i].n = Math.max(1, parseInt(v) || 1);
+  renderPostBoxEdit();
+};
+window.updatePostBoxRowQty = function(i, v){
+  const ed = _postBoxEdit; if (!ed) return;
+  ed.rows[i].q = Math.max(0, parseInt(v) || 0);
+  renderPostBoxEdit();
+};
+window.addPostBoxRow = function(){
+  const ed = _postBoxEdit; if (!ed) return;
+  const usedNums = ed.rows.map(r => r.n);
+  const next = usedNums.length ? Math.max(...usedNums) + 1 : 1;
+  ed.rows.push({ n: next, q: 0 });
+  renderPostBoxEdit();
+};
+window.removePostBoxRow = function(i){
+  const ed = _postBoxEdit; if (!ed || ed.rows.length <= 1) return;
+  ed.rows.splice(i, 1);
+  renderPostBoxEdit();
+};
+window.savePostBoxSplit = async function(){
+  const ed = _postBoxEdit; if (!ed) return;
+  const sum = ed.rows.reduce((s,r) => s + (Number(r.q)||0), 0);
+  if (sum !== ed.total) { toast('⚠ 합계를 기록된 수량과 맞춰야 저장할 수 있습니다', 'err'); return; }
+  const nums = ed.rows.map(r => r.n);
+  if (new Set(nums).size !== nums.length) { toast('⚠ 같은 번호가 중복되어 있습니다 — 하나로 합쳐주세요', 'err'); return; }
+  const btn = document.getElementById('postBoxSaveBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> 저장 중...'; }
+  const payload = { entryId: ed.entryId, sku: ed.sku, barcode: ed.barcode, rows: ed.rows.map(r => ({ n:r.n, q:r.q })) };
+  const out = _mgrOK ? await mgrOp('updateBoxAssignment', payload)
+    : await apiOp('updateBoxAssignment', Object.assign({}, payload, { worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : '' }));
+  if (!out.net || !out.res.ok) {
+    const err = out.res && out.res.error;
+    const msg = err === 'total_mismatch' ? '⚠ 합계가 서버 기록과 달라 저장할 수 없습니다 — 새로고침 후 다시 시도하세요'
+      : err === 'unauthorized' ? '⚠ 권한이 없습니다 (본인 세션이 아니거나 매니저 로그인이 필요합니다)'
+      : '⚠ 저장 실패: ' + (err || 'network');
+    toast(msg, 'err');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ri-check-line"></i> 서버에 저장'; }
+    return;
+  }
+  // Keep the list's in-memory copy in sync, so re-opening a tag right
+  // after saving (or just looking at the list again) shows the
+  // just-saved split instead of stale pre-save numbers.
+  if (_postBoxList) {
+    const it = _postBoxList.items.find(x => (x.barcode||x.sku) === ed.key);
+    if (it) it.rows = ed.rows.filter(r => r.q > 0).map(r => ({ n:r.n, q:r.q }));
+  }
+  closeModal();
+  toast('저장되었습니다 — 구글시트에 반영됨', 'ok');
+  if (_postBoxList) renderPostBoxList();
 };
 
 // Builds the "just scanned" banner shown directly above the scan box (never
@@ -8011,6 +8185,7 @@ window.renderEntries = function(){
         <td class="mono" style="color:var(--teal)">${fmtMin(w.netMin)}</td>
         <td style="white-space:nowrap">
           ${(w.stage==='INSP' && w.endT) ? `<button class="btn btn-sm" style="padding:2px 5px" title="Reprint packing slip" onclick="reprintPackingSlip('${w.id}')"><i class="ri-printer-line"></i></button>` : ''}
+          ${(w.stage==='INSP' && w.endT) ? `<button class="btn btn-sm" style="padding:2px 5px;color:var(--purple)" title="박스/팔렛 배정 수정" onclick="openPostSessionBoxList('${w.id}')"><i class="ri-archive-2-line"></i></button>` : ''}
           ${!w.endT ? `<button class="btn btn-sm" style="color:var(--amber);padding:2px 5px" title="Force end — closes this stuck/open session now (keeps its net time), freeing this worker to start other work" onclick="forceEndEntry('${w.id}')"><i class="ri-stop-circle-line"></i></button>` : ''}
           <button class="btn btn-sm" style="padding:2px 5px" title="Edit" onclick="editEntryModal('${w.id}')"><i class="ri-edit-line"></i></button>
           <button class="btn btn-sm" style="color:var(--red);padding:2px 5px" title="Delete" onclick="delEntry('${w.id}')"><i class="ri-delete-bin-line"></i></button>
