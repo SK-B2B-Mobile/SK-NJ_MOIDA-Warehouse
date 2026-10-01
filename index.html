@@ -1622,6 +1622,88 @@ function orderProgressBar(oid){
 // ── DASHBOARD ──
 const D_PER = 20;
 
+// v14.55 — "완료" tag/tile only ever meant "every INSP session someone
+// started has an EndTime" — never "every SKU the order actually needs was
+// accounted for". Those usually match, but a split-between-N-workers order
+// where each worker's own portion is genuinely done still shows ✅ Complete
+// even when nobody happened to touch one particular SKU (see IM00234231,
+// 2026-09-30: all 3 sessions ended clean, dashboard said Complete, nobody
+// noticed 1 of 334 SKUs had zero combined scans from anyone until a manager
+// happened to dig into it manually). getOrderProgress_ already knows the
+// real truth (skuDone vs skuTotal) and is now fast (see the v14.52-14.54
+// notes in Code.gs), so this proactively checks every order whose INSP
+// sessions have ALL ended, and surfaces any that are secretly short — a
+// manager no longer has to think to go look.
+let _attentionCache = {};   // oid -> { skuTotal, skuDone, missing:[{sku,barcode,name,rack,reqQty,packedQty}] }
+let _attentionChecked = {}; // oid -> timestamp of last check, so a steady 30s dashboard refresh doesn't re-hit every candidate order every single time
+const ATTENTION_RECHECK_MS = 20000;
+
+function attentionCandidates(){
+  // An order is worth checking once its INSP sessions are all closed out
+  // (nobody could still be about to cover the gap) and at least one INSP
+  // session actually happened (never-started orders aren't "short", they're
+  // just not done yet — that's the existing Waiting/Inspection tiles' job).
+  return S.orders
+    .filter(o => (orderStageSummary(o.id).INSP || []).length > 0)
+    .filter(o => orderStageSummary(o.id).INSP.every(w => w.endT))
+    .map(o => o.id);
+}
+
+async function refreshAttentionOrders(){
+  const now = Date.now();
+  const candidates = attentionCandidates()
+    .filter(oid => !_attentionChecked[oid] || (now - _attentionChecked[oid]) > ATTENTION_RECHECK_MS);
+  if (!candidates.length) return;
+  // Sequential, not Promise.all — this piggybacks on ordinary dashboard
+  // traffic rather than firing a burst of simultaneous requests.
+  for (const oid of candidates) {
+    _attentionChecked[oid] = Date.now();
+    const out = await apiOp('getOrderProgress', { oid }, 45000);
+    if (!out.net || !out.res.ok) continue; // best-effort — try again next cycle
+    const p = out.res;
+    if (p.ready || !p.skuTotal) { delete _attentionCache[oid]; continue; }
+    _attentionCache[oid] = {
+      skuTotal: p.skuTotal, skuDone: p.skuDone,
+      missing: (p.skus || []).filter(s => !s.done).map(s => ({
+        sku: s.sku, barcode: s.barcode, name: s.name, rack: s.rack,
+        reqQty: s.reqQty, packedQty: s.packedQty
+      }))
+    };
+  }
+  if (curPage() === 'dash') renderAttentionTile();
+}
+
+function renderAttentionTile(){
+  const el = document.getElementById('dashAttentionTile'); if (!el) return;
+  const n = Object.keys(_attentionCache).length;
+  el.outerHTML = `<div class="mc rd${n>0?' alert':''}" id="dashAttentionTile" style="${n>0?'cursor:pointer':''}" ${n>0?'onclick="openAttentionModal()"':''}>
+    <div class="mc-l">⚠ Needs attention</div><div class="mc-v" style="color:var(--red)">${n}</div>
+  </div>`;
+}
+
+window.openAttentionModal = function(){
+  const entries = Object.entries(_attentionCache);
+  if (!entries.length) return;
+  const html = entries.map(([oid, info]) => `
+    <div style="margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:4px">${oid} <span style="font-weight:400;color:var(--t3);font-size:11px">— ${info.skuDone}/${info.skuTotal} SKUs accounted for</span></div>
+      <div class="sku-list" style="text-align:left">
+        ${info.missing.map(m => `<div class="sku-row warn">
+          <div class="sku-check"></div>
+          <div class="sku-row-name">
+            <div class="sku-row-sku">${m.sku||'—'}${m.name?' · '+m.name:''}</div>
+            <div class="sku-row-nm" style="color:var(--t3)">${m.packedQty||0}/${m.reqQty||0} scanned${m.rack?' · Rack '+m.rack:''}${m.barcode?' · '+m.barcode:''}</div>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`).join('');
+  openModal(`<div class="end-modal-inner" style="text-align:left">
+    <div style="font-size:15px;font-weight:700;margin-bottom:10px;text-align:center"><i class="ri-error-warning-line" style="color:var(--red)"></i> Needs attention — ${entries.length} order${entries.length>1?'s':''}</div>
+    <div style="max-height:60vh;overflow-y:auto">${html}</div>
+    <div style="display:flex;justify-content:center;margin-top:12px"><button class="btn btn-sm" onclick="closeModal()">Close</button></div>
+  </div>`, { wide:true });
+};
+
 R.dash = function(){
   let wait=0, pickA=0, inspA=0, pallA=0, done=0, slaN=0;
   S.orders.forEach(o => {
@@ -1638,13 +1720,19 @@ R.dash = function(){
     else if (a.PICK.some(w => !w.endT)) pickA++;
   });
 
-  document.getElementById('dashMetrics').innerHTML = `<div class="g6">
+  document.getElementById('dashMetrics').innerHTML = `<div class="g7">
     ${[{l:'Waiting',v:wait,c:'am'},{l:'Picking',v:pickA,c:'bl'},{l:'Inspection',v:inspA,c:'pu'},
        {l:'Completed',v:done,c:'gr'},
        {l:'SLA risk',v:slaN,c:'rd',alert:slaN>0},{l:'Total',v:S.orders.length,c:'cy'}]
-    .map(m => `<div class="mc ${m.c}${m.alert?' alert':''}"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${{am:'amber',bl:'blue',pu:'purple',tl:'teal',gr:'green',cy:'cyan',rd:'red'}[m.c]})">${m.v}</div></div>`).join('')}</div>`;
+    .map(m => `<div class="mc ${m.c}${m.alert?' alert':''}"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${{am:'amber',bl:'blue',pu:'purple',tl:'teal',gr:'green',cy:'cyan',rd:'red'}[m.c]})">${m.v}</div></div>`).join('')}
+    <div class="mc rd" id="dashAttentionTile"><div class="mc-l">⚠ Needs attention</div><div class="mc-v" style="color:var(--red)">${Object.keys(_attentionCache).length}</div></div>
+  </div>`;
+  renderAttentionTile(); // reapplies the click handler/styling consistently with however many are cached right now
   renderLiveNow();
   renderDashTable();
+  // v14.55 — fire-and-forget: don't block the rest of the dashboard
+  // render on this, it fills in / updates the tile whenever it resolves.
+  refreshAttentionOrders();
 };
 
 // ── v8.2: WORKING NOW — who is doing what, right now ──
