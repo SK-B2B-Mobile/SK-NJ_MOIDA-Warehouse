@@ -5607,14 +5607,6 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   const worker = meta.worker || '';
   const result = meta.result || '';
 
-  const rowsHtml = rows.map(r => `<tr>
-      <td class="box-bc">${r.barcode||''}</td>
-      <td class="box-bc">${r.sku||''}</td>
-      <td>${r.name||''}${r.mc ? ' <span style="font-size:10px;font-weight:700;color:#92400e;border:1px solid #d97706;border-radius:4px;padding:1px 4px">MC</span>' : ''}${r.fc ? ' <span style="font-size:10px;font-weight:700;color:#991b1b;border:1px solid #dc2626;border-radius:4px;padding:1px 4px">FC</span>' : ''}</td>
-      <td style="text-align:center">${r.req}</td>
-      <td style="text-align:center">${r.hasIssue ? (r.issue.qty||0) : 0}</td>
-      <td style="text-align:center;font-weight:700">${r.got}</td>
-    </tr>`).join('');
   const totalOrdered = rows.reduce((a,r) => a + (r.req||0), 0);
   const totalIssue   = rows.reduce((a,r) => a + (r.hasIssue ? (r.issue.qty||0) : 0), 0);
   const totalPacked  = rows.reduce((a,r) => a + (r.got), 0);
@@ -5624,30 +5616,32 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   // on its own, e.g. "18"). Printing both side by side on the slip avoids
   // "ISSUE 18" reading as if 18 different products were wrong.
   const shippedCleanCount = rows.length - issueRows.length;
-  const issuesHtml = issueRows.length ? `
-    <h4 class="issues-h4">Issues / Shortages — ${issueRows.length} SKU${issueRows.length===1?'':'s'} affected (${totalIssue} unit${totalIssue===1?'':'s'} total)</h4>
-    <table class="slip-table issue-slip-table"><colgroup><col class="c-itype"><col class="c-ibc"><col class="c-isku"><col class="c-iname"><col class="c-iqty"><col class="c-inote"></colgroup>
-    <thead><tr><th>Type</th><th>Barcode</th><th>SKU</th><th>Product</th><th style="text-align:center">Qty</th><th>Note</th></tr></thead><tbody>
-    ${issueRows.map(r => `<tr><td>${r.issue.type}</td><td class="box-bc">${r.barcode||''}</td><td class="box-bc">${r.sku||''}</td><td>${r.name||r.sku||''}</td><td style="text-align:center">${r.issue.qty||0}</td><td>${r.issue.note||''}</td></tr>`).join('')}
-    </tbody></table>` : '';
   const mcNote = rows.some(r => r.mc)
     ? `<p style="font-size:11px;color:#92400e;margin-top:10px"><b>MC</b> = confirmed as one full master case via the case's own barcode, not scanned unit-by-unit.</p>` : '';
   const forcedCount = rows.filter(r => r.fc).length;
   const forcedByNames = (meta.forcedBy && meta.forcedBy.length) ? meta.forcedBy.join(', ') : worker;
   const fcNote = forcedCount ? `<p style="font-size:11px;color:#991b1b;font-weight:700;margin-top:6px;border:1px solid #dc2626;border-radius:6px;padding:6px 10px"><b>⚠ FC</b> = ${forcedCount} item${forcedCount>1?'s were':' was'} force-completed without scanning, by <b>${forcedByNames}</b>.</p>` : '';
 
-  // Box / pallet breakdown — which SKUs (and how many) went into each
-  // box or pallet, built from scan-time tracking. Only shown when
-  // slipMode==='box'. Wording follows the unit chosen during scanning
-  // (Box for parcel carriers like UPS, Pallet for freight like TK).
-  let boxHtml = '';
-  // v14.61 — same box-breakdown data, reshaped for the Excel export (see
-  // the export toolbar below) so the workbook's "Box Breakdown" sheet
-  // matches the printed table exactly instead of being recomputed
-  // separately from a different code path.
-  let boxExportGroups = [];
   const uw = unitWord(meta.unitType);
   const uwCap = unitWord(meta.unitType, true);
+
+  // v14.63 — "Page N / Total" footer the user asked for has to be baked
+  // into the document itself, NOT left to the browser's print-dialog
+  // "Headers and footers" checkbox (workers kept forgetting to turn that
+  // on, and even on it can't be moved to a chosen corner by this page's
+  // own CSS). Getting a real, accurate total requires deciding page breaks
+  // ourselves instead of letting the browser's automatic reflow decide —
+  // so the whole printable body is now built as a flat sequence of
+  // "blocks" (one per row / section title / box header / note / closing),
+  // which the popup's own script (right before it calls window.print(),
+  // see below) measures and packs onto pages up to the real printable
+  // height, THEN renders as actual paginated <div> sections with its own
+  // footer. A table that ends up spanning a page break has its column
+  // header re-emitted at the top of the next page automatically, since
+  // each page's blocks are rendered independently.
+  const blocks = [];
+  let boxExportGroups = [];
+
   if (slipMode === 'box') {
     // Accepts two shapes: the legacy per-entry object keyed by box number
     // (single worker's own boxScans, e.g. {1:{...},2:{...}}), or the newer
@@ -5665,53 +5659,58 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
     const skuByKey = {};
     rows.forEach(r => { const k = r.barcode || r.sku; nameByKey[k] = r.name || r.sku || ''; skuByKey[k] = r.sku || ''; });
     if (groups.length) {
-      // v14.28 — a box with many SKUs used to render as ONE giant
-      // comma-joined paragraph, with page-break-inside:avoid on the whole
-      // thing (.box-line). That rule only works when the element actually
-      // fits on a page; a paragraph listing 100+ items is routinely taller
-      // than a full printable page, so the browser had no choice but to
-      // break — and clip — somewhere in the middle of it anyway, which is
-      // exactly the "잘린다"/garbled-looking print this was reported as.
-      // Fix: one short block PER ITEM instead of one huge block per box.
-      // Every individual item line trivially fits on a page, so
-      // page-break-inside:avoid on each one actually holds, and the
-      // browser breaks the page cleanly BETWEEN items instead of through
-      // one — however many items a single box ends up holding.
-      // v14.62 — the browser's own print header/footer ("1/9" etc.) is
-      // being turned off (its position is fixed by the browser, not by
-      // this page, and can't be moved to bottom-center). In its place,
-      // each box/pallet section now numbers itself against the total
-      // section count right in its own title bar (e.g. "… · Box 1  ·  1/3"),
-      // so there's still a clear "where am I" marker while flipping pages —
-      // it counts box/pallet SECTIONS, not physical printed pages, since a
-      // single box can itself span several pages when it holds many SKUs.
+      blocks.push({ t:'sectionTitle', html: `<h4 class="issues-h4">${uwCap} breakdown</h4>` });
       const groupTotal = groups.length;
-      boxHtml = `<h4 class="issues-h4">${uwCap} breakdown</h4>` + groups.map((g, gi) => {
+      groups.forEach((g, gi) => {
         const entries = Object.entries(g.items || {});
         const boxTotal = entries.reduce((s, [,qty]) => s + qty, 0);
-        const itemRows = entries
-          .map(([key, qty]) => `<tr><td class="box-bc">${key}</td><td class="box-bc">${skuByKey[key] || ''}</td><td>${nameByKey[key] || ''}</td><td style="text-align:center">${qty}</td></tr>`)
-          .join('') || `<tr><td colspan="4" style="color:#991b1b">(no items recorded)</td></tr>`;
-        return `<div class="box-group">
-          <div class="box-head"><span>${g.label} <span class="box-seq">· ${gi+1}/${groupTotal}</span></span><span class="box-count">${entries.length} SKU${entries.length===1?'':'s'} · ${boxTotal} unit${boxTotal===1?'':'s'}</span></div>
-          <table class="box-table"><colgroup><col class="c-bc"><col class="c-sku"><col class="c-name"><col class="c-qty"></colgroup>
-          <thead><tr><th>Barcode</th><th>SKU</th><th>Product</th><th style="text-align:center">Qty</th></tr></thead>
-          <tbody>${itemRows}</tbody></table>
-        </div>`;
-      }).join('');
-      boxExportGroups = groups.map(g => ({
-        label: g.label,
-        items: Object.entries(g.items || {}).map(([key, qty]) => ({
-          barcode: key, sku: skuByKey[key] || '', name: nameByKey[key] || '', qty
-        }))
-      }));
+        // v14.62 — each box/pallet section numbers itself against the
+        // total section count right in its own title bar (e.g.
+        // "… · Box 1 · 1/3") — counts box/pallet SECTIONS, not physical
+        // printed pages, since one box can itself span several pages.
+        blocks.push({ t:'boxHead', html: `<div class="box-group"><div class="box-head"><span>${g.label} <span class="box-seq">· ${gi+1}/${groupTotal}</span></span><span class="box-count">${entries.length} SKU${entries.length===1?'':'s'} · ${boxTotal} unit${boxTotal===1?'':'s'}</span></div></div>` });
+        if (entries.length) {
+          entries.forEach(([key, qty]) => {
+            blocks.push({ t:'rowBox', html: `<tr><td class="box-bc">${key}</td><td class="box-bc">${skuByKey[key] || ''}</td><td>${nameByKey[key] || ''}</td><td style="text-align:center">${qty}</td></tr>` });
+          });
+        } else {
+          blocks.push({ t:'rowBox', html: `<tr><td colspan="4" style="color:#991b1b">(no items recorded)</td></tr>` });
+        }
+        boxExportGroups.push({
+          label: g.label,
+          items: entries.map(([key, qty]) => ({ barcode: key, sku: skuByKey[key] || '', name: nameByKey[key] || '', qty }))
+        });
+      });
     } else {
-      boxHtml = `<p style="font-size:11px;color:#991b1b;margin-top:10px">⚠ No ${uw} breakdown was recorded for this order — showing combined totals only.</p>`;
+      blocks.push({ t:'note', html: `<p style="font-size:11px;color:#991b1b;margin-top:10px">⚠ No ${uw} breakdown was recorded for this order — showing combined totals only.</p>` });
     }
   }
 
+  rows.forEach(r => {
+    blocks.push({ t:'rowMain', html: `<tr>
+      <td class="box-bc">${r.barcode||''}</td>
+      <td class="box-bc">${r.sku||''}</td>
+      <td>${r.name||''}${r.mc ? ' <span style="font-size:10px;font-weight:700;color:#92400e;border:1px solid #d97706;border-radius:4px;padding:1px 4px">MC</span>' : ''}${r.fc ? ' <span style="font-size:10px;font-weight:700;color:#991b1b;border:1px solid #dc2626;border-radius:4px;padding:1px 4px">FC</span>' : ''}</td>
+      <td style="text-align:center">${r.req}</td>
+      <td style="text-align:center">${r.hasIssue ? (r.issue.qty||0) : 0}</td>
+      <td style="text-align:center;font-weight:700">${r.got}</td>
+    </tr>` });
+  });
+  blocks.push({ t:'totalRow', html: `<tr class="slip-total-row"><td colspan="3"><b>TOTAL — ${rows.length} SKU${rows.length===1?'':'s'}</b>${issueRows.length?`<div style="font-weight:400;font-size:10.5px;color:#555;margin-top:2px">${shippedCleanCount} shipped in full · ${issueRows.length} with issue</div>`:''}</td><td style="text-align:center"><b>${totalOrdered}</b></td><td style="text-align:center"><b>${totalIssue}</b></td><td style="text-align:center"><b>${totalPacked}</b></td></tr>` });
+
+  if (issueRows.length) {
+    blocks.push({ t:'sectionTitle', html: `<h4 class="issues-h4">Issues / Shortages — ${issueRows.length} SKU${issueRows.length===1?'':'s'} affected (${totalIssue} unit${totalIssue===1?'':'s'} total)</h4>` });
+    issueRows.forEach(r => {
+      blocks.push({ t:'rowIssue', html: `<tr><td>${r.issue.type}</td><td class="box-bc">${r.barcode||''}</td><td class="box-bc">${r.sku||''}</td><td>${r.name||r.sku||''}</td><td style="text-align:center">${r.issue.qty||0}</td><td>${r.issue.note||''}</td></tr>` });
+    });
+  }
+
+  if (mcNote) blocks.push({ t:'note', html: mcNote });
+  if (fcNote) blocks.push({ t:'note', html: fcNote });
+
   const badgeClass = result === 'PASS' ? 'verify-ok' : 'verify-bad';
   const badgeText = result === 'PASS' ? '✓ INSPECTION PASSED — ALL ITEMS VERIFIED' : '⚠ INSPECTION COMPLETE — WITH ISSUES';
+  blocks.push({ t:'closing', html: `<div class="slip-closing"><div class="verify-badge ${badgeClass}">${badgeText}</div><div class="slip-footer"><span>Verified by: ${worker} · ${printedAt}</span><span>StyleKorean NJ/MOIDA Warehouse System</span></div></div>` });
 
   // v14.61 — "⬇ Excel" download button on the packing slip screen. The
   // slip opens in its own popup window/document (document.write'd below),
@@ -5736,6 +5735,22 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   // that sequence would otherwise break the popup's HTML).
   const xlsxDataJson = JSON.stringify(xlsxExportData).replace(/<\//g, '<\\/');
 
+  // v14.63 — everything the popup's own pagination script (bottom of this
+  // function) needs: the flat block list, the column-header/colgroup HTML
+  // for each of the 3 table kinds (re-emitted at the top of a table every
+  // time it starts — including a fresh start after a page break), and the
+  // page-1-only vs continuation-page header blocks.
+  const theadMain = `<thead><tr><th>Barcode</th><th>SKU</th><th>Product</th><th style="text-align:center">Ordered</th><th style="text-align:center">Issue</th><th style="text-align:center">Packed</th></tr></thead>`;
+  const theadBox = `<thead><tr><th>Barcode</th><th>SKU</th><th>Product</th><th style="text-align:center">Qty</th></tr></thead>`;
+  const theadIssue = `<thead><tr><th>Type</th><th>Barcode</th><th>SKU</th><th>Product</th><th style="text-align:center">Qty</th><th>Note</th></tr></thead>`;
+  const colgroupMain = `<colgroup><col class="c-bc"><col class="c-sku"><col class="c-name"><col class="c-ord"><col class="c-iss"><col class="c-pk"></colgroup>`;
+  const colgroupBox = `<colgroup><col class="c-bc"><col class="c-sku"><col class="c-name"><col class="c-qty"></colgroup>`;
+  const colgroupIssue = `<colgroup><col class="c-itype"><col class="c-ibc"><col class="c-isku"><col class="c-iname"><col class="c-iqty"><col class="c-inote"></colgroup>`;
+  const headerHtml = `<div class="slip-head"><div><div class="slip-logo">StyleKorean</div><div class="slip-addr">NJ/MOIDA</div></div><div><div class="slip-title">PACKING SLIP</div><div class="slip-meta">Order ${w.oid}<br>Printed ${printedAt}</div></div></div><div class="slip-info"><div><b>Customer</b>${o?.ch||''} · ${o?.cu||''}</div><div><b>Order #</b>${w.oid}</div><div><b>Inspected by</b>${worker}</div><div><b>Result</b>${result}</div></div>`;
+  const contHeaderHtml = `<div class="slip-cont-head"><span>StyleKorean · Order ${w.oid}</span><span>(continued)</span></div>`;
+  const slipData = { blocks, theadMain, theadBox, theadIssue, colgroupMain, colgroupBox, colgroupIssue, headerHtml, contHeaderHtml };
+  const slipDataJson = JSON.stringify(slipData).replace(/<\//g, '<\\/');
+
   // v14.12 — found the actual bug behind the clipping: <body> padding is
   // NOT a per-page margin. The browser slices one continuous flowed
   // document into pages, and body's own top/bottom padding only appears
@@ -5748,6 +5763,11 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   // is cut back to a token amount. Header/info block spacing (between the
   // company name and the barcode table) is also tightened back down per
   // feedback — that gap, not the page edges, was too loose.
+  // v14.63 — page content is now manually paginated (see above), so the
+  // document body itself is pinned to the exact printable-area width
+  // (185.9mm → 702.6px at 96 CSS px/inch) both on screen AND at print
+  // time, so the popup's own measurement pass (which runs at that same
+  // width) produces line-wrapping that matches the real printed output.
   const css = `
     @page{ size: letter; margin: 18mm 15mm 20mm; }
     /* v14.62 — most browsers default to NOT printing background-color/
@@ -5761,8 +5781,31 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
        of whether the person remembered to turn it on. */
     *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact; }
     *{box-sizing:border-box;}
-    html, body{width:100%;}
-    body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; padding:0; max-width:100%; margin:0; font-size:12px; line-height:1.45;}
+    html, body{width:702.6px;}
+    body{font-family:'Helvetica Neue',Arial,sans-serif; color:#111; padding:0; margin:0 auto; font-size:12px; line-height:1.45;}
+    @media screen{ body{background:#ccc; padding-top:16px;} }
+    @media print{ body{background:#fff;} }
+    /* v14.63 — each physical page, built by the pagination script below.
+       height (not min-height) is set UNCONDITIONALLY — not just on
+       screen — to exactly the real printable-area height (241.4mm @
+       96px/in). This matters beyond just visual accuracy: .page-footer
+       below is position:absolute inside this box, and an absolutely
+       positioned child is placed relative to its parent's actual box
+       size. With only min-height (and only under @media screen, as an
+       earlier version of this had it), the box had NO explicit height at
+       print time at all — it auto-sized to its in-flow content, which
+       does NOT include the absolutely-positioned footer, so "bottom:2px"
+       ended up landing just below the last content row instead of at the
+       true bottom of the page, overlapping it on a full page. A real,
+       unconditional height fixes that for both the on-screen preview and
+       the actual print/PDF output. */
+    .pdf-page{ background:#fff; position:relative; height:912.2px; overflow:hidden; page-break-after:always; break-after:page; }
+    .pdf-page:last-child{ page-break-after:auto; break-after:auto; }
+    @media screen{ .pdf-page{ margin:0 auto 20px; box-shadow:0 2px 16px rgba(0,0,0,.3); } }
+    .page-footer{ position:absolute; left:0; right:0; bottom:2px; text-align:right; font-size:10.5px; color:#444; font-weight:700; }
+    .page-footer .brand{ color:#999; font-weight:500; margin-right:10px; font-size:10px; }
+    .slip-cont-head{ display:flex; justify-content:space-between; font-size:10.5px; color:#777; border-bottom:1px solid #ccc; padding-bottom:6px; margin-bottom:10px; }
+    #slipMeasure{ position:absolute; top:0; left:-9999px; width:702.6px; visibility:hidden; }
     .slip-head{display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #111; padding-bottom:10px; margin-bottom:14px;}
     .slip-logo{font-size:23px; font-weight:800; letter-spacing:-0.02em;}
     .slip-addr{font-size:11px; color:#555; margin-top:3px; line-height:1.4;}
@@ -5854,31 +5897,13 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
         <button class="slip-btn-print" onclick="window.print()">🖨 인쇄 / PDF로 저장</button>
         <button class="slip-btn-xlsx" id="slipXlsxBtn" onclick="downloadSlipExcel()">⬇ Excel 다운로드</button>
       </div>
-      <div style="font-size:11px; color:#991b1b; font-weight:600;">⚠ 인쇄 대화상자에서 "머리글과 바닥글(Headers and footers)"을 꺼주세요 — 꺼야 브라우저가 자체적으로 붙이는 페이지 번호가 안 나오고, 아래 각 박스 제목의 번호(예: 1/3)만 깔끔하게 보입니다.</div>
+      <div style="font-size:11px; color:#166534; font-weight:600;">✓ 페이지 번호(Page N / Total)가 각 페이지 우측 하단에 자동으로 인쇄됩니다 — 브라우저 인쇄 설정과 무관하게 항상 표시됩니다.</div>
     </div>
-    <div class="slip-head">
-      <div><div class="slip-logo">StyleKorean</div><div class="slip-addr">NJ/MOIDA</div></div>
-      <div><div class="slip-title">PACKING SLIP</div><div class="slip-meta">Order ${w.oid}<br>Printed ${printedAt}</div></div>
+    <div id="slipMeasure"></div>
+    <div id="slipBody">
+      <div style="padding:40px;font-size:13px;color:#777">페이지 레이아웃 계산 중…</div>
     </div>
-    <div class="slip-info">
-      <div><b>Customer</b>${o?.ch||''} · ${o?.cu||''}</div>
-      <div><b>Order #</b>${w.oid}</div>
-      <div><b>Inspected by</b>${worker}</div>
-      <div><b>Result</b>${result}</div>
-    </div>
-    ${boxHtml}
-    <table class="slip-table"><colgroup><col class="c-bc"><col class="c-sku"><col class="c-name"><col class="c-ord"><col class="c-iss"><col class="c-pk"></colgroup>
-    <thead><tr><th>Barcode</th><th>SKU</th><th>Product</th><th style="text-align:center">Ordered</th><th style="text-align:center">Issue</th><th style="text-align:center">Packed</th></tr></thead>
-    <tbody>${rowsHtml}</tbody>
-    <tfoot><tr class="slip-total-row"><td colspan="3"><b>TOTAL — ${rows.length} SKU${rows.length===1?'':'s'}</b>${issueRows.length?`<div style="font-weight:400;font-size:10.5px;color:#555;margin-top:2px">${shippedCleanCount} shipped in full · ${issueRows.length} with issue</div>`:''}</td><td style="text-align:center"><b>${totalOrdered}</b></td><td style="text-align:center"><b>${totalIssue}</b></td><td style="text-align:center"><b>${totalPacked}</b></td></tr></tfoot>
-    </table>
-    ${issuesHtml}
-    ${mcNote}
-    ${fcNote}
-    <div class="slip-closing">
-      <div class="verify-badge ${badgeClass}">${badgeText}</div>
-      <div class="slip-footer"><span>Verified by: ${worker} · ${printedAt}</span><span>StyleKorean NJ/MOIDA Warehouse System</span></div>
-    </div>
+    <script type="application/json" id="slipData">${slipDataJson}<\/script>
     <script type="application/json" id="slipXlsxData">${xlsxDataJson}<\/script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" onerror="document.getElementById('slipXlsxBtn').disabled=true; document.getElementById('slipXlsxBtn').textContent='⬇ Excel (오프라인 — 다운로드 불가)';"><\/script>
     <script>
@@ -5924,13 +5949,135 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
         XLSX.writeFile(wb, 'PackingSlip_' + (data.oid || 'order') + '.xlsx');
       }
     <\/script>
+    <script>
+      // v14.63 — manual pagination engine. Runs once, right after this
+      // popup's DOM is ready, before printing. It (1) measures every
+      // content block's REAL rendered height at the exact width the
+      // printed page will have, (2) packs blocks onto pages up to the
+      // real printable-area height (reserving room for the footer, and
+      // for a repeated table header whenever a table starts or
+      // continues), then (3) re-renders the whole body as actual
+      // per-page <div>s, each with its own baked-in "Page N / Total"
+      // footer, and only THEN calls window.print().
+      (function(){
+        var data = JSON.parse(document.getElementById('slipData').textContent);
+        var blocks = data.blocks;
+
+        // 96 CSS px / inch; @page margin: 18mm 15mm 20mm; letter = 8.5in x 11in.
+        var PAGE_W = 702.6;   // (215.9 - 15 - 15)mm → px
+        var PAGE_H = 912.2;   // (279.4 - 18 - 20)mm → px
+        var FOOTER_RESERVE = 22;
+
+        var measure = document.getElementById('slipMeasure');
+
+        function kindOf(t){
+          if (t === 'rowMain' || t === 'totalRow') return 'main';
+          if (t === 'rowBox') return 'box';
+          if (t === 'rowIssue') return 'issue';
+          return null;
+        }
+        function theadFor(k){ return k==='main'?data.theadMain:(k==='box'?data.theadBox:data.theadIssue); }
+        function colgroupFor(k){ return k==='main'?data.colgroupMain:(k==='box'?data.colgroupBox:data.colgroupIssue); }
+        function tableClassFor(k){ return k==='main'?'slip-table':(k==='box'?'box-table':'slip-table issue-slip-table'); }
+
+        function measureHtml(html){ measure.innerHTML = html; return measure.offsetHeight; }
+
+        var theadHeights = {
+          main: measureHtml('<table class="slip-table">' + data.colgroupMain + data.theadMain + '</table>'),
+          box: measureHtml('<table class="box-table">' + data.colgroupBox + data.theadBox + '</table>'),
+          issue: measureHtml('<table class="slip-table issue-slip-table">' + data.colgroupIssue + data.theadIssue + '</table>')
+        };
+        var headerH = measureHtml(data.headerHtml);
+        var contHeaderH = measureHtml(data.contHeaderHtml);
+
+        var heights = blocks.map(function(b){
+          var k = kindOf(b.t);
+          if (k === 'main') return measureHtml('<table class="slip-table">' + data.colgroupMain + '<tbody>' + (b.t==='totalRow'?'':b.html) + '</tbody>' + (b.t==='totalRow'?('<tfoot>'+b.html+'</tfoot>'):'') + '</table>');
+          if (k === 'box') return measureHtml('<table class="box-table">' + data.colgroupBox + '<tbody>' + b.html + '</tbody></table>');
+          if (k === 'issue') return measureHtml('<table class="slip-table issue-slip-table">' + data.colgroupIssue + '<tbody>' + b.html + '</tbody></table>');
+          return measureHtml(b.html);
+        });
+
+        // Keep a header-ish block (box/section title) from being stranded
+        // alone at the bottom of a page: walk forward through any chain of
+        // header-ish blocks to the first real row, adding its height AND
+        // the table-header height it would need.
+        function lookaheadNeed(i){
+          if (i + 1 >= blocks.length) return 0;
+          var nb = blocks[i+1], k = kindOf(nb.t);
+          if (k) return heights[i+1] + (theadHeights[k] || 0);
+          if (nb.t === 'boxHead' || nb.t === 'sectionTitle') return heights[i+1] + lookaheadNeed(i+1);
+          return heights[i+1];
+        }
+
+        var pages = [];
+        var cur = [];
+        var curH = 0;
+        var lastKind = null;
+        var cap = PAGE_H - FOOTER_RESERVE - headerH;
+
+        function startNewPage(){
+          pages.push(cur);
+          cur = [];
+          curH = 0;
+          lastKind = null;
+          cap = PAGE_H - FOOTER_RESERVE - contHeaderH;
+        }
+
+        for (var i = 0; i < blocks.length; i++) {
+          var b = blocks[i], h = heights[i], k = kindOf(b.t);
+          var extra = (k && k !== lastKind) ? (theadHeights[k] || 0) : 0;
+          var need = h + extra;
+          if (b.t === 'boxHead' || b.t === 'sectionTitle') need += lookaheadNeed(i);
+          if (cur.length && curH + need > cap) {
+            startNewPage();
+            extra = k ? (theadHeights[k] || 0) : 0; // fresh page → always a fresh run
+          }
+          cur.push(b);
+          curH += h + extra;
+          lastKind = k;
+        }
+        if (cur.length) pages.push(cur);
+
+        var pagesHtml = pages.map(function(pageBlocks){
+          var out = '', i2 = 0;
+          while (i2 < pageBlocks.length) {
+            var b = pageBlocks[i2], k = kindOf(b.t);
+            if (k) {
+              var body = '', foot = '', j = i2;
+              while (j < pageBlocks.length && kindOf(pageBlocks[j].t) === k) {
+                if (pageBlocks[j].t === 'totalRow') foot += pageBlocks[j].html; else body += pageBlocks[j].html;
+                j++;
+              }
+              out += '<table class="' + tableClassFor(k) + '">' + colgroupFor(k) + theadFor(k) +
+                '<tbody>' + body + '</tbody>' + (foot ? ('<tfoot>' + foot + '</tfoot>') : '') + '</table>';
+              i2 = j;
+            } else {
+              out += b.html;
+              i2++;
+            }
+          }
+          return out;
+        });
+
+        var total = pages.length;
+        var finalHtml = pagesHtml.map(function(content, pi){
+          var head = pi === 0 ? data.headerHtml : data.contHeaderHtml;
+          return '<div class="pdf-page">' + head + content +
+            '<div class="page-footer"><span class="brand">StyleKorean NJ/MOIDA</span>Page ' + (pi+1) + ' / ' + total + '</div></div>';
+        }).join('');
+
+        document.getElementById('slipBody').innerHTML = finalHtml;
+        measure.remove();
+        setTimeout(function(){ window.focus(); window.print(); }, 300);
+      })();
+    <\/script>
   </body></html>`;
 
-  const win = window.open('', '_blank', 'width=820,height=1000');
+  const win = window.open('', '_blank', 'width=900,height=1000');
   if (!win) { toast('⚠ Popup blocked — allow popups for this site to print packing slips', 'err'); return; }
   win.document.write(html);
   win.document.close();
-  setTimeout(() => { win.focus(); win.print(); }, 300);
 }
 
 // ── Shipping/box labels — one page per box, printed right after the slip ──
