@@ -2945,7 +2945,12 @@ async function refreshLiveBaseline(wid){
   const w = S.works.find(x => x.id === wid); if (!w || w.endT) return;
   const [liveOut, endedOut] = await Promise.all([
     apiOp('getLiveScans', { orderId: w.oid }),
-    apiOp('getOrderProgress', { oid: w.oid })
+    // v14.52 — bumped from the 30s default: under heavy concurrent load
+    // this read can queue behind other workers' writes (see Code.gs
+    // v14.52 note on logInspectionResults_) longer than 30s even though
+    // the server call itself is fast and genuinely succeeds — giving up
+    // too early just shows a false "could not check progress" error.
+    apiOp('getOrderProgress', { oid: w.oid }, 45000)
   ]);
   // v12.6 — if either call failed (flaky network), keep the last-known-good
   // baseline instead of overwriting it with a partial/empty one. Without
@@ -5107,14 +5112,17 @@ async function getPrintReadyProgress(oid){
   // "order is already finished" case and removes any risk of the new
   // live-merge logic interfering with it.
   const hasActiveInsp = S.works.some(w => w.oid === oid && w.stage === 'INSP' && !w.endT);
+  // v14.52 — bumped from the 30s default: see the matching note in
+  // refreshLiveBaseline above. A slow-but-successful server call shouldn't
+  // surface as "Could not check progress".
   if (!hasActiveInsp) {
-    const endedOnly = await apiOp('getOrderProgress', { oid });
+    const endedOnly = await apiOp('getOrderProgress', { oid }, 45000);
     return (endedOnly.net && endedOnly.res.ok) ? endedOnly.res : null;
   }
 
   const [liveOut, endedOut] = await Promise.all([
     apiOp('getLiveScans', { orderId: oid }),
-    apiOp('getOrderProgress', { oid })
+    apiOp('getOrderProgress', { oid }, 45000)
   ]);
   if (!endedOut.net || !endedOut.res.ok) return null;
   const p = endedOut.res;
