@@ -5808,7 +5808,15 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
     // v14.57 — ISO timestamp of this item's most recent scan/issue touch
     // (see touchSkuOrder), so the server can record it separately from the
     // batch "End Inspection" save time.
-    scannedAt: r.scannedAt || ''
+    scannedAt: r.scannedAt || '',
+    // v14.58 — THIS ROW's own status (OK fully scanned / SHORT not fully
+    // scanned by ME, no issue flagged / ISSUE explicitly flagged), not the
+    // whole session's single pass/fail verdict. The session-level `result`
+    // param below used to get stamped onto every row of a save — including
+    // items this worker simply never touched (someone else's share of a
+    // split order) — which made InspResult read as "ISSUE" on rows with
+    // PackedQty 0 and no IssueType at all. See Code.gs's RC.RESULT note.
+    result: r.hasIssue ? 'ISSUE' : (r.ok ? 'OK' : 'SHORT')
   }));
   // Box-detail rows (boxNum set, no reqQty/issue — those live on the
   // summary row above) — lets a reprint reconstruct the box breakdown.
