@@ -2070,6 +2070,39 @@ function touchSkuOrder(st, key){
   st.skuScannedAt = st.skuScannedAt || {};
   st.skuScannedAt[key] = new Date().toISOString();
 }
+// v14.67 — which box/pallet number(s) THIS SKU's own scanned qty
+// currently sits under, read straight out of st.boxScans (the same
+// structure the box-number picker/chips already use — see boxChipsHtml).
+// Returns [] when this SKU has nothing logged yet, or when the order
+// isn't using box/pallet tracking at all.
+function boxTagsForSku(st, key){
+  const out = [];
+  Object.keys(st.boxScans || {}).forEach(n => {
+    const q = (st.boxScans[n] || {})[key] || 0;
+    if (q > 0) out.push({ n: Number(n), q });
+  });
+  return out.sort((a,b) => a.n - b.n);
+}
+// v14.67 — a box/pallet number that only ONE sku in the whole session has
+// ever been scanned into is worth a second look (classic typo: meant to
+// type the number you'd been using for the last 20 SKUs, fat-fingered a
+// different one instead) — but only once there are at least 2 distinct
+// numbers in play at all, so a simple single-pallet order never lights up
+// with warnings it has no business showing.
+function rareBoxNumbersInSession(st){
+  const skusByNum = {};
+  Object.keys(st.boxScans || {}).forEach(n => {
+    const num = Number(n);
+    Object.entries(st.boxScans[n] || {}).forEach(([k, q]) => {
+      if (!q) return;
+      (skusByNum[num] = skusByNum[num] || new Set()).add(k);
+    });
+  });
+  const nums = Object.keys(skusByNum).map(Number);
+  const rare = new Set();
+  if (nums.length >= 2) nums.forEach(n => { if (skusByNum[n].size === 1) rare.add(n); });
+  return rare;
+}
 function skuRowHtml(it, st, wid){
   const key = it.barcode || it.sku;
   const mine = st.skuCounts[key] || 0;
@@ -2087,11 +2120,29 @@ function skuRowHtml(it, st, wid){
   const qtyHtml = issue
     ? `<span style="color:var(--red);font-size:11px;font-weight:800">${issue.type}${issue.qty?(' ×'+issue.qty):''}</span>`
     : `<span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" title="Tap to correct YOUR scanned quantity" onclick="event.stopPropagation();openQtyEditModal('${wid}','${keyEsc}')">${got}/${it.reqQty||0}</span>${mcBadge}${fcBadge}${othersNote}`;
+  // v14.67 — "which pallet(s) is this SKU's own qty actually sitting in"
+  // tags, right on the row — previously only visible as an aggregate
+  // total in the chip list, with no per-SKU breakdown anywhere at all.
+  // Tapping a tag opens openSkuBoxModal to reassign just this one SKU.
+  const boxTags = boxTagsForSku(st, key);
+  let boxTagsHtml = '';
+  if (boxTags.length) {
+    const rare = rareBoxNumbersInSession(st);
+    const uw = unitWord(st.unitType, true);
+    boxTagsHtml = `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${boxTags.map(t => {
+      const isRare = rare.has(t.n);
+      return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 7px;cursor:pointer;${isRare
+        ? 'background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber)'
+        : 'background:var(--blue-bg);border:1px solid var(--blue-bd);color:var(--blue)'}"
+        title="탭해서 이 SKU의 ${uw} 배정 수정" onclick="event.stopPropagation();openSkuBoxModal('${wid}','${keyEsc}')">${isRare?'<i class="ri-error-warning-line"></i> ':''}${uw} ${t.n} · ${t.q}</span>`;
+    }).join('')}</div>`;
+  }
   return `<div class="sku-row ${cls}">
     <div class="sku-check ${issue?'issue':(ok?'ok':'')}">${issue ? '<i class="ri-flag-2-fill"></i>' : (ok ? '<i class="ri-check-line"></i>' : '')}</div>
     <div class="sku-row-name">
       <div class="sku-row-sku">${it.sku||'—'}${it.barcode?` <span style="color:var(--t3);font-weight:500">· ${it.barcode}</span>`:''}</div>
       <div class="sku-row-nm">${it.name||''}${it.rack?' · '+it.rack:''}</div>
+      ${boxTagsHtml}
     </div>
     <div class="sku-row-qty" style="color:${issue?'var(--red)':ok?'var(--green)':got>0?'var(--amber)':'var(--t3)'}">${qtyHtml}</div>
     <button class="btn btn-sm" style="padding:5px 10px;flex-shrink:0;border-color:${issue?'var(--red-bd)':'var(--amber-bd)'};background:${issue?'var(--red-bg)':'var(--bg4)'}" title="Report issue (expired / not found / out of stock / damaged / other)" onclick="openSkuIssueModal('${wid}','${keyEsc}')"><i class="ri-flag-2-line" style="color:${issue?'var(--red)':'var(--amber)'};font-size:15px"></i></button>
@@ -2501,6 +2552,133 @@ window.saveQtyEdit = function(wid, key){
   pushMyLiveScan(wid);
 };
 
+// ── Per-SKU pallet/box reassignment — v14.67 ────────────────────────
+// Opened by tapping one of the pallet/box tags on a checklist row (see
+// boxTagsForSku/skuRowHtml above). This answers a DIFFERENT question than
+// the pencil (Correct scanned qty) tool above: that one changes HOW MANY
+// units this worker has for a SKU; this one only changes WHICH pallet(s)
+// that same total sits under — e.g. a SKU too large for one pallet
+// (16,000 units split 4,000 across pallets 1–4), or fixing a fat-fingered
+// pallet number right after scanning it. The rows here must always sum
+// back to the worker's existing total for this SKU before Save is
+// enabled — same "must match exactly" rule the user required for the
+// bulk pallet-entry design ("합계는 항상 맞아야 한다"), just scoped to one
+// SKU's redistribution instead of a whole new quantity entry. This never
+// touches st.skuCounts — only st.boxScans[*][key] gets rewritten.
+let _skuBoxEdit = null;
+window.openSkuBoxModal = function(wid, key){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const items = _orderItemsCache[w.oid] || [];
+  const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
+  const st = loadScanState(wid);
+  const mine = st.skuCounts[key] || 0;
+  if (mine <= 0) { toast('아직 스캔된 수량이 없습니다', 'err'); return; }
+  const existing = boxTagsForSku(st, key);
+  // Fallback for the rare case where this SKU's qty predates box tracking
+  // (boxScans has nothing for it yet, even though skuCounts does) — start
+  // from a single row holding the full total under the current number,
+  // rather than opening on an already-mismatched 0/${mine}.
+  const rows = existing.length ? existing.map(t => ({ n: t.n, q: t.q })) : [{ n: st.currentBox || 1, q: mine }];
+  const uw = unitWord(st.unitType), uwCap = unitWord(st.unitType, true);
+  _skuBoxEdit = { wid, key, total: mine, rows, uw, uwCap };
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
+      <i class="ri-archive-2-line" style="color:var(--purple)"></i> ${uwCap} 재배정
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
+      <span class="mono" style="font-size:11.5px;color:var(--t3);white-space:nowrap;flex-shrink:0;padding-top:2px">${it.barcode||it.sku||'—'}</span>
+      <span style="font-size:12.5px;color:var(--t);line-height:1.5;flex:1">${(it.name||'').replace(/</g,'&lt;')}</span>
+    </div>
+    <div style="font-size:11.5px;color:var(--t3);margin-bottom:10px;text-align:center">이 SKU 전체 <b style="color:var(--t)">${mine.toLocaleString()}</b>개를 ${uw} 별로 다시 나눠보세요</div>
+    <div id="skuBoxRows"></div>
+    <button type="button" class="btn btn-sm" style="width:100%;border-style:dashed;color:var(--blue);margin-bottom:10px" onclick="addSkuBoxRow()"><i class="ri-add-line"></i> ${uwCap} 추가</button>
+    <div id="skuBoxSumline"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-sm" onclick="closeModal()">취소</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-purple btn-sm" id="skuBoxSaveBtn" onclick="saveSkuBoxSplit()"><i class="ri-check-line"></i> 저장</button>
+    </div>
+  `);
+  renderSkuBoxEdit();
+};
+function renderSkuBoxEdit(){
+  const ed = _skuBoxEdit; if (!ed) return;
+  const rowsEl = document.getElementById('skuBoxRows');
+  if (rowsEl) rowsEl.innerHTML = ed.rows.map((r,i) => `
+    <div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:7px 9px;margin-bottom:7px">
+      <div style="display:flex;align-items:center;gap:5px;font-weight:700;font-size:12.5px;flex-shrink:0">
+        <i class="ri-archive-2-line" style="color:var(--purple)"></i> ${ed.uwCap}
+        <input type="number" min="1" value="${r.n}" style="width:44px;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-weight:700;text-align:center;padding:4px 2px" oninput="updateSkuBoxRowNum(${i},this.value)">
+      </div>
+      <input type="number" min="0" value="${r.q}" style="flex:1;min-width:0;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-family:var(--mono);font-weight:700;padding:7px 9px;text-align:right" oninput="updateSkuBoxRowQty(${i},this.value)">
+      <button type="button" style="width:26px;height:26px;border-radius:50%;border:none;background:transparent;color:var(--t3);font-size:15px;flex-shrink:0" onclick="removeSkuBoxRow(${i})">✕</button>
+    </div>`).join('');
+  const sum = ed.rows.reduce((s,r) => s + (Number(r.q)||0), 0);
+  const diff = ed.total - sum;
+  const sumEl = document.getElementById('skuBoxSumline');
+  const saveBtn = document.getElementById('skuBoxSaveBtn');
+  if (sumEl) {
+    if (diff === 0) {
+      sumEl.style.cssText = 'display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;padding:9px 10px;border-radius:var(--r);background:var(--green-bg);color:var(--green)';
+      sumEl.innerHTML = `<span>✓ 원래 수량과 일치</span><span class="mono">${sum.toLocaleString()} / ${ed.total.toLocaleString()}</span>`;
+    } else {
+      sumEl.style.cssText = 'display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;padding:9px 10px;border-radius:var(--r);background:var(--red-bg);color:var(--red)';
+      sumEl.innerHTML = `<span>⚠ ${Math.abs(diff).toLocaleString()}개 ${diff>0?'부족':'초과'}</span><span class="mono">${sum.toLocaleString()} / ${ed.total.toLocaleString()}</span>`;
+    }
+  }
+  if (saveBtn) saveBtn.disabled = (diff !== 0) || ed.rows.some(r => !r.n || r.n < 1);
+}
+window.updateSkuBoxRowNum = function(i, v){
+  const ed = _skuBoxEdit; if (!ed) return;
+  ed.rows[i].n = Math.max(1, parseInt(v) || 1);
+  renderSkuBoxEdit();
+};
+window.updateSkuBoxRowQty = function(i, v){
+  const ed = _skuBoxEdit; if (!ed) return;
+  ed.rows[i].q = Math.max(0, parseInt(v) || 0);
+  renderSkuBoxEdit();
+};
+window.addSkuBoxRow = function(){
+  const ed = _skuBoxEdit; if (!ed) return;
+  const usedNums = ed.rows.map(r => r.n);
+  const next = usedNums.length ? Math.max(...usedNums) + 1 : 1;
+  ed.rows.push({ n: next, q: 0 });
+  renderSkuBoxEdit();
+};
+window.removeSkuBoxRow = function(i){
+  const ed = _skuBoxEdit; if (!ed || ed.rows.length <= 1) return;
+  ed.rows.splice(i, 1);
+  renderSkuBoxEdit();
+};
+window.saveSkuBoxSplit = function(){
+  const ed = _skuBoxEdit; if (!ed) return;
+  const sum = ed.rows.reduce((s,r) => s + (Number(r.q)||0), 0);
+  if (sum !== ed.total) { toast('⚠ 합계를 원래 수량과 맞춰야 저장할 수 있습니다', 'err'); return; }
+  const nums = ed.rows.map(r => r.n);
+  if (new Set(nums).size !== nums.length) { toast(`⚠ 같은 ${ed.uw} 번호가 중복되어 있습니다 — 하나로 합쳐주세요`, 'err'); return; }
+  const st = loadScanState(ed.wid);
+  // Clear every box's existing entry for this key first, then write the
+  // new per-row split fresh — same "replace, don't add" convention as
+  // saveQtyEdit above, just scoped to the box-label dimension instead of
+  // the total.
+  Object.keys(st.boxScans || {}).forEach(n => { if (st.boxScans[n]) delete st.boxScans[n][ed.key]; });
+  let maxN = st.maxBox || 1;
+  ed.rows.forEach(r => {
+    if (r.q <= 0) return;
+    st.boxScans[r.n] = st.boxScans[r.n] || {};
+    st.boxScans[r.n][ed.key] = r.q;
+    if (r.n > maxN) maxN = r.n;
+  });
+  st.maxBox = maxN;
+  touchSkuOrder(st, ed.key);
+  saveScanState(ed.wid, st);
+  const wid2 = ed.wid, uwCap2 = ed.uwCap;
+  _skuBoxEdit = null;
+  closeModal();
+  toast(`${uwCap2} 배정이 저장되었습니다`, 'ok');
+  renderStageContent();
+};
+
 // Builds the "just scanned" banner shown directly above the scan box (never
 // below it — the on-screen keyboard covers anything under the input while
 // scanning, so this is the one spot guaranteed to stay visible).
@@ -2575,19 +2753,30 @@ function renderSkuChecklistUI(w, items, st){
       <button type="button" class="scan-mult-btn${st.unitType!=='pallet'?' on':''}" style="flex:1" onclick="setUnitType('${w.id}','box')"><i class="ri-archive-2-line"></i> Box</button>
       <button type="button" class="scan-mult-btn${st.unitType==='pallet'?' on':''}" style="flex:1" onclick="setUnitType('${w.id}','pallet')"><i class="ri-truck-line"></i> Pallet</button>
     </div>
-    <!-- v14.46 — was sequential-only (prev/next). Several workers can now
-         each own their own box/pallet number and jump straight to it
-         (tap the number), instead of clicking "next" N times to reach a
-         non-adjacent number. This is purely a local label — see
-         boxScans in loadScanState — so switching it around, any number
-         of times, in any order, never affects what gets saved. -->
+    <!-- v14.67 — was sequential-only (prev/next), then v14.46 let a
+         worker jump straight to any number by tapping it. The "이 박스
+         완료 (다음 번호로)" button used to ALSO auto-advance currentBox
+         to maxBox+1 on every tap, which read as a required step ("did I
+         have to press this before starting the next pallet?") when it
+         never was — the number is purely a local label (see boxScans in
+         loadScanState), switching it around freely never affects what
+         gets saved, and nothing server-side cares whether this button
+         was ever pressed. Per 2026-10-01 feedback: the button no longer
+         changes the number at all (it's just a confirmation tap — see
+         confirmBoxLabel) — getting a genuinely fresh, unused number is
+         now a "+ 새 번호" chip in the list below, right next to every
+         number already in use, so "assign a number" and "see what's
+         already been used" live in the same one place. -->
     <div style="display:flex;justify-content:space-between;align-items:center;background:var(--purple-bg);border:2px solid var(--purple-bd);border-radius:var(--r);padding:8px 12px;margin-bottom:6px;cursor:pointer" onclick="openBoxNumberModal('${w.id}')" title="탭해서 ${unitWord(st.unitType)} 번호 직접 지정">
       <span style="font-size:12px;color:var(--purple);font-weight:700"><i class="ri-archive-2-line"></i> ${unitWord(st.unitType,true)} 번호 (탭해서 변경)</span>
       <span style="font-size:16px;font-weight:800">${st.currentBox || 1} <i class="ri-pencil-line" style="font-size:12px;opacity:.6"></i></span>
     </div>
-    ${boxChipsHtml(st, w.id) ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">${boxChipsHtml(st, w.id)}</div>` : ''}
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">
+      ${boxChipsHtml(st, w.id)}
+      <span class="scan-mult-btn" style="cursor:pointer;border-style:dashed" onclick="newBoxNumber('${w.id}')"><i class="ri-add-line"></i> 새 번호</span>
+    </div>
     <div style="display:flex;gap:6px;margin-bottom:12px">
-      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="nextBox('${w.id}')"><i class="ri-inbox-archive-line"></i> 이 ${unitWord(st.unitType)} 완료 (다음 번호로)</button>
+      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="confirmBoxLabel('${w.id}')"><i class="ri-check-line"></i> 완료</button>
     </div>
 
     <div id="lastScanBanner_${w.id}">${lastScanHtml}</div>
@@ -3326,18 +3515,35 @@ window.saveMyPageRange = async function(wid){
   }
 };
 
-// v14.46 — now jumps to a genuinely NEW number (maxBox+1), not just
+// v14.46 — jumps to a genuinely NEW number (maxBox+1), not just
 // "currentBox+1": since the number can be set directly via
 // openBoxNumberModal (below), a worker may have jumped back to an
-// earlier number to add more to it — "finish, start next" should still
-// mean "a fresh one I haven't used yet", not accidentally collide with
-// a number already in progress.
-window.nextBox = function(wid){
+// earlier number to add more to it — "give me a fresh one" should still
+// mean "a number I haven't used yet", not accidentally collide with a
+// number already in progress.
+// v14.67 — this used to be what the big "이 박스 완료 (다음 번호로)"
+// button did, which made it look like a required step between pallets.
+// It isn't — it's now just a "+ 새 번호" chip alongside the already-used
+// numbers (see boxChipsHtml), a pure convenience shortcut with no
+// required-step meaning attached to it at all.
+window.newBoxNumber = function(wid){
   const st = loadScanState(wid);
   st.currentBox = (st.maxBox || 1) + 1;
   st.maxBox = st.currentBox;
   saveScanState(wid, st);
   renderStageContent();
+};
+// v14.67 — the old "완료" button used to silently double as "advance to
+// the next box number" (see newBoxNumber above) — confusing, since
+// nothing server-side actually needs a "this box is done" signal at all
+// (box/pallet number is just a label on whatever gets scanned next, see
+// the comment above the number picker). This button is now a pure,
+// harmless confirmation tap — it changes nothing — kept only because a
+// worker asked for something to tap that visibly acknowledges "yes, I'm
+// intentionally packing under this number right now".
+window.confirmBoxLabel = function(wid){
+  const st = loadScanState(wid);
+  toast(`${unitWord(st.unitType, true)} ${st.currentBox || 1}번으로 계속 담는 중`, 'ok');
 };
 // Quick per-box/pallet quantity summary chips, shown under the number
 // picker — lets a worker see at a glance how much is logged under each
