@@ -5609,6 +5609,7 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
 
   const rowsHtml = rows.map(r => `<tr>
       <td class="box-bc">${r.barcode||''}</td>
+      <td class="box-bc">${r.sku||''}</td>
       <td>${r.name||''}${r.mc ? ' <span style="font-size:10px;font-weight:700;color:#92400e;border:1px solid #d97706;border-radius:4px;padding:1px 4px">MC</span>' : ''}${r.fc ? ' <span style="font-size:10px;font-weight:700;color:#991b1b;border:1px solid #dc2626;border-radius:4px;padding:1px 4px">FC</span>' : ''}</td>
       <td style="text-align:center">${r.req}</td>
       <td style="text-align:center">${r.hasIssue ? (r.issue.qty||0) : 0}</td>
@@ -5625,8 +5626,9 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
   const shippedCleanCount = rows.length - issueRows.length;
   const issuesHtml = issueRows.length ? `
     <h4 class="issues-h4">Issues / Shortages — ${issueRows.length} SKU${issueRows.length===1?'':'s'} affected (${totalIssue} unit${totalIssue===1?'':'s'} total)</h4>
-    <table class="slip-table"><thead><tr><th>Type</th><th>Product</th><th style="text-align:center">Qty</th><th>Note</th></tr></thead><tbody>
-    ${issueRows.map(r => `<tr><td>${r.issue.type}</td><td>${r.name||r.sku||''}</td><td style="text-align:center">${r.issue.qty||0}</td><td>${r.issue.note||''}</td></tr>`).join('')}
+    <table class="slip-table issue-slip-table"><colgroup><col class="c-itype"><col class="c-ibc"><col class="c-isku"><col class="c-iname"><col class="c-iqty"><col class="c-inote"></colgroup>
+    <thead><tr><th>Type</th><th>Barcode</th><th>SKU</th><th>Product</th><th style="text-align:center">Qty</th><th>Note</th></tr></thead><tbody>
+    ${issueRows.map(r => `<tr><td>${r.issue.type}</td><td class="box-bc">${r.barcode||''}</td><td class="box-bc">${r.sku||''}</td><td>${r.name||r.sku||''}</td><td style="text-align:center">${r.issue.qty||0}</td><td>${r.issue.note||''}</td></tr>`).join('')}
     </tbody></table>` : '';
   const mcNote = rows.some(r => r.mc)
     ? `<p style="font-size:11px;color:#92400e;margin-top:10px"><b>MC</b> = confirmed as one full master case via the case's own barcode, not scanned unit-by-unit.</p>` : '';
@@ -5725,8 +5727,15 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
        instead of overflowing when a name is long, so nothing runs off
        the printable area regardless of content length. */
     table.slip-table{width:100%; border-collapse:collapse; font-size:11.5px; margin-top:8px; table-layout:fixed;}
-    table.slip-table col.c-bc{width:18%;} table.slip-table col.c-name{width:42%;}
-    table.slip-table col.c-ord{width:13%;} table.slip-table col.c-iss{width:13%;} table.slip-table col.c-pk{width:14%;}
+    table.slip-table col.c-bc{width:15%;} table.slip-table col.c-sku{width:13%;} table.slip-table col.c-name{width:32%;}
+    table.slip-table col.c-ord{width:12%;} table.slip-table col.c-iss{width:12%;} table.slip-table col.c-pk{width:14%;}
+    /* Issues/Shortages table has its own 6-column shape (Type/Barcode/SKU/
+       Product/Qty/Note), distinct from the main slip-table's 6 columns
+       above — both share the .slip-table base styling (header/border/
+       font), so only the column widths need their own colgroup classes. */
+    table.issue-slip-table col.c-itype{width:11%;} table.issue-slip-table col.c-ibc{width:16%;}
+    table.issue-slip-table col.c-isku{width:13%;} table.issue-slip-table col.c-iname{width:28%;}
+    table.issue-slip-table col.c-iqty{width:8%;} table.issue-slip-table col.c-inote{width:24%;}
     table.slip-table th{background:#111; color:#fff; padding:7px 8px; text-align:left; font-size:10px; text-transform:uppercase;}
     table.slip-table td{padding:6px 8px; border-bottom:1px solid #ddd; overflow-wrap:break-word; word-break:break-word;}
     table.slip-table tbody tr, table.slip-table tfoot tr{page-break-inside:avoid; break-inside:avoid;}
@@ -5773,10 +5782,10 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
       <div><b>Result</b>${result}</div>
     </div>
     ${boxHtml}
-    <table class="slip-table"><colgroup><col class="c-bc"><col class="c-name"><col class="c-ord"><col class="c-iss"><col class="c-pk"></colgroup>
-    <thead><tr><th>Barcode</th><th>Product</th><th style="text-align:center">Ordered</th><th style="text-align:center">Issue</th><th style="text-align:center">Packed</th></tr></thead>
+    <table class="slip-table"><colgroup><col class="c-bc"><col class="c-sku"><col class="c-name"><col class="c-ord"><col class="c-iss"><col class="c-pk"></colgroup>
+    <thead><tr><th>Barcode</th><th>SKU</th><th>Product</th><th style="text-align:center">Ordered</th><th style="text-align:center">Issue</th><th style="text-align:center">Packed</th></tr></thead>
     <tbody>${rowsHtml}</tbody>
-    <tfoot><tr class="slip-total-row"><td colspan="2"><b>TOTAL — ${rows.length} SKU${rows.length===1?'':'s'}</b>${issueRows.length?`<div style="font-weight:400;font-size:10.5px;color:#555;margin-top:2px">${shippedCleanCount} shipped in full · ${issueRows.length} with issue</div>`:''}</td><td style="text-align:center"><b>${totalOrdered}</b></td><td style="text-align:center"><b>${totalIssue}</b></td><td style="text-align:center"><b>${totalPacked}</b></td></tr></tfoot>
+    <tfoot><tr class="slip-total-row"><td colspan="3"><b>TOTAL — ${rows.length} SKU${rows.length===1?'':'s'}</b>${issueRows.length?`<div style="font-weight:400;font-size:10.5px;color:#555;margin-top:2px">${shippedCleanCount} shipped in full · ${issueRows.length} with issue</div>`:''}</td><td style="text-align:center"><b>${totalOrdered}</b></td><td style="text-align:center"><b>${totalIssue}</b></td><td style="text-align:center"><b>${totalPacked}</b></td></tr></tfoot>
     </table>
     ${issuesHtml}
     ${mcNote}
