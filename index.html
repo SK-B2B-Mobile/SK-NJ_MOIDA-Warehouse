@@ -2203,8 +2203,21 @@ window.openSkuIssueModal = function(wid, key){
   const reqQty = it.reqQty || 0;
   const othersQty = othersQtyForCap(wid, key);
   const mineBefore = st.skuCounts[key] || 0;
-  const maxTotal = Math.max(0, reqQty - othersQty);
-  const defaultIssue = existing ? existing.qty : Math.max(0, maxTotal - mineBefore);
+  // v14.59 — this used to cap at (reqQty - othersQty), i.e. "only what's
+  // left after everyone else's already-logged qty" — correct for ADDING
+  // new scans, but it also meant that once teammates' sessions already
+  // combined to 100% (othersQty === reqQty), this worker's own room was
+  // exactly 0, and the modal flatly refused ANY input, with no way to
+  // flag that some of those already-counted units are actually damaged/
+  // expired/etc. Saving this modal is now a correction that REPLACES the
+  // order's whole recorded total for this one SKU (see saveSkuIssue), not
+  // an addition on top of it — so the only real ceiling is reqQty itself,
+  // and it works regardless of who scanned it or whether their session
+  // has already ended. "누가 하든지 간에, 언제든지" per 2026-10-01 request.
+  const maxTotal = reqQty;
+  const combinedBefore = othersQty + mineBefore;
+  const defaultOk = existing ? mineBefore : Math.max(0, combinedBefore - (existing ? existing.qty : 0));
+  const defaultIssue = existing ? existing.qty : 0;
   const keyEsc = String(key).replace(/'/g, "\\'");
 
   // v14.43 — the Required/Others logged/My max summary box (still shown
@@ -2225,7 +2238,7 @@ window.openSkuIssueModal = function(wid, key){
     <div style="display:flex;gap:10px">
       <div class="fg" style="flex:1">
         <label class="fl">정상 수량 (OK)</label>
-        ${qtyFieldHtml('skuIssueOkQty', mineBefore, `_onSkuIssueSplitInput('${wid}','${keyEsc}')`)}
+        ${qtyFieldHtml('skuIssueOkQty', defaultOk, `_onSkuIssueSplitInput('${wid}','${keyEsc}')`)}
       </div>
       <div class="fg" style="flex:1">
         <label class="fl">이슈 수량 (Issue)</label>
@@ -2233,6 +2246,7 @@ window.openSkuIssueModal = function(wid, key){
       </div>
     </div>
     <div id="skuIssueSplitWarn" style="display:none;font-size:11px;color:var(--red);margin:-4px 0 8px;text-align:center">⚠ 정상 + 이슈 합이 ${maxTotal}을 초과할 수 없습니다</div>
+    ${othersQty > 0 ? `<div style="font-size:10.5px;color:var(--amber);margin:-6px 0 8px;text-align:center"><i class="ri-information-line"></i> 현재 ${othersQty}개는 다른 작업자가 이미 기록함 — 저장하면 이 SKU 전체 기록이 입력한 값으로 교체됩니다</div>` : ''}
     <div style="font-size:10px;color:var(--t3);margin:-6px 0 6px;text-align:center">탭해서 필드 선택 후 키패드로 입력</div>
     ${numpadHtml()}
     <div class="fg">
@@ -2250,7 +2264,7 @@ window.openSkuIssueModal = function(wid, key){
       ${existing ? `<button class="btn btn-sm" style="color:var(--red)" onclick="clearSkuIssue('${wid}','${keyEsc}')"><i class="ri-delete-bin-line"></i> Clear issue</button>` : '<span></span>'}
       <div style="flex:1"></div>
       <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-red btn-sm" onclick="saveSkuIssue('${wid}','${keyEsc}')"><i class="ri-flag-2-line"></i> Save</button>
+      <button class="btn btn-red btn-sm" onclick="saveSkuIssue('${wid}','${keyEsc}',this)"><i class="ri-flag-2-line"></i> Save</button>
     </div>
   `);
   setTimeout(() => { window._onSkuIssueSplitInput(wid, key); numpadFocus('skuIssueOkQty'); }, 0);
@@ -2260,9 +2274,10 @@ window._onSkuIssueSplitInput = function(wid, key){
   const w = S.works.find(x => x.id === wid); if (!w) return;
   const items = _orderItemsCache[w.oid] || [];
   const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
-  const reqQty = it.reqQty || 0;
-  const othersQty = othersQtyForCap(wid, key);
-  const maxTotal = Math.max(0, reqQty - othersQty);
+  // v14.59 — this modal's save now replaces the SKU's whole order-wide
+  // total (see saveSkuIssue), so the only real ceiling is reqQty itself —
+  // not reqQty minus other workers' already-logged qty (see openSkuIssueModal).
+  const maxTotal = it.reqQty || 0;
   const okEl = document.getElementById('skuIssueOkQty');
   const issEl = document.getElementById('issueQty');
   let ok = Number(okEl && okEl.value); if (isNaN(ok) || ok < 0) ok = 0;
@@ -2277,23 +2292,39 @@ window.pickIssueType = function(val){
   const hidden = document.getElementById('issueTypeVal'); if (hidden) hidden.value = val;
 };
 
-window.saveSkuIssue = async function(wid, key){
+// v14.59 — this used to only ever update THIS worker's own local scan
+// state (capped at what was left after others' already-logged qty) and
+// let the normal end-of-session save carry it to the server later,
+// additively. That meant a worker could never flag an issue on a SKU
+// teammates had already fully covered (their room was 0 — see
+// openSkuIssueModal's note), and the correction was invisible to anyone
+// else until this worker's own session ended.
+//
+// Now: saving here is an immediate, authoritative correction for this
+// ONE SKU, order-wide — it writes straight to the server with the same
+// "재검수(reinspect)" 덮어쓰기 semantics logInspectionResults_ already
+// uses for a full re-inspect (see Code.gs v14.50), scoped to just this
+// SKU's row. The server purges every OTHER entryId's row for this
+// SKU+order and this becomes the new combined total — so it works
+// regardless of who originally scanned it, whether that session has
+// already ended, or how much "room" was left. Any worker, any time.
+window.saveSkuIssue = async function(wid, key, btn){
   const w = S.works.find(x => x.id === wid); if (!w) return;
   const items = _orderItemsCache[w.oid] || [];
   const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
   const reqQty = it.reqQty || 0;
-  const othersQty = othersQtyForCap(wid, key);
-  const maxTotal = Math.max(0, reqQty - othersQty);
+  const maxTotal = reqQty;
 
   let ok = Number(document.getElementById('skuIssueOkQty')?.value);
   if (isNaN(ok) || ok < 0) { toast('⚠ Enter a valid OK quantity', 'err'); return; }
   let qty = Number(document.getElementById('issueQty')?.value);
   if (isNaN(qty) || qty < 0) { toast('⚠ Enter a valid issue quantity', 'err'); return; }
 
-  // The one hard rule this whole rewrite exists to enforce: my OK + my
-  // issue can never add up to more than what's actually left for me.
+  // The only real ceiling left: this SKU's OWN required qty — this save
+  // replaces the whole order's total for it, so there's nothing else to
+  // subtract.
   if (ok + qty > maxTotal) {
-    toast(`⚠ 정상(${ok}) + 이슈(${qty}) 합이 ${maxTotal}을 초과할 수 없습니다`, 'err');
+    toast(`⚠ 정상(${ok}) + 이슈(${qty}) 합이 요청수량(${maxTotal})을 초과할 수 없습니다`, 'err');
     return;
   }
 
@@ -2304,27 +2335,49 @@ window.saveSkuIssue = async function(wid, key){
     if (type === 'OTHER' && !note) { toast('Add a short note for "Other"', 'err'); return; }
   }
 
-  const st = loadScanState(wid);
-  st.skuCounts[key] = ok;
-  st.skuIssues = st.skuIssues || {};
-  if (qty > 0) st.skuIssues[key] = { type, qty, note };
-  else delete st.skuIssues[key];
-  touchSkuOrder(st, key);
-  saveScanState(wid, st);
+  await withBtnBusy(btn, BTN_BUSY_HTML, async () => {
+    const st = loadScanState(wid);
+    const row = {
+      sku: it.sku, barcode: it.barcode, name: it.name, reqQty,
+      packedQty: ok, issueType: qty > 0 ? type : '', issueQty: qty,
+      issueNote: qty > 0 ? note : '', masterCase: false, forceCompleted: false,
+      scannedAt: new Date().toISOString(),
+      result: qty > 0 ? 'ISSUE' : (ok >= reqQty ? 'OK' : 'SHORT')
+    };
+    const out = await apiOp('logInspectionResults', {
+      entryId: wid, orderId: w.oid, result: qty > 0 ? 'ISSUE' : 'PASS',
+      rows: [row], replace: false, reinspect: true,
+      unitType: st.unitType || 'box',
+      worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
+    }, 45000);
+    if (!out.net || !out.res.ok) {
+      toast('⚠ 저장 실패 — 네트워크를 확인하고 다시 시도해주세요', 'err');
+      return;
+    }
 
-  closeModal();
-  toast(qty > 0 ? `Issue recorded: ${type} (${qty})` : '정상 수량으로 조정되었습니다', 'ok');
-  renderStageContent();
-  pushMyLiveScan(wid);
+    st.skuCounts[key] = ok;
+    st.skuIssues = st.skuIssues || {};
+    if (qty > 0) st.skuIssues[key] = { type, qty, note };
+    else delete st.skuIssues[key];
+    touchSkuOrder(st, key);
+    saveScanState(wid, st);
 
-  // Server record — this is a normal worker action (not manager-gated),
-  // same auth pattern as startWork/endWork: worker + their PIN if set.
-  const out = await apiOp('logSkuIssue', {
-    orderId: w.oid, entryId: wid, sku: it.sku, barcode: it.barcode, name: it.name,
-    issueType: type, qty, note,
-    worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
+    closeModal();
+    toast(qty > 0 ? `Issue recorded: ${type} (${qty}) — 전체 기록 교체됨` : '정상 수량으로 교체 저장됨', 'ok');
+    renderStageContent();
+    pushMyLiveScan(wid);
+    // Pull the now-corrected authoritative total back down right away,
+    // instead of waiting for the next 5s live-poll tick.
+    refreshLiveBaseline(wid);
+
+    // Audit log (SkuIssues sheet) — unchanged, best-effort.
+    const auditOut = await apiOp('logSkuIssue', {
+      orderId: w.oid, entryId: wid, sku: it.sku, barcode: it.barcode, name: it.name,
+      issueType: type, qty, note,
+      worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
+    });
+    if (!auditOut.net || !auditOut.res.ok) toast('⚠ Issue saved but audit log sync failed — will retry on refresh', 'err');
   });
-  if (!out.net || !out.res.ok) toast('⚠ Issue saved on this device but failed to sync — will retry on refresh', 'err');
 };
 
 window.clearSkuIssue = function(wid, key){
