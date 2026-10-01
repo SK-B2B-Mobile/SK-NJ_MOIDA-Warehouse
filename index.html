@@ -1825,34 +1825,56 @@ function renderDashTable(){
     : `<span style="font-size:11px;color:var(--t3)">${total} order${total>1?'s':''}</span>`;
 }
 
-// v14.65 — inspNote is still stored/sent as one flattened string (reason /
-// FORCE-COMPLETED note / "Issues: SKU:TYPE×QTY, ..." / free text, joined
-// with ' — ' — see proceedToPrintOptions in the Work page code, and the
-// InspNote column in the Google Sheet, which has nowhere else to put it).
-// This turns the "Issues: ..." segment back into clean, separated per-SKU
-// rows instead of one undifferentiated red line — "Short" is no longer
-// part of this string at all (see v14.65 note at its construction site),
-// so there's nothing here to confuse with a real registered issue.
+// v14.66 — inspNote is still stored/sent as one flattened string (see
+// proceedToPrintOptions in the Work page code, and the InspNote column in
+// the Google Sheet, which has nowhere else to put it) — but its format has
+// changed over time, and historical rows keep whatever format they were
+// originally written in (nothing here ever rewrites old data):
+//   - current  : blocks joined by a BLANK line ('\n\n') — reason /
+//                forced-note / "Issues (N):\n<one 'TYPE: SKU × QTY pcs'
+//                line per item>" / free note.
+//   - v14.65   : blocks joined by ' — ' — reason / forced-note /
+//                "Issues: SKU:TYPE×QTY, SKU:TYPE×QTY, ..." / free note.
+//   - pre-v14.65 (any order still showing a completed session from before
+//                this round of changes): same ' — ' join, but ALSO
+//                contains a "Short: SKU:got/req, ..." segment — Short is
+//                still dropped from the display even for this old data,
+//                since showing it was the entire thing being fixed.
+// This tries the current format first and falls back to the legacy one,
+// so every order (new or old) renders as the same clean per-SKU card
+// instead of a raw dump — only the parsing path differs, not the output.
 function renderInspNoteHtml(note){
   if (!note) return '';
-  // v14.66 — note is now a series of blocks joined by a BLANK line (see
-  // proceedToPrintOptions): reason / forced-note / "Issues (N):\n<one line
-  // per SKU>" / free note. Find the Issues block specifically and turn its
-  // lines back into clean per-SKU rows; every other block renders as
-  // plain muted text, same as before.
-  const blocks = String(note).split('\n\n').filter(Boolean);
+  const raw = String(note);
+  let otherParts = [], items = [];
+
+  const blocks = raw.split('\n\n').filter(Boolean);
   const issueBlock = blocks.find(b => /^Issues \(\d+\):/.test(b));
-  const otherBlocks = blocks.filter(b => b !== issueBlock);
-  let html = '';
-  if (otherBlocks.length) {
-    html += `<div style="color:var(--t3);margin-top:2px;white-space:pre-wrap">${otherBlocks.join('\n\n')}</div>`;
-  }
   if (issueBlock) {
-    const lines = issueBlock.split('\n').slice(1).filter(Boolean);
-    const items = lines.map(line => {
+    otherParts = blocks.filter(b => b !== issueBlock);
+    items = issueBlock.split('\n').slice(1).filter(Boolean).map(line => {
       const m = line.match(/^([A-Za-z]+):\s*(.+?)(?:\s*×\s*(\d+)\s*pcs)?$/);
       return m ? { type: m[1], sku: m[2], qty: m[3] || '' } : { type: '', sku: line, qty: '' };
     });
+  } else {
+    // legacy fallback — ' — '-joined parts; drop any "Short: ..." part
+    // entirely, parse "Issues: ..." (comma-joined) if present.
+    const parts = raw.split(' — ').filter(Boolean);
+    const legacyIssuePart = parts.find(p => p.startsWith('Issues: '));
+    otherParts = parts.filter(p => p !== legacyIssuePart && !p.startsWith('Short: '));
+    if (legacyIssuePart) {
+      items = legacyIssuePart.slice('Issues: '.length).split(', ').filter(Boolean).map(seg => {
+        const m = seg.match(/^(.+?):([A-Za-z]+)(?:×(\d+))?$/);
+        return m ? { sku: m[1], type: m[2], qty: m[3] || '' } : { sku: seg, type: '', qty: '' };
+      });
+    }
+  }
+
+  let html = '';
+  if (otherParts.length) {
+    html += `<div style="color:var(--t3);margin-top:2px;white-space:pre-wrap">${otherParts.join('\n\n')}</div>`;
+  }
+  if (items.length) {
     html += `<div style="margin-top:5px;background:var(--red-bg);border:1px solid var(--red-bd);border-radius:var(--r);padding:7px 9px">
       <div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px"><i class="ri-error-warning-line"></i> Issues · ${items.length}</div>
       ${items.map(it => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;padding:2px 0">
