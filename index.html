@@ -2611,18 +2611,38 @@ window.openSkuBoxModal = function(wid, key){
   `);
   renderSkuBoxEdit();
 };
+// v14.70 — renderSkuBoxEdit() used to rebuild EVERY row's innerHTML (via
+// rowsEl.innerHTML = ...) on every single keystroke, because the qty/box
+// number inputs' own oninput handler called it directly. That destroys
+// and recreates the <input> elements each time, which kills focus after
+// the FIRST digit — so typing "3595" only ever registered the "3" before
+// the field silently lost focus, and only the native number spinner's
+// one-shot arrow clicks (which don't need sustained focus) looked like
+// they worked. Fixed by splitting row-building (only needed when rows are
+// added/removed) from the sum-line/save-button update (needed on every
+// keystroke, but must NOT touch the row inputs' DOM). Also switched the
+// inputs from type="number" (whose spinner was the other half of the
+// complaint — "화살표로 하나씩만") to a plain text/numeric-keypad input, so
+// typing multi-digit numbers directly works like any other field.
 function renderSkuBoxEdit(){
+  renderSkuBoxRows();
+  updateSkuBoxSum();
+}
+function renderSkuBoxRows(){
   const ed = _skuBoxEdit; if (!ed) return;
   const rowsEl = document.getElementById('skuBoxRows');
   if (rowsEl) rowsEl.innerHTML = ed.rows.map((r,i) => `
     <div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:7px 9px;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:5px;font-weight:700;font-size:12.5px;flex-shrink:0">
         <i class="ri-archive-2-line" style="color:var(--purple)"></i> ${ed.uwCap}
-        <input type="number" min="1" value="${r.n}" style="width:44px;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-weight:700;text-align:center;padding:4px 2px" oninput="updateSkuBoxRowNum(${i},this.value)">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" value="${r.n}" style="width:44px;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-weight:700;text-align:center;padding:4px 2px" oninput="updateSkuBoxRowNum(${i},this.value)">
       </div>
-      <input type="number" min="0" value="${r.q}" style="flex:1;min-width:0;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-family:var(--mono);font-weight:700;padding:7px 9px;text-align:right" oninput="updateSkuBoxRowQty(${i},this.value)">
+      <input type="text" inputmode="numeric" pattern="[0-9]*" value="${r.q}" style="flex:1;min-width:0;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-family:var(--mono);font-weight:700;padding:7px 9px;text-align:right" oninput="updateSkuBoxRowQty(${i},this.value)">
       <button type="button" style="width:26px;height:26px;border-radius:50%;border:none;background:transparent;color:var(--t3);font-size:15px;flex-shrink:0" onclick="removeSkuBoxRow(${i})">✕</button>
     </div>`).join('');
+}
+function updateSkuBoxSum(){
+  const ed = _skuBoxEdit; if (!ed) return;
   const sum = ed.rows.reduce((s,r) => s + (Number(r.q)||0), 0);
   const diff = ed.total - sum;
   const sumEl = document.getElementById('skuBoxSumline');
@@ -2641,12 +2661,12 @@ function renderSkuBoxEdit(){
 window.updateSkuBoxRowNum = function(i, v){
   const ed = _skuBoxEdit; if (!ed) return;
   ed.rows[i].n = Math.max(1, parseInt(v) || 1);
-  renderSkuBoxEdit();
+  updateSkuBoxSum(); // never rebuild the row inputs here — see note above
 };
 window.updateSkuBoxRowQty = function(i, v){
   const ed = _skuBoxEdit; if (!ed) return;
   ed.rows[i].q = Math.max(0, parseInt(v) || 0);
-  renderSkuBoxEdit();
+  updateSkuBoxSum(); // never rebuild the row inputs here — see note above
 };
 window.addSkuBoxRow = function(){
   const ed = _skuBoxEdit; if (!ed) return;
@@ -2801,18 +2821,30 @@ window.openPostSessionBoxModal = function(entryId, key){
   `);
   renderPostBoxEdit();
 };
+// v14.70 — same fix as renderSkuBoxEdit above: row-building split out from
+// the sum-line/save-button update so typing a multi-digit number doesn't
+// get its own input destroyed (and focus lost) after every keystroke, and
+// the inputs themselves switched off type="number" (whose spinner was the
+// other half of the complaint) to a plain numeric-keypad text input.
 function renderPostBoxEdit(){
+  renderPostBoxRows();
+  updatePostBoxSum();
+}
+function renderPostBoxRows(){
   const ed = _postBoxEdit; if (!ed) return;
   const rowsEl = document.getElementById('postBoxRows');
   if (rowsEl) rowsEl.innerHTML = ed.rows.map((r,i) => `
     <div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:7px 9px;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:5px;font-weight:700;font-size:12.5px;flex-shrink:0">
         <i class="ri-archive-2-line" style="color:var(--purple)"></i>
-        <input type="number" min="1" value="${r.n}" style="width:44px;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-weight:700;text-align:center;padding:4px 2px" oninput="updatePostBoxRowNum(${i},this.value)">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" value="${r.n}" style="width:44px;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-weight:700;text-align:center;padding:4px 2px" oninput="updatePostBoxRowNum(${i},this.value)">
       </div>
-      <input type="number" min="0" value="${r.q}" style="flex:1;min-width:0;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-family:var(--mono);font-weight:700;padding:7px 9px;text-align:right" oninput="updatePostBoxRowQty(${i},this.value)">
+      <input type="text" inputmode="numeric" pattern="[0-9]*" value="${r.q}" style="flex:1;min-width:0;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-family:var(--mono);font-weight:700;padding:7px 9px;text-align:right" oninput="updatePostBoxRowQty(${i},this.value)">
       <button type="button" style="width:26px;height:26px;border-radius:50%;border:none;background:transparent;color:var(--t3);font-size:15px;flex-shrink:0" onclick="removePostBoxRow(${i})">✕</button>
     </div>`).join('');
+}
+function updatePostBoxSum(){
+  const ed = _postBoxEdit; if (!ed) return;
   const sum = ed.rows.reduce((s,r) => s + (Number(r.q)||0), 0);
   const diff = ed.total - sum;
   const sumEl = document.getElementById('postBoxSumline');
@@ -2831,12 +2863,12 @@ function renderPostBoxEdit(){
 window.updatePostBoxRowNum = function(i, v){
   const ed = _postBoxEdit; if (!ed) return;
   ed.rows[i].n = Math.max(1, parseInt(v) || 1);
-  renderPostBoxEdit();
+  updatePostBoxSum(); // never rebuild the row inputs here — see note above
 };
 window.updatePostBoxRowQty = function(i, v){
   const ed = _postBoxEdit; if (!ed) return;
   ed.rows[i].q = Math.max(0, parseInt(v) || 0);
-  renderPostBoxEdit();
+  updatePostBoxSum(); // never rebuild the row inputs here — see note above
 };
 window.addPostBoxRow = function(){
   const ed = _postBoxEdit; if (!ed) return;
