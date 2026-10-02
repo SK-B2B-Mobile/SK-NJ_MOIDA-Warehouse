@@ -1794,12 +1794,11 @@ function renderLiveNow(){
       const col   = paused ? PCOL[reason]     : SCOL[w.stage];
       const bdCol = paused ? PBDCOL[reason]   : SBDCOL[w.stage];
       const fill  = paused ? PFILLCOL[reason] : SFILLCOL[w.stage];
-      // v14.74 — same tofu-box fix as the dashboard table's 나가기 badge:
-      // ⏸/⏱ aren't guaranteed to render on every device's font — remixicon
-      // glyphs are, since the app already loads that icon font for
-      // everything else.
+      // v14.75 — per feedback, dropped the icon entirely instead of
+      // swapping glyphs — plain text reads cleanly and doesn't burn extra
+      // width on a narrow badge (matches 이석's plain-text treatment).
       const badgeLabel = paused
-        ? (reason === 'idle_timeout' ? '<i class="ri-time-line"></i> 이석' : '<i class="ri-pause-circle-line"></i> 나가기')
+        ? (reason === 'idle_timeout' ? '이석' : '나가기')
         : w.stage;
       const badge = `<span class="stat-badge${paused?' dashed':''}" style="color:${col};border-color:${bdCol};background:${fill}">${badgeLabel}</span>`;
       return `<button class="live-card" onclick="showOrderDetail('${w.oid}')" style="border-style:${paused?'dashed':'solid'};border-color:${bdCol}" title="${w.w} — ${w.stage} on ${w.oid}${paused?(reason==='idle_timeout'?' (idle timeout)':' (paused via 나가기)'):''}">
@@ -1902,12 +1901,11 @@ function renderDashTable(){
             return `<span style="white-space:nowrap" title="${a.stage} — 이석(자동 일시정지) — 실제 작업 여부는 상세보기에서 확인"><span class="wname-ghost">${n}</span> <span class="ghost-badge">${a.stage} 이석</span></span>`;
           }
           const reason = 'manual';
-          // v14.74 — the ⏸ Unicode pause glyph has no fallback glyph in
-          // this device's font and rendered as a stray orange "tofu" box
-          // (see user screenshot) — swapped for the same remixicon glyph
-          // system every other icon in this app already uses, which is
-          // guaranteed to render identically everywhere.
-          return `<span style="white-space:nowrap;opacity:.85"><span style="color:${PCOL[reason]};font-weight:600">${n}</span> <span class="stat-badge dashed" style="color:${PCOL[reason]};border-color:${PBDCOL[reason]};background:${PFILLCOL[reason]}">${a.stage} <i class="ri-pause-circle-line"></i> 나가기</span></span>`;
+          // v14.75 — per feedback, dropped the icon entirely (was a
+          // remixicon pause glyph, itself a fix for an earlier ⏸ Unicode
+          // tofu-box — but still just took up space without adding
+          // anything) — plain "나가기" text, same as 이석's plain-text badge.
+          return `<span style="white-space:nowrap;opacity:.85"><span style="color:${PCOL[reason]};font-weight:600">${n}</span> <span class="stat-badge dashed" style="color:${PCOL[reason]};border-color:${PBDCOL[reason]};background:${PFILLCOL[reason]}">${a.stage} 나가기</span></span>`;
         }
         return `<span style="white-space:nowrap"><span style="color:${SCOL[a.stage]};font-weight:700">${n}</span> <span class="stat-badge" style="color:${SCOL[a.stage]};border-color:${SBDCOL[a.stage]};background:${SFILLCOL[a.stage]}"><span class="wdot" style="background:${SCOL[a.stage]};margin-right:0"></span>${a.stage}</span></span>`;
       }
