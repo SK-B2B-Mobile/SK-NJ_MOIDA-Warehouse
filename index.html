@@ -82,6 +82,15 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .mc-l{font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.09em;text-transform:uppercase;margin-bottom:10px}
 .mc-v{font-family:var(--mono);font-size:32px;font-weight:800;line-height:1;letter-spacing:-1px}
 .mc.alert{border-color:var(--red-bd);background:linear-gradient(135deg,rgba(239,68,68,.06),var(--bg2))}
+/* v14.73 — only the top accent bar blinks (same place every card's color
+   already lives), not the whole card border/shadow — keeps every KPI card
+   the same "quiet box, colored top bar" shape; SLA's bar just pulses
+   instead of sitting still, so it reads as the one that needs attention. */
+@keyframes slaBarBlink{
+  0%,100%{opacity:1;box-shadow:0 0 6px 1px rgba(239,68,68,.75)}
+  50%{opacity:.35;box-shadow:0 0 0 0 rgba(239,68,68,0)}
+}
+.mc.alert::before{animation:slaBarBlink 1.4s ease-in-out infinite}
 
 /* ── KPI summary cards ── */
 .kmc{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r2);padding:20px 22px;position:relative;overflow:hidden}
@@ -170,9 +179,12 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .ghost-badge{display:inline-flex;align-items:center;gap:3px;border-radius:5px;padding:0 5px;font-size:9px;font-weight:600;border:1px dashed rgba(255,255,255,.14);color:var(--t4);background:transparent;vertical-align:middle}
 /* ── v14.70 — pager buttons sized for a handheld scanner screen (~390px
    wide) and gloved/thick-finger taps, see dashboard_pagination_simulation. */
-.pgbtn{width:38px;height:38px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg4);color:var(--t);font-size:17px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle}
+/* v14.73 — sized down from the original 38×38px per feedback ("too big,
+   looked bolted-on") — still comfortably tappable at 28px, now that the
+   pager sits attached to the table instead of floating as its own box. */
+.pgbtn{width:28px;height:28px;border-radius:6px;border:1px solid var(--bd2);background:var(--bg4);color:var(--t);font-size:14px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle}
 .pgbtn:disabled{opacity:.35;cursor:not-allowed}
-.pgnum{display:inline-block;min-width:70px;text-align:center;font-size:12px;color:var(--t2);vertical-align:middle}
+.pgnum{display:inline-block;min-width:44px;text-align:center;font-size:11px;color:var(--t2);vertical-align:middle}
 
 /* ── KPI table ── */
 .kpi-tbl{width:100%;border-collapse:collapse}
@@ -431,7 +443,16 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .live-card-bottom{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0}
 .live-card-oid{font-size:11px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .live-card-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.wdot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;animation:pulse 1.6s infinite;vertical-align:1px}
+/* v14.73 — a clearer blink than the plain opacity .pulse fade (easy to
+   miss at 6px): scale + a glow ring in the dot's own color, via
+   currentColor so each stage's color (blue/purple/teal) carries through
+   without a second color variable per stage. Only an actually-active
+   (not paused/이석/나가기/done) worker's dot uses this — see renderDashTable. */
+@keyframes wdotBlink{
+  0%,100%{transform:scale(1);box-shadow:0 0 0 0 currentColor}
+  50%{transform:scale(1.3);box-shadow:0 0 4px 2px currentColor}
+}
+.wdot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;animation:wdotBlink 1.3s ease-in-out infinite;vertical-align:1px}
 
 /* v14.42 — shared pill/badge used for stage + pause labels everywhere
    (WORKING NOW cards, dashboard WORKERS column): the color-simulation's
@@ -465,10 +486,20 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   .stab{padding:11px 4px;font-size:12px}
   .stab i{font-size:16px}
   .card,.session-card,.start-card{padding:14px 14px}
-  .mc,.kmc{padding:14px 14px}
-  .mc-v,.kmc-v{font-size:24px}
+  .kmc{padding:14px 14px}
+  .kmc-v{font-size:24px}
   .scan-counter-big{font-size:34px}
-  .g4,.g5,.g6{grid-template-columns:1fr}
+  .g4,.g5{grid-template-columns:1fr}
+  /* v14.73 — the Dashboard's 6 KPI cards used to stack one-per-row on a
+     narrow scan-device screen, burning a lot of vertical space before any
+     actual order data was visible. 3×2 (same rhythm as the 4-tab nav row
+     above it) instead, with the cards themselves shrunk to fit. Desktop
+     (outside this breakpoint) is completely untouched — still the single
+     wide row. See dashboard_truly_final_simulation. */
+  .g6{grid-template-columns:repeat(3,1fr);gap:7px}
+  .mc{padding:9px 6px}
+  .mc-l{font-size:8.5px;margin-bottom:4px;white-space:nowrap;letter-spacing:.03em}
+  .mc-v{font-size:18px;letter-spacing:-.3px}
   .g7{grid-template-columns:repeat(2,1fr)}
   .frow{grid-template-columns:1fr}
   .session-chips,.scan-mult-row{gap:5px}
@@ -1718,10 +1749,16 @@ R.dash = function(){
     else if (a.PICK.some(w => !w.endT)) pickA++;
   });
 
+  // v14.73 — SLA risk leads the row instead of sitting after Completed:
+  // it isn't a stage in the wait→pick→inspect→done flow (an SLA-risk order
+  // can be waiting, picking OR inspecting — any not-done stage), it's a
+  // cross-cutting alert, and alerts read first. The flow stages stay
+  // together as their own group, Total trails as the plain summary.
   document.getElementById('dashMetrics').innerHTML = `<div class="g6">
-    ${[{l:'Waiting',v:wait,c:'am'},{l:'Picking',v:pickA,c:'bl'},{l:'Inspection',v:inspA,c:'pu'},
+    ${[{l:'SLA risk',v:slaN,c:'rd',alert:slaN>0},
+       {l:'Waiting',v:wait,c:'am'},{l:'Picking',v:pickA,c:'bl'},{l:'Inspection',v:inspA,c:'pu'},
        {l:'Completed',v:done,c:'gr'},
-       {l:'SLA risk',v:slaN,c:'rd',alert:slaN>0},{l:'Total',v:S.orders.length,c:'cy'}]
+       {l:'Total',v:S.orders.length,c:'cy'}]
     .map(m => `<div class="mc ${m.c}${m.alert?' alert':''}"><div class="mc-l">${m.l}</div><div class="mc-v" style="color:var(--${{am:'amber',bl:'blue',pu:'purple',tl:'teal',gr:'green',cy:'cyan',rd:'red'}[m.c]})">${m.v}</div></div>`).join('')}
   </div>`;
   renderLiveNow();
@@ -1915,32 +1952,34 @@ function renderDashTable(){
     </tr>`;
   });
 
-  document.getElementById('dashTable').innerHTML = `<div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)">
-    <table class="dash-tbl" style="min-width:920px"><thead><tr>
-      <th>Order</th><th>Ch.</th><th>Customer</th><th>Age</th><th>Workers</th>
-      <th>Items</th><th>QTY</th><th>Net time</th><th>Progress</th><th>상세보기</th>
-    </tr></thead><tbody>${trs.join('')}</tbody></table></div>`;
-
-  // v14.70 — bigger, B2B-list-style pager (38×38px buttons) sized for the
-  // real handheld scanner screens and gloved/thick-finger taps — see
-  // dashboard_pagination_simulation.
-  // v14.71 — always render the full pager bar, even with only one page
-  // (both nav buttons simply disabled) — showing the 5-per-page UI
-  // consistently regardless of how many orders currently exist, instead of
-  // silently falling back to plain text whenever there happens to be ≤5
-  // orders total. (With exactly 5 orders, D_PER=5 is genuinely already
-  // active — Math.ceil(5/5)=1 page — there was just nothing to visibly
-  // prove it before this.)
-  const pg = document.getElementById('dashPager');
+  // v14.73 — the pager used to be a separate box with a gap above it
+  // (looked like a stray, slightly-too-big floating control). Now it's a
+  // footer row INSIDE the same card as the table, directly attached with
+  // just a border-top divider — same "one box" look as the B2B reference
+  // the user attached. Only the table itself scrolls horizontally
+  // (overflow-x on its own wrapper), so the footer never scrolls with it.
   const from = total ? _dp*D_PER + 1 : 0, to = Math.min(total, _dp*D_PER + D_PER);
-  pg.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r);padding:8px 10px;margin-top:10px">
+  document.getElementById('dashTable').innerHTML = `<div class="card" style="padding:0;border-radius:var(--r2);overflow:hidden">
+    <div style="overflow-x:auto">
+      <table class="dash-tbl" style="min-width:920px"><thead><tr>
+        <th>Order</th><th>Ch.</th><th>Customer</th><th>Age</th><th>Workers</th>
+        <th>Items</th><th>QTY</th><th>Net time</th><th>Progress</th><th>상세보기</th>
+      </tr></thead><tbody>${trs.join('')}</tbody></table>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--bd);background:var(--bg3);padding:8px 12px">
       <span style="font-size:11px;color:var(--t3)">${total ? `${from}–${to} / ${total}건` : '0건'}</span>
       <div style="display:flex;align-items:center;gap:6px">
         <button class="pgbtn" onclick="_dp--;renderDashTable()" ${_dp===0?'disabled':''}><i class="ri-arrow-left-s-line"></i></button>
         <span class="pgnum">${_dp+1} / ${pages}</span>
         <button class="pgbtn" onclick="_dp++;renderDashTable()" ${_dp>=pages-1?'disabled':''}><i class="ri-arrow-right-s-line"></i></button>
       </div>
-    </div>`;
+    </div>
+  </div>`;
+  // dashPager (the old separate element) is kept empty now that the pager
+  // lives inside dashTable's own card — still cleared on the "no orders"
+  // branch above for a clean slate either way.
+  const pgOld = document.getElementById('dashPager');
+  if (pgOld) pgOld.innerHTML = '';
 }
 
 // v14.66 — inspNote is still stored/sent as one flattened string (see
