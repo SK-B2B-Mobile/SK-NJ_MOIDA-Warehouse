@@ -4367,7 +4367,7 @@ function renderInspDoneCard(wrap, oid, prog){
         <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat',this)"><i class="ri-file-list-3-line"></i> Flat List</button>
         <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${oid}',this)"><i class="ri-price-tag-3-line"></i> Labels</button>
       </div>
-      <button class="btn btn-sm" style="color:var(--t3)" onclick="if(confirm('이 오더는 이미 검수 완료되었습니다. 정말 다시 검수를 시작하시겠습니까?'))startReinspect('${oid}');"><i class="ri-add-line"></i> Re-inspect (재검수 시작)</button>
+      <button class="btn btn-sm" style="color:var(--t3)" onclick="confirmStartReinspect('${oid}')"><i class="ri-add-line"></i> Re-inspect (재검수 시작)</button>
     </div>`;
   reconcileOrderInspSessionsOnce(oid);
 }
@@ -4972,6 +4972,31 @@ window._confirmedStart = function(oid, items, qty, pageFrom, pageTo){
 // and passes reinspect:true straight through so the server exempts this
 // session from the order_completed block and from the auto-close sweep
 // in reconcileOrderInspSessions_.
+// v14.68 — this used to be a native browser confirm() — easy to blow past
+// on a phone without reading, and it never said WHAT reinspect actually
+// does (brand-new session + overwrite-per-SKU semantics, see the reinspect
+// note on logInspectionResults_ in Code.gs). Replaced with the app's own
+// styled modal so it's impossible to miss, spells out the real
+// consequence, and points toward the 📦 post-session box/pallet edit tool
+// for the common case (someone just wants to fix a pallet number) that
+// never actually needed a full reinspect at all.
+window.confirmStartReinspect = function(oid){
+  openModal(`
+    <div style="text-align:center;padding:4px 0 2px">
+      <i class="ri-error-warning-line" style="font-size:30px;color:var(--amber);display:block;margin-bottom:8px"></i>
+      <div style="font-size:15px;font-weight:800;margin-bottom:10px">재검수를 시작하시겠습니까?</div>
+      <div style="font-size:12.5px;color:var(--t2);line-height:1.7;text-align:left;background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px;margin-bottom:4px">
+        <b style="color:var(--t)">${oid}</b>는 이미 검수가 완료된 상태입니다.<br><br>
+        재검수를 시작하면 완전히 새로운 검수 세션이 열리고, <b style="color:var(--amber)">이번 세션에서 손댄(스캔하거나 수정한) SKU의 기존 기록은 전부 지금 입력하는 값으로 교체됩니다</b> — 기존 기록에 더해지는 게 아니라 통째로 바뀝니다.<br><br>
+        단순히 팔렛/박스 번호만 고치려는 것이라면 재검수 대신, 이 주문 상세보기의 <i class="ri-archive-2-line" style="color:var(--purple)"></i> 아이콘(완료 후 배정 수정)을 사용하세요 — 전체 기록을 다시 쓰지 않고 그 부분만 고칠 수 있습니다.
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:10px">
+      <button class="btn btn-sm" onclick="closeModal()">취소</button>
+      <button class="btn btn-sm" style="color:#fff;background:var(--amber);border-color:var(--amber)" onclick="closeModal();startReinspect('${oid}')"><i class="ri-add-line"></i> 네, 재검수 시작</button>
+    </div>
+  `);
+};
 window.startReinspect = function(oid){
   if (!oid) { toast('Select an order', 'err'); return; }
   const already = S.works.find(w => w.w===CW && w.oid===oid && w.stage==='INSP' && !w.endT);
