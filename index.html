@@ -297,6 +297,25 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .sku-row-sku{font-family:var(--mono);font-weight:700;font-size:12px}
 .sku-row-nm{color:var(--t3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sku-row-qty{font-family:var(--mono);font-weight:800;font-size:13px;flex-shrink:0;white-space:nowrap}
+.sku-check{cursor:pointer}
+
+/* v14.80 — missing-item summary box, shown right above Finish early.
+   Additive only: the scan list's own sort order is untouched (see
+   filterSkuItems' v10.11 comment on why re-litigating that isn't worth
+   it), this is just a collapsible "what's still left" callout. */
+.missbox{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.32);border-radius:var(--r);padding:9px 10px;margin-bottom:8px}
+.missbox-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.missbox-title{font-size:12px;font-weight:800;color:var(--amber);display:flex;align-items:center;gap:6px}
+.missbox-chev{color:var(--amber);font-size:13px;transition:transform .15s}
+.missbox-list{margin-top:7px;display:flex;flex-direction:column;gap:5px}
+.missrow{display:flex;align-items:center;gap:7px;background:var(--bg4);border:1px solid var(--bd);border-radius:6px;padding:6px 8px;cursor:pointer;font-size:11px}
+.missrow:active{background:var(--bg3)}
+.miss-sku{font-family:var(--mono);font-weight:700;flex-shrink:0}
+.miss-nm{color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.miss-qty{color:var(--amber);font-weight:700;flex-shrink:0}
+.miss-jump{color:var(--blue);font-weight:700;flex-shrink:0;white-space:nowrap}
+@keyframes jumpFlash{0%,100%{background:inherit}30%{background:rgba(59,130,246,.22)}}
+.sku-row.jump-flash{animation:jumpFlash 1.5s ease-out}
 
 /* Import pick list */
 .import-drop{border:2px dashed var(--bd2);border-radius:var(--r2);padding:26px 16px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
@@ -2311,8 +2330,8 @@ function skuRowHtml(it, st, wid){
         title="탭해서 이 SKU의 ${uw} 배정 수정" onclick="event.stopPropagation();openSkuBoxModal('${wid}','${keyEsc}')">${isRare?'<i class="ri-error-warning-line"></i> ':''}${uw} ${t.n} · ${t.q}</span>`;
     }).join('')}</div>`;
   }
-  return `<div class="sku-row ${cls}">
-    <div class="sku-check ${issue?'issue':(ok?'ok':'')}">${issue ? '<i class="ri-flag-2-fill"></i>' : (ok ? '<i class="ri-check-line"></i>' : '')}</div>
+  return `<div class="sku-row ${cls}" id="skurow_${wid}_${skuIdSafe(key)}">
+    <div class="sku-check ${issue?'issue':(ok?'ok':'')}" title="탭해서 제품 정보 확인" onclick="event.stopPropagation();openSkuDetailModal('${wid}','${keyEsc}')">${issue ? '<i class="ri-flag-2-fill"></i>' : (ok ? '<i class="ri-check-line"></i>' : '')}</div>
     <div class="sku-row-name">
       <div class="sku-row-sku">${it.sku||'—'}${it.barcode?` <span style="color:var(--t3);font-weight:500">· ${it.barcode}</span>`:''}</div>
       <div class="sku-row-nm">${it.name||''}${it.rack?' · '+it.rack:''}</div>
@@ -3802,6 +3821,17 @@ function updateSkuChecklistLive(wid){
   }
   const unknownEl = document.getElementById('skuUnknownLine_' + wid);
   if (unknownEl) unknownEl.innerHTML = st.unknown ? `<div style="font-size:11px;color:var(--red);margin-top:6px"><i class="ri-error-warning-line"></i> ${st.unknown} scan${st.unknown>1?'s':''} didn't match any item on this order's list</div>` : '';
+
+  // v14.80 — keep the "fully accounted for" banner, the missing-items
+  // summary, and the Finish early button's own (N/M scanned) count in sync
+  // with every scan, the same way the counters above already are — without
+  // this, a worker could scan the last missing item and still see a stale
+  // "Finish early (31/32)" / missing-box entry until something else
+  // happened to trigger a full renderStageContent().
+  const readyBannerEl = document.getElementById('readyBanner_' + wid);
+  if (readyBannerEl) readyBannerEl.innerHTML = renderReadyBannerHtml(skuChecklistReadyInfo(w));
+  const finishAreaEl = document.getElementById('finishArea_' + wid);
+  if (finishAreaEl) finishAreaEl.innerHTML = renderFinishAreaHtml(w);
 }
 
 function startLivePoll(wid){
@@ -4107,6 +4137,136 @@ function skuChecklistReadyInfo(w){
   return { done, total: items.length, ready: done === items.length };
 }
 
+function skuIdSafe(key){ return String(key).replace(/[^a-zA-Z0-9_-]/g, '_'); }
+
+// v14.80 — per manager request: before tapping Finish early, show which
+// SKU(s) are still short, so a worker doesn't have to scroll-hunt for them.
+// Deliberately NOT a re-sort of the main scan list (filterSkuItems' v10.11
+// comment documents why that's been flip-flopped before and shouldn't be
+// re-litigated) — this is a separate, additive summary built from the same
+// {done,total} logic as skuChecklistReadyInfo so the two can never disagree.
+function skuMissingItems(w){
+  const items = _orderItemsCache[w.oid] || [];
+  const st = loadScanState(w.id);
+  const others = _liveBaseline[w.id] || {};
+  const out = [];
+  items.forEach(it => {
+    const key = it.barcode || it.sku;
+    const got = (st.skuCounts[key] || 0) + (others[key] || 0);
+    const issue = (st.skuIssues || {})[key];
+    if (!issue && it.reqQty > 0 && got < it.reqQty) {
+      out.push({ key, sku: it.sku, name: it.name, barcode: it.barcode, got, reqQty: it.reqQty });
+    }
+  });
+  return out;
+}
+
+function renderReadyBannerHtml(readyInfo){
+  return (readyInfo && readyInfo.ready)
+    ? `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:8px 12px"><i class="ri-checkbox-circle-fill"></i> This order is fully accounted for (${readyInfo.total}/${readyInfo.total}, combining everyone's scans)</div>`
+    : '';
+}
+
+// v14.80 — the missing-items box + Finish-early button live in their own
+// id'd wrapper (#finishArea_<wid>) so a scan can refresh them immediately
+// via updateSkuChecklistLive, the same low-risk path every other live scan
+// counter already uses — see v13.5's comment above on why renderStageContent
+// itself is never called mid-scan-burst.
+function renderFinishAreaHtml(w){
+  const s = w.stage;
+  const inf = !!_pending[w.id];
+  const readyInfo = skuChecklistReadyInfo(w);
+  const gated = s === 'INSP' && !!readyInfo;
+  const notReadyYet = gated && !readyInfo.ready;
+  const missing = notReadyYet ? skuMissingItems(w) : [];
+  const missingHtml = missing.length ? `
+    <div class="missbox">
+      <div class="missbox-head" onclick="toggleMissingBox('${w.id}')">
+        <div class="missbox-title"><i class="ri-error-warning-line"></i> 미완료 SKU ${missing.length}건 — 탭해서 보기</div>
+        <span class="missbox-chev" id="missChev_${w.id}">▾</span>
+      </div>
+      <div class="missbox-list" id="missList_${w.id}" style="display:none">
+        ${missing.map(m => `<div class="missrow" onclick="jumpToSkuRow('${w.id}','${String(m.key).replace(/'/g,"\\'")}')">
+          <span class="miss-sku">${m.sku||'—'}</span>
+          <span class="miss-nm">${(m.name||'').replace(/</g,'&lt;')}</span>
+          <span class="miss-qty">${m.got}/${m.reqQty||0}</span>
+          <span class="miss-jump">보기 ›</span>
+        </div>`).join('')}
+      </div>
+    </div>` : '';
+  return `${missingHtml}
+    <button class="btn btn-green btn-block btn-lg${readyInfo && readyInfo.ready ? ' ready-to-finish' : ''}"
+      onclick="endWork('${w.id}','${s}')" ${inf ? 'disabled' : ''}
+      title="${notReadyYet ? 'Tap to finish early — you can flag or force-complete what\'s left' : ''}">
+      <i class="ri-checkbox-circle-line"></i> ${notReadyYet ? `Finish early (${readyInfo.done}/${readyInfo.total} scanned)` : SELABEL[s]}
+    </button>`;
+}
+
+window.toggleMissingBox = function(wid){
+  const list = document.getElementById('missList_' + wid);
+  const chev = document.getElementById('missChev_' + wid);
+  if (!list) return;
+  const open = list.style.display !== 'none';
+  list.style.display = open ? 'none' : 'flex';
+  if (chev) chev.style.transform = open ? '' : 'rotate(180deg)';
+};
+
+// v14.80 — tapping a missing item scrolls the main scan list to that row
+// and flashes it. Any active search text is cleared first purely so the
+// target row is guaranteed to be on-screen somewhere — the list's own sort
+// order (recency-first) is never touched.
+window.jumpToSkuRow = function(wid, key){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const items = _orderItemsCache[w.oid] || [];
+  const st = loadScanState(wid);
+  const ui = skuUI(wid);
+  ui.q = '';
+  const searchInp = document.getElementById('skuSearch_' + wid);
+  if (searchInp) searchInp.value = '';
+  const filtered = filterSkuItems(items, '', st, wid);
+  const idx = filtered.findIndex(it => (it.barcode || it.sku) === key);
+  if (idx < 0) return;
+  ui.page = Math.floor(idx / ui.size);
+  updateSkuListView(wid);
+  setTimeout(() => {
+    const row = document.getElementById('skurow_' + wid + '_' + skuIdSafe(key));
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.classList.add('jump-flash');
+      setTimeout(() => row.classList.remove('jump-flash'), 1600);
+    }
+  }, 40);
+};
+
+// v14.80 — the SKU row's circle icon used to be purely decorative; tapping
+// it now opens a small read-only "what product is this" popup, closeable,
+// so a worker unsure what a cryptic SKU code refers to isn't left guessing.
+window.openSkuDetailModal = function(wid, key){
+  const w = S.works.find(x => x.id === wid); if (!w) return;
+  const items = _orderItemsCache[w.oid] || [];
+  const it = items.find(x => (x.barcode || x.sku) === key); if (!it) return;
+  const st = loadScanState(wid);
+  const others = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
+  const got = (st.skuCounts[key] || 0) + others;
+  const req = it.reqQty || 0;
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+      <i class="ri-information-line" style="color:var(--purple)"></i> 제품 정보
+    </div>
+    <div class="fg">
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12.5px"><span style="color:var(--t3)">제품명</span><span style="font-weight:700;text-align:right">${it.name||'—'}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12.5px"><span style="color:var(--t3)">SKU</span><span style="font-weight:700">${it.sku||'—'}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12.5px"><span style="color:var(--t3)">바코드</span><span style="font-weight:700">${it.barcode||'—'}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12.5px"><span style="color:var(--t3)">랙 위치</span><span style="font-weight:700">${it.rack||'—'}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12.5px"><span style="color:var(--t3)">필요 수량</span><span style="font-weight:700">${req}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:7px 0;font-size:12.5px"><span style="color:var(--t3)">현재 스캔</span><span style="font-weight:700;color:${req>0&&got>=req?'var(--green)':'var(--amber)'}">${got}/${req}</span></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-sm btn-block" style="justify-content:center" onclick="closeModal()">닫기</button>
+    </div>
+  `);
+};
+
 // Who else (if anyone) is on this order+stage right now, and has it been
 // done before? Used to enrich the order picker so a worker can see —
 // before selecting — whether starting this stage would collide with
@@ -4239,19 +4399,13 @@ function renderStageContent(){
           ${elapsed ? `<span class="chip hi" id="elapsed_${w.id}"><i class="ri-timer-line"></i> ${elapsed}</span>` : `<span id="elapsed_${w.id}"></span>`}
         </div>
         ${s==='INSP' ? renderScanUI(w) : ''}
-        ${readyInfo && readyInfo.ready
-            ? `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:8px 12px"><i class="ri-checkbox-circle-fill"></i> This order is fully accounted for (${readyInfo.total}/${readyInfo.total}, combining everyone's scans)</div>`
-            : ''}
+        <div id="readyBanner_${w.id}">${renderReadyBannerHtml(readyInfo)}</div>
         ${s==='INSP' ? `<div style="display:flex;gap:6px;margin-bottom:8px">
           <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${w.oid}','box',this)" title="Per box/pallet breakdown"><i class="ri-printer-line"></i> Packing Slip</button>
           <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${w.oid}','flat',this)" title="Whole order, one combined list"><i class="ri-file-list-3-line"></i> Flat List</button>
           <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${w.oid}',this)" title="Progress + shipping labels"><i class="ri-price-tag-3-line"></i> Labels</button>
         </div>` : ''}
-        <button class="btn btn-green btn-block btn-lg${readyInfo && readyInfo.ready ? ' ready-to-finish' : ''}"
-          onclick="endWork('${w.id}','${s}')" ${inf ? 'disabled' : ''}
-          title="${notReadyYet ? 'Tap to finish early — you can flag or force-complete what\'s left' : ''}">
-          <i class="ri-checkbox-circle-line"></i> ${notReadyYet ? `Finish early (${readyInfo.done}/${readyInfo.total} scanned)` : SELABEL[s]}
-        </button>
+        <div id="finishArea_${w.id}">${renderFinishAreaHtml(w)}</div>
         ${s==='INSP' ? `<div style="font-size:10.5px;color:var(--t3);text-align:center;margin-top:6px;line-height:1.4"><i class="ri-information-line"></i> 같은 오더를 여러 명이 나눠서 검수 중이라면, <b style="color:var(--t2)">각자 자기 화면에서 직접 눌러야</b> 내 몫이 저장됩니다</div>` : ''}
         ${s==='INSP' ? `<button class="btn" style="width:100%;justify-content:center;margin-top:8px;padding:10px;font-size:12.5px;font-weight:600;color:var(--t2)" onclick="hideInspSession('${w.id}')" title="이 오더에서 완전히 나갑니다 — 더 이상 Active로 표시되지 않습니다. 스캔 진행상황은 그대로 저장되어 있어서, 나중에 이 오더를 다시 선택하면 중단한 곳부터 이어집니다">
           <i class="ri-logout-box-r-line" style="font-size:14px"></i> 나가기 (진행 상황 저장됨)
