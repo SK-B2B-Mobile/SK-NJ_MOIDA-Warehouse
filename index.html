@@ -1809,14 +1809,14 @@ function renderDashTable(){
       <td><span class="num">${totalQty||'—'}</span></td>
       <td><span class="num" style="color:var(--blue)">${totalNet?fmtMin(totalNet):'—'}</span></td>
       <td>${orderProgressBar(o.id)}</td>
-      <td><button class="btn btn-sm" onclick="showOrderDetail('${o.id}')"><i class="ri-eye-line"></i></button></td>
+      <td><button class="btn btn-sm" title="상세보기" onclick="showOrderDetail('${o.id}')"><i class="ri-file-list-3-line"></i></button></td>
     </tr>`;
   });
 
   document.getElementById('dashTable').innerHTML = `<div class="card" style="padding:0;overflow-x:auto;border-radius:var(--r2)">
     <table class="dash-tbl" style="min-width:920px"><thead><tr>
       <th>Order</th><th>Ch.</th><th>Customer</th><th>Age</th><th>Workers</th>
-      <th>Items</th><th>QTY</th><th>Net time</th><th>Progress</th><th></th>
+      <th>Items</th><th>QTY</th><th>Net time</th><th>Progress</th><th>상세보기</th>
     </tr></thead><tbody>${trs.join('')}</tbody></table></div>`;
 
   const pg = document.getElementById('dashPager');
@@ -1910,14 +1910,16 @@ window.showOrderDetail = function(oid){
         : (w.pallets!==null&&done?`${fmtPallets(w.pallets)} pallets`:'');
       const inspBadge = stage==='INSP' && done && w.inspResult
         ? ` <span class="badge ${w.inspResult==='PASS'?'b-pass':'b-issue'}" style="font-size:10px;padding:2px 8px">${w.inspResult}</span>` : '';
-      // v14.68 — lets a worker correct their OWN already-saved session's
-      // pallet/box assignment (or a manager, any session) even after the
-      // session has fully ended and its box-detail rows are already on
-      // InspectionResults — see openPostSessionBoxList. Shown only when
-      // there's a real chance of something to edit (INSP + ended) and the
-      // viewer is either that session's own worker or a logged-in manager.
-      const boxEditBtn = stage==='INSP' && done && (w.w===CW || _mgrOK)
-        ? `<button class="btn btn-sm" style="padding:2px 7px;margin-left:6px;color:var(--purple);border-color:var(--purple-bd)" title="박스/팔렛 배정 수정" onclick="event.stopPropagation();openPostSessionBoxList('${w.id}')"><i class="ri-archive-2-line"></i></button>` : '';
+      // v14.69 — lets anyone logged in correct ANY session's already-saved
+      // pallet/box assignment, even after that session fully ended and its
+      // box-detail rows are already on InspectionResults — see
+      // openPostSessionBoxList, which pulls EVERY ended INSP session on
+      // this order (not just this one row's), same "any known worker can
+      // correct any SKU on this order" rule the SKU-issue tool already
+      // uses (see openSkuIssueModal/saveSkuIssue) — no longer gated to
+      // "your own session or a logged-in manager" (v14.68's narrower rule).
+      const boxEditBtn = stage==='INSP' && done
+        ? `<button class="btn btn-sm" style="padding:2px 7px;margin-left:6px;color:var(--purple);border-color:var(--purple-bd)" title="박스/팔렛 배정 수정" onclick="event.stopPropagation();openPostSessionBoxList('${oid}')"><i class="ri-archive-2-line"></i></button>` : '';
       html += `<div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 11px;margin-bottom:4px;font-size:12px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">${w.w}</span>
@@ -2690,52 +2692,79 @@ window.saveSkuBoxSplit = function(){
 // ── Post-session-end pallet/box reassignment — v14.68 ──────────────
 // Same redistribution idea as openSkuBoxModal just above, but for a
 // session that's ALREADY ended and saved to InspectionResults — reached
-// from showOrderDetail's per-entry row via the archive icon next to
-// "Done" (own entries only, unless a manager is logged in). Unlike
-// openSkuBoxModal, there's no local scan state to keep in sync: every
-// open re-fetches live from the server (same call reprintPackingSlip
-// uses) and every save writes straight back to the sheet via the
-// updateBoxAssignment_ server op, which enforces the same "rows must sum
-// to exactly the recorded total" rule server-side too (there's no
-// client-side cap to lean on once a session has already ended).
+// from showOrderDetail's per-entry row (or the Manager Entries table) via
+// the archive icon next to "Done". v14.69 — this now pulls EVERY ended
+// INSP session on the whole order, not just the one row's own entryId, so
+// clicking ANY row's icon (even one with no box data of its own, like an
+// auto-closed "Manager" session) shows the order's real data — same "any
+// known worker can correct any SKU on this order" rule the SKU-issue tool
+// already uses (openSkuIssueModal/saveSkuIssue), no longer gated to "your
+// own session or a logged-in manager". There's no local scan state to
+// keep in sync: every open re-fetches live from the server and every save
+// writes straight back via updateBoxAssignment_, which enforces the same
+// "rows must sum to exactly the recorded total" rule server-side too.
 let _postBoxList = null;
 let _postBoxEdit = null;
-window.openPostSessionBoxList = async function(entryId){
-  const w = S.works.find(x => x.id === entryId); if (!w) return;
-  if (!(w.w === CW || _mgrOK)) { toast('본인이 끝낸 세션이거나 매니저 로그인이 필요합니다', 'err'); return; }
+window.openPostSessionBoxList = async function(oid){
+  const entries = S.works.filter(w => w.oid === oid && w.stage === 'INSP' && w.endT);
+  if (!entries.length) { toast('이 주문에 완료된 검수 세션이 없습니다', 'err'); return; }
   toast('불러오는 중...', '');
-  const out = await apiOp('getInspectionResults', { entryId });
-  if (!out.net || !out.res.ok) { toast('⚠ 불러오지 못했습니다', 'err'); return; }
-  const boxRows = (out.res.rows || []).filter(r => r.boxNum);
-  if (!boxRows.length) { toast('이 세션에 저장된 박스/팔렛 데이터가 없습니다', 'err'); return; }
-  const byKey = {};
-  boxRows.forEach(r => {
-    const key = r.barcode || r.sku;
-    byKey[key] = byKey[key] || { sku:r.sku, barcode:r.barcode, name:r.name, total:0, rows:[] };
-    byKey[key].total += (r.packedQty || 0);
-    byKey[key].rows.push({ n:r.boxNum, q:r.packedQty||0 });
+  const perEntry = await Promise.all(entries.map(e => apiOp('getInspectionResults', { entryId: e.id })));
+  const items = [];
+  entries.forEach((e, i) => {
+    const out = perEntry[i];
+    if (!out.net || !out.res.ok) return;
+    const boxRows = (out.res.rows || []).filter(r => r.boxNum);
+    if (!boxRows.length) return;
+    const byKey = {};
+    boxRows.forEach(r => {
+      const key = r.barcode || r.sku;
+      byKey[key] = byKey[key] || { sku:r.sku, barcode:r.barcode, name:r.name, total:0, rows:[] };
+      byKey[key].total += (r.packedQty || 0);
+      byKey[key].rows.push({ n:r.boxNum, q:r.packedQty||0 });
+    });
+    Object.keys(byKey).forEach(k => items.push(Object.assign({ entryId:e.id, worker:e.w, key:k }, byKey[k])));
   });
-  _postBoxList = { entryId, items: Object.keys(byKey).map(k => byKey[k]) };
+  if (!items.length) { toast('이 주문에 저장된 박스/팔렛 데이터가 없습니다', 'err'); return; }
+  _postBoxList = { oid, items };
   renderPostBoxList();
 };
 function renderPostBoxList(){
   const st = _postBoxList; if (!st) return;
+  // Group the (entryId, sku) rows by SKU first — a SKU touched by only
+  // one worker's session renders exactly as before; one split across
+  // more than one session's own box numbering shows each session's own
+  // group separately (see the comment on the server op for why these
+  // aren't merged into one combined redistribution).
+  const bySku = {};
+  st.items.forEach(it => {
+    bySku[it.key] = bySku[it.key] || { sku: it.sku, barcode: it.barcode, name: it.name, entries: [] };
+    bySku[it.key].entries.push(it);
+  });
+  const skuGroups = Object.values(bySku);
   const html = `
     <div style="font-size:15px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:8px">
-      <i class="ri-archive-2-line" style="color:var(--purple)"></i> 박스/팔렛 배정 수정
+      <i class="ri-archive-2-line" style="color:var(--purple)"></i> 박스/팔렛 배정 수정 — 주문 전체
     </div>
     <div style="font-size:10.5px;color:var(--t3);background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 10px;margin-bottom:12px;line-height:1.6">
-      <i class="ri-information-line"></i> 이미 저장된 기록을 지금 막 다시 불러온 것 — 태그를 눌러 팔렛을 다시 나눌 수 있습니다. 저장하면 구글시트에 바로 반영됩니다.
+      <i class="ri-information-line"></i> ${st.oid}의 완료된 모든 검수 세션에서 가져온 것 — 누가 스캔했는지와 무관하게 전체를 보고 고칠 수 있습니다. 태그를 눌러 팔렛을 다시 나누면 바로 구글시트에 반영됩니다.
     </div>
-    ${st.items.map(it => {
-      const keyEsc = String(it.barcode||it.sku).replace(/'/g, "\\'");
+    ${skuGroups.map(g => {
+      const multi = g.entries.length > 1;
       return `<div style="padding:9px 2px;border-bottom:1px solid var(--bd)">
-        <div style="font-family:var(--mono);font-size:12px;font-weight:700">${it.sku||'—'}${it.barcode?` <span style="color:var(--t3);font-weight:500">· ${it.barcode}</span>`:''}</div>
-        <div style="font-size:10.5px;color:var(--t3);margin:1px 0 6px">${(it.name||'').replace(/</g,'&lt;')}</div>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;gap:4px;flex-wrap:wrap">${it.rows.sort((a,b)=>a.n-b.n).map(r => `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 7px;cursor:pointer;background:var(--blue-bg);border:1px solid var(--blue-bd);color:var(--blue)" onclick="openPostSessionBoxModal('${keyEsc}')"><i class="ri-archive-2-line"></i> ${r.n} · ${r.q}</span>`).join('')}</div>
-          <span style="font-family:var(--mono);font-weight:800;color:var(--green);font-size:12px">${it.total.toLocaleString()}</span>
-        </div>
+        <div style="font-family:var(--mono);font-size:12px;font-weight:700">${g.sku||'—'}${g.barcode?` <span style="color:var(--t3);font-weight:500">· ${g.barcode}</span>`:''}</div>
+        <div style="font-size:10.5px;color:var(--t3);margin:1px 0 7px">${(g.name||'').replace(/</g,'&lt;')}</div>
+        ${g.entries.map(it => {
+          const keyEsc = String(it.key).replace(/'/g, "\\'");
+          const entryIdEsc = String(it.entryId).replace(/'/g, "\\'");
+          return `<div style="margin-bottom:6px">
+            ${multi ? `<div style="font-size:9.5px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px"><i class="ri-user-line"></i> ${it.worker} 세션 · 총 ${it.total.toLocaleString()}</div>` : ''}
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="display:flex;gap:4px;flex-wrap:wrap">${it.rows.sort((a,b)=>a.n-b.n).map(r => `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 7px;cursor:pointer;background:var(--blue-bg);border:1px solid var(--blue-bd);color:var(--blue)" onclick="openPostSessionBoxModal('${entryIdEsc}','${keyEsc}')"><i class="ri-archive-2-line"></i> ${r.n} · ${r.q}</span>`).join('')}</div>
+              ${!multi ? `<span style="font-family:var(--mono);font-weight:800;color:var(--green);font-size:12px">${it.total.toLocaleString()}</span>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
       </div>`;
     }).join('')}
     <div style="display:flex;gap:8px;margin-top:14px">
@@ -2745,10 +2774,10 @@ function renderPostBoxList(){
   `;
   openModal(html, { wide:true });
 }
-window.openPostSessionBoxModal = function(key){
+window.openPostSessionBoxModal = function(entryId, key){
   const listSt = _postBoxList; if (!listSt) return;
-  const it = listSt.items.find(x => (x.barcode||x.sku) === key); if (!it) return;
-  _postBoxEdit = { entryId: listSt.entryId, key, sku: it.sku, barcode: it.barcode, name: it.name, total: it.total, rows: it.rows.map(r => ({...r})) };
+  const it = listSt.items.find(x => x.entryId === entryId && x.key === key); if (!it) return;
+  _postBoxEdit = { entryId, key, sku: it.sku, barcode: it.barcode, name: it.name, total: it.total, rows: it.rows.map(r => ({...r})) };
   openModal(`
     <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
       <i class="ri-archive-2-line" style="color:var(--purple)"></i> 팔렛 재배정
@@ -2835,7 +2864,7 @@ window.savePostBoxSplit = async function(){
   if (!out.net || !out.res.ok) {
     const err = out.res && out.res.error;
     const msg = err === 'total_mismatch' ? '⚠ 합계가 서버 기록과 달라 저장할 수 없습니다 — 새로고침 후 다시 시도하세요'
-      : err === 'unauthorized' ? '⚠ 권한이 없습니다 (본인 세션이 아니거나 매니저 로그인이 필요합니다)'
+      : err === 'unauthorized' ? '⚠ 권한이 없습니다 (로그인된 작업자 이름을 확인하세요 — PIN이 설정되어 있다면 PIN도 필요합니다)'
       : '⚠ 저장 실패: ' + (err || 'network');
     toast(msg, 'err');
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ri-check-line"></i> 서버에 저장'; }
@@ -2845,7 +2874,7 @@ window.savePostBoxSplit = async function(){
   // after saving (or just looking at the list again) shows the
   // just-saved split instead of stale pre-save numbers.
   if (_postBoxList) {
-    const it = _postBoxList.items.find(x => (x.barcode||x.sku) === ed.key);
+    const it = _postBoxList.items.find(x => x.entryId === ed.entryId && x.key === ed.key);
     if (it) it.rows = ed.rows.filter(r => r.q > 0).map(r => ({ n:r.n, q:r.q }));
   }
   closeModal();
@@ -8210,7 +8239,7 @@ window.renderEntries = function(){
         <td class="mono" style="color:var(--teal)">${fmtMin(w.netMin)}</td>
         <td style="white-space:nowrap">
           ${(w.stage==='INSP' && w.endT) ? `<button class="btn btn-sm" style="padding:2px 5px" title="Reprint packing slip" onclick="reprintPackingSlip('${w.id}')"><i class="ri-printer-line"></i></button>` : ''}
-          ${(w.stage==='INSP' && w.endT) ? `<button class="btn btn-sm" style="padding:2px 5px;color:var(--purple)" title="박스/팔렛 배정 수정" onclick="openPostSessionBoxList('${w.id}')"><i class="ri-archive-2-line"></i></button>` : ''}
+          ${(w.stage==='INSP' && w.endT) ? `<button class="btn btn-sm" style="padding:2px 5px;color:var(--purple)" title="박스/팔렛 배정 수정" onclick="openPostSessionBoxList('${w.oid}')"><i class="ri-archive-2-line"></i></button>` : ''}
           ${!w.endT ? `<button class="btn btn-sm" style="color:var(--amber);padding:2px 5px" title="Force end — closes this stuck/open session now (keeps its net time), freeing this worker to start other work" onclick="forceEndEntry('${w.id}')"><i class="ri-stop-circle-line"></i></button>` : ''}
           <button class="btn btn-sm" style="padding:2px 5px" title="Edit" onclick="editEntryModal('${w.id}')"><i class="ri-edit-line"></i></button>
           <button class="btn btn-sm" style="color:var(--red);padding:2px 5px" title="Delete" onclick="delEntry('${w.id}')"><i class="ri-delete-bin-line"></i></button>
