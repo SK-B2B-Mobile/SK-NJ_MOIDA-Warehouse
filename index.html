@@ -15,7 +15,7 @@
 :root{
   --bg:#080c12;--bg2:#0f1520;--bg3:#161e2e;--bg4:#1d2840;
   --bd:rgba(255,255,255,.07);--bd2:rgba(255,255,255,.14);
-  --t:#eef2f7;--t2:#b4bfcc;--t3:#6b7a8d;
+  --t:#eef2f7;--t2:#b4bfcc;--t3:#6b7a8d;--t4:#4b5868;--gray-bright:#cbd5e1;
   --blue:#3b82f6;--blue2:#2563eb;--blue-bg:rgba(59,130,246,.1);--blue-bd:rgba(59,130,246,.28);
   --green:#22c55e;--green-bg:rgba(34,197,94,.1);--green-bd:rgba(34,197,94,.28);
   --amber:#f59e0b;--amber-bg:rgba(245,158,11,.1);--amber-bd:rgba(245,158,11,.28);
@@ -149,8 +149,30 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .dash-tbl tbody tr:hover td{background:rgba(255,255,255,.022)}
 .dash-tbl tr.sla-row td:first-child{box-shadow:inset 3px 0 0 var(--red)}
 .dash-tbl .oid{font-family:var(--mono);font-weight:800;font-size:15px;color:var(--t);letter-spacing:-.2px}
+.dash-tbl .oid.st-wait{color:var(--gray-bright)}
+.dash-tbl .oid.st-active{color:var(--blue)}
+.dash-tbl .oid.st-done{color:var(--green)}
+.dash-tbl .oid.st-sla{color:var(--red)}
 .dash-tbl .num{font-family:var(--mono);font-size:14px;font-weight:600}
 .dash-tbl .dim{font-size:14px;color:var(--t2)}
+.newtag{display:inline-block;background:rgba(59,130,246,.15);color:var(--blue);border:1px solid var(--blue-bd);border-radius:5px;font-size:9px;font-weight:800;padding:1px 5px;margin-left:5px;vertical-align:middle;white-space:nowrap}
+/* ── v14.70 — "이석" (idle-timeout) workers on the Dashboard table are
+   likely zero-activity ghost sessions (see onOrderChange/startWork: just
+   SELECTING an order auto-starts a real INSP session — no scan or click
+   required — so a worker who opened an order and then simply never came
+   back for 20min+ shows up here looking identical to someone who actually
+   did real work and stepped away). Keep the record (nothing is deleted or
+   hidden), but de-emphasize it — small, muted, dashed — so it doesn't
+   visually compete with real active/finished work. "나가기" (manual pause)
+   is untouched: that's a deliberate exit, a much stronger signal of real
+   prior work. */
+.wname-ghost{font-weight:500;color:var(--t4);font-size:11px}
+.ghost-badge{display:inline-flex;align-items:center;gap:3px;border-radius:5px;padding:0 5px;font-size:9px;font-weight:600;border:1px dashed rgba(255,255,255,.14);color:var(--t4);background:transparent;vertical-align:middle}
+/* ── v14.70 — pager buttons sized for a handheld scanner screen (~390px
+   wide) and gloved/thick-finger taps, see dashboard_pagination_simulation. */
+.pgbtn{width:38px;height:38px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--bg4);color:var(--t);font-size:17px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle}
+.pgbtn:disabled{opacity:.35;cursor:not-allowed}
+.pgnum{display:inline-block;min-width:70px;text-align:center;font-size:12px;color:var(--t2);vertical-align:middle}
 
 /* ── KPI table ── */
 .kpi-tbl{width:100%;border-collapse:collapse}
@@ -211,6 +233,17 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
 .start-card.pick{border-color:var(--blue-bd)}
 .start-card.insp{border-color:var(--purple-bd)}
 .start-card.pall{border-color:var(--teal-bd)}
+
+/* ── v14.70 — explicit "started" confirmation shown the instant an order
+   is selected in INSPECTION (auto-start-on-select — see startWork/
+   onOrderChange — gives no other feedback besides a toast that can be
+   missed and the dropdown resetting to blank, which used to read as
+   "did my selection even register?"). See
+   ghost_session_and_start_feedback_simulation. */
+.start-confirm{display:flex;align-items:center;gap:10px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:12px 14px;margin-top:10px;animation:startpop .2s ease-out}
+@keyframes startpop{0%{transform:scale(.96);opacity:0}100%{transform:scale(1);opacity:1}}
+.session-card.just-started{animation:justglow 1.3s ease-in-out 2}
+@keyframes justglow{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 4px var(--purple-bd)}}
 
 /* Activity row */
 .act-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd);font-size:14px}
@@ -734,6 +767,13 @@ let _syncN = 0;
 let _dp = 0;                   // dashboard page
 let _dFilter = 'all';
 let _startLock = false;
+// v14.70 — which just-started work entry (if any) gets the one-time
+// "✅ started" confirmation box + glow highlight on its session card (see
+// doStartWork/migrateWidKeyedState/renderStageContent) — cleared after a
+// few seconds so it never lingers or reappears on an unrelated re-render.
+let _justStartedWid = null;
+let _justStartedTimer = null;
+const SSTAGE_KO = {PICK:'피킹', INSP:'검수', PALL:'팔레타이징'};
 let _loginSel = '';
 let _orderItemsCache = {};    // oid -> [{sku,name,barcode,reqQty,rack}]
 let _orderItemsLoading = {};  // oid -> true while fetching
@@ -1609,10 +1649,37 @@ function fmtAge(h){
   if (h < 24) return Math.floor(h) + 'h';
   return (h/24).toFixed(1) + 'd';
 }
+// v14.70 — SLA is measured in actual WORKING hours elapsed since the order
+// was created, not calendar/wall-clock hours — per the warehouse's actual
+// hours (08:30–17:30, lunch 12:00–13:00 excluded, weekends excluded). An
+// order that lands Friday at 17:00 doesn't silently burn 2+ calendar days
+// of "SLA risk" over the weekend; its clock simply doesn't move until
+// Monday 08:30, same as the NetMinutes/KPI clock already does (see bizNet,
+// which this reuses directly — same business-hours definition everywhere
+// in the app, not a second slightly-different one). The Age column itself
+// stays calendar time (orderAgeH/fmtAge) — that's the intuitive "how long
+// ago" a worker glances at; only the SLA threshold check uses working time.
+function orderBizAgeH(o){
+  if (!o.at) return null;
+  const d = new Date(String(o.at).replace(' ', 'T'));
+  if (isNaN(d)) return null;
+  const m = bizNet(d, new Date());
+  return m === null ? 0 : m / 60;
+}
 function isSLA(o){
   if (orderState(o.id) === 'done') return false;
-  const h = orderAgeH(o);
+  const h = orderBizAgeH(o);
   return h !== null && h >= SLA_HOURS;
+}
+// v14.70 — "NEW" is purely time-based (calendar time since creation) and
+// completely independent of orderState's color — a brand new order can be
+// gray(wait)+NEW or blue(active)+NEW at the same time; it just can't ever
+// be red(SLA), since SLA requires SLA_HOURS of WORKING time to have passed
+// first, which is always much more than NEW_HOURS of calendar time.
+const NEW_HOURS = 1;
+function isNewOrder(o){
+  const h = orderAgeH(o);
+  return h !== null && h < NEW_HOURS;
 }
 function orderProgressBar(oid){
   const a = orderStageSummary(oid);
@@ -1628,7 +1695,11 @@ function orderProgressBar(oid){
 }
 
 // ── DASHBOARD ──
-const D_PER = 20;
+// v14.70 — dropped from 20 to 5: on the real handheld scanner screens
+// (~390px wide) a 20-row table meant endless scrolling; 5 + a page control
+// matches the B2B-style list UI the user asked to match. See
+// dashboard_pagination_simulation.
+const D_PER = 5;
 
 R.dash = function(){
   let wait=0, pickA=0, inspA=0, pallA=0, done=0, slaN=0;
@@ -1722,8 +1793,20 @@ function renderDashTable(){
            o.cu.toUpperCase().includes(sq) || ws.some(w => w.w.toUpperCase().includes(sq));
   });
 
-  // SLA-risk orders float to the top so they can't be missed
-  rows = [...rows].sort((a,b) => (isSLA(b)?1:0) - (isSLA(a)?1:0));
+  // v14.70 — three-tier sort: ① SLA-risk always first (safety — can't be
+  // missed), ② everything NOT done (waiting+active), newest-created first,
+  // ③ everything done, also newest-created first — but a tier-2 order can
+  // never be outranked by a tier-3 one no matter how recently it finished.
+  // e.g. a 3-day-old still-open order always sits above an order finished
+  // minutes ago, so a long-neglected order can't get buried under today's
+  // completions. See dashboard_final_simulation.
+  const tierOf = o => isSLA(o) ? 0 : (orderState(o.id) === 'done' ? 2 : 1);
+  const createdMs = o => { const d = o.at ? new Date(String(o.at).replace(' ','T')) : null; return (d && !isNaN(d)) ? d.getTime() : 0; };
+  rows = [...rows].sort((a,b) => {
+    const ta = tierOf(a), tb = tierOf(b);
+    if (ta !== tb) return ta - tb;
+    return createdMs(b) - createdMs(a);
+  });
 
   const total = rows.length, pages = Math.max(1, Math.ceil(total / D_PER));
   if (_dp >= pages) _dp = pages - 1; if (_dp < 0) _dp = 0;
@@ -1763,9 +1846,21 @@ function renderDashTable(){
       if (activeBy[n]) {
         const a = activeBy[n];
         if (a.paused) {
-          const reason = a.idle ? 'idle_timeout' : 'manual';
-          const badgeLabel = a.idle ? '⏱ 이석' : '⏸ 나가기';
-          return `<span style="white-space:nowrap;opacity:.85"><span style="color:${PCOL[reason]};font-weight:600">${n}</span> <span class="stat-badge dashed" style="color:${PCOL[reason]};border-color:${PBDCOL[reason]};background:${PFILLCOL[reason]}">${a.stage} ${badgeLabel}</span></span>`;
+          // v14.70 — "이석"(idle_timeout) is the SYSTEM's own guess, not a
+          // deliberate action — and since just SELECTING an order already
+          // starts a real session (see startWork/onOrderChange), a worker
+          // who opened an order and never touched it again looks exactly
+          // like one who scanned for an hour and stepped away. Can't tell
+          // those apart from here, so de-emphasize ALL 이석 — small, muted,
+          // dashed — instead of the bold amber treatment every other state
+          // gets. "나가기" (manual) stays exactly as before: that's the
+          // worker deliberately exiting, a much stronger signal of real
+          // prior work. See ghost_session_and_start_feedback_simulation.
+          if (a.idle) {
+            return `<span style="white-space:nowrap" title="${a.stage} — 이석(자동 일시정지) — 실제 작업 여부는 상세보기에서 확인"><span class="wname-ghost">${n}</span> <span class="ghost-badge">${a.stage} 이석</span></span>`;
+          }
+          const reason = 'manual';
+          return `<span style="white-space:nowrap;opacity:.85"><span style="color:${PCOL[reason]};font-weight:600">${n}</span> <span class="stat-badge dashed" style="color:${PCOL[reason]};border-color:${PBDCOL[reason]};background:${PFILLCOL[reason]}">${a.stage} ⏸ 나가기</span></span>`;
         }
         return `<span style="white-space:nowrap"><span style="color:${SCOL[a.stage]};font-weight:700">${n}</span> <span class="stat-badge" style="color:${SCOL[a.stage]};border-color:${SBDCOL[a.stage]};background:${SFILLCOL[a.stage]}"><span class="wdot" style="background:${SCOL[a.stage]};margin-right:0"></span>${a.stage}</span></span>`;
       }
@@ -1798,9 +1893,15 @@ function renderDashTable(){
     const isMe  = ws.some(w => w.w === CW);
     const sla   = isSLA(o);
     const ageH  = orderAgeH(o);
-    const isDone = orderState(o.id) === 'done';
+    const st    = orderState(o.id);
+    // v14.70 — order-ID color is state-based + permanent: gray=waiting,
+    // blue=active, green=done, red=SLA (always wins, regardless of state).
+    // NEW is time-based + temporary (orderAgeH < NEW_HOURS) and fully
+    // independent of color — see isNewOrder/dashboard_final_simulation.
+    const stCls = sla ? 'st-sla' : (st === 'active' ? 'st-active' : (st === 'done' ? 'st-done' : 'st-wait'));
+    const isNew = isNewOrder(o);
     return `<tr class="${sla?'sla-row':''}"${isMe?' style="background:rgba(59,130,246,.04)"':''}>
-      <td><span class="oid"${isDone?' style="color:var(--green)"':''}>${o.id}</span>${sla?' <span class="badge b-sla" style="font-size:10px;padding:2px 8px">SLA</span>':''}</td>
+      <td><span class="oid ${stCls}">${o.id}</span>${isNew?' <span class="newtag">NEW</span>':''}${sla?' <span class="badge b-sla" style="font-size:10px;padding:2px 8px">SLA</span>':''}</td>
       <td><span class="dim">${o.ch}</span></td>
       <td><span class="dim">${o.cu}</span></td>
       <td><span class="num" style="${sla?'color:var(--red);font-weight:800':'color:var(--t2)'}">${fmtAge(ageH)}</span></td>
@@ -1819,10 +1920,21 @@ function renderDashTable(){
       <th>Items</th><th>QTY</th><th>Net time</th><th>Progress</th><th>상세보기</th>
     </tr></thead><tbody>${trs.join('')}</tbody></table></div>`;
 
+  // v14.70 — bigger, B2B-list-style pager (38×38px buttons) sized for the
+  // real handheld scanner screens and gloved/thick-finger taps — see
+  // dashboard_pagination_simulation.
   const pg = document.getElementById('dashPager');
+  const from = total ? _dp*D_PER + 1 : 0, to = Math.min(total, _dp*D_PER + D_PER);
   pg.innerHTML = pages > 1
-    ? `<button class="btn btn-sm" onclick="_dp--;renderDashTable()" ${_dp===0?'disabled':''}><i class="ri-arrow-left-s-line"></i></button><span style="font-size:11px;color:var(--t2)">${_dp+1}/${pages} (${total})</span><button class="btn btn-sm" onclick="_dp++;renderDashTable()" ${_dp>=pages-1?'disabled':''}><i class="ri-arrow-right-s-line"></i></button>`
-    : `<span style="font-size:11px;color:var(--t3)">${total} order${total>1?'s':''}</span>`;
+    ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r);padding:8px 10px;margin-top:10px">
+        <span style="font-size:11px;color:var(--t3)">${from}–${to} / ${total}건</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="pgbtn" onclick="_dp--;renderDashTable()" ${_dp===0?'disabled':''}><i class="ri-arrow-left-s-line"></i></button>
+          <span class="pgnum">${_dp+1} / ${pages}</span>
+          <button class="pgbtn" onclick="_dp++;renderDashTable()" ${_dp>=pages-1?'disabled':''}><i class="ri-arrow-right-s-line"></i></button>
+        </div>
+      </div>`
+    : `<div style="text-align:center;padding:8px 0"><span style="font-size:11px;color:var(--t3)">${total} order${total>1?'s':''}</span></div>`;
 }
 
 // v14.66 — inspNote is still stored/sent as one flattened string (see
@@ -4043,8 +4155,23 @@ function renderStageContent(){
       // so it stays exactly as before (always clickable).
       const gated = s === 'INSP' && !!readyInfo;
       const notReadyYet = gated && !readyInfo.ready;
+      // v14.70 — see _justStartedWid: a one-time "✅ started" confirmation
+      // box right above this session's own card, plus a brief glow on the
+      // card itself, so selecting an order never again looks like it
+      // silently did nothing (the dropdown resetting to blank used to be
+      // the only visible change).
+      const justStarted = w.id === _justStartedWid;
+      const startConfirmHtml = justStarted ? `
+      <div class="start-confirm">
+        <i class="ri-checkbox-circle-fill" style="font-size:20px;color:var(--green);flex-shrink:0"></i>
+        <div>
+          <div style="font-weight:800;font-size:13px;color:var(--green)">${w.oid} ${SSTAGE_KO[s]||s} 시작됨</div>
+          <div style="font-size:11px;color:var(--t2)">아래 세션 카드에서 바로 진행하세요</div>
+        </div>
+      </div>` : '';
       return `
-      <div class="session-card ${bdcl}" id="sc_${w.id}" style="margin-bottom:10px">
+      ${startConfirmHtml}
+      <div class="session-card ${bdcl}${justStarted?' just-started':''}" id="sc_${w.id}" style="margin-bottom:10px">
         <div class="session-top">
           <div>
             <div class="session-title">${w.oid}</div>
@@ -5103,6 +5230,15 @@ function doStartWork(oid, items, qty, pageFrom, pageTo, reinspect){
     pageFrom: pageFrom!==undefined?pageFrom:null, pageTo: pageTo!==undefined?pageTo:null
   };
   S.works.push(entry);
+  // v14.70 — flag this entry for the one-time "✅ started" confirmation +
+  // glow (see renderStageContent) — expires on its own so a stale flag
+  // never resurfaces on some later unrelated re-render.
+  _justStartedWid = tid;
+  clearTimeout(_justStartedTimer);
+  _justStartedTimer = setTimeout(() => {
+    _justStartedWid = null;
+    if (curPage() === 'work') renderStageContent();
+  }, 3000);
   if (reinspect) {
     // v14.49 — mark this worker's LOCAL scan state as a reinspect session
     // right away so every room-cap check (othersQtyForCap) stops treating
@@ -5211,6 +5347,7 @@ function doStartWork(oid, items, qty, pageFrom, pageTo, reinspect){
 // window (which can now include the very first scan that started the
 // session) would silently disappear from the UI the moment the swap happens.
 function migrateWidKeyedState(oldId, newId){
+  if (_justStartedWid === oldId) _justStartedWid = newId;
   if (_scanState[oldId]) {
     _scanState[newId] = _scanState[oldId];
     delete _scanState[oldId];
