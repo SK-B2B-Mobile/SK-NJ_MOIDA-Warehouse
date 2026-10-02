@@ -772,6 +772,7 @@ let _startLock = false;
 // doStartWork/migrateWidKeyedState/renderStageContent) — cleared after a
 // few seconds so it never lingers or reappears on an unrelated re-render.
 let _justStartedWid = null;
+let _justStartedKind = 'start'; // 'start' (brand-new session) or 'resume' (re-selected an already-open session)
 let _justStartedTimer = null;
 const SSTAGE_KO = {PICK:'피킹', INSP:'검수', PALL:'팔레타이징'};
 let _loginSel = '';
@@ -1923,18 +1924,23 @@ function renderDashTable(){
   // v14.70 — bigger, B2B-list-style pager (38×38px buttons) sized for the
   // real handheld scanner screens and gloved/thick-finger taps — see
   // dashboard_pagination_simulation.
+  // v14.71 — always render the full pager bar, even with only one page
+  // (both nav buttons simply disabled) — showing the 5-per-page UI
+  // consistently regardless of how many orders currently exist, instead of
+  // silently falling back to plain text whenever there happens to be ≤5
+  // orders total. (With exactly 5 orders, D_PER=5 is genuinely already
+  // active — Math.ceil(5/5)=1 page — there was just nothing to visibly
+  // prove it before this.)
   const pg = document.getElementById('dashPager');
   const from = total ? _dp*D_PER + 1 : 0, to = Math.min(total, _dp*D_PER + D_PER);
-  pg.innerHTML = pages > 1
-    ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r);padding:8px 10px;margin-top:10px">
-        <span style="font-size:11px;color:var(--t3)">${from}–${to} / ${total}건</span>
-        <div style="display:flex;align-items:center;gap:6px">
-          <button class="pgbtn" onclick="_dp--;renderDashTable()" ${_dp===0?'disabled':''}><i class="ri-arrow-left-s-line"></i></button>
-          <span class="pgnum">${_dp+1} / ${pages}</span>
-          <button class="pgbtn" onclick="_dp++;renderDashTable()" ${_dp>=pages-1?'disabled':''}><i class="ri-arrow-right-s-line"></i></button>
-        </div>
-      </div>`
-    : `<div style="text-align:center;padding:8px 0"><span style="font-size:11px;color:var(--t3)">${total} order${total>1?'s':''}</span></div>`;
+  pg.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg3);border:1px solid var(--bd2);border-radius:var(--r);padding:8px 10px;margin-top:10px">
+      <span style="font-size:11px;color:var(--t3)">${total ? `${from}–${to} / ${total}건` : '0건'}</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="pgbtn" onclick="_dp--;renderDashTable()" ${_dp===0?'disabled':''}><i class="ri-arrow-left-s-line"></i></button>
+        <span class="pgnum">${_dp+1} / ${pages}</span>
+        <button class="pgbtn" onclick="_dp++;renderDashTable()" ${_dp>=pages-1?'disabled':''}><i class="ri-arrow-right-s-line"></i></button>
+      </div>
+    </div>`;
 }
 
 // v14.66 — inspNote is still stored/sent as one flattened string (see
@@ -4165,8 +4171,8 @@ function renderStageContent(){
       <div class="start-confirm">
         <i class="ri-checkbox-circle-fill" style="font-size:20px;color:var(--green);flex-shrink:0"></i>
         <div>
-          <div style="font-weight:800;font-size:13px;color:var(--green)">${w.oid} ${SSTAGE_KO[s]||s} 시작됨</div>
-          <div style="font-size:11px;color:var(--t2)">아래 세션 카드에서 바로 진행하세요</div>
+          <div style="font-weight:800;font-size:13px;color:var(--green)">${w.oid} ${SSTAGE_KO[s]||s} ${_justStartedKind==='resume'?'세션 재개됨':'시작됨'}</div>
+          <div style="font-size:11px;color:var(--t2)">아래 세션 카드에서 바로 ${_justStartedKind==='resume'?'이어서 진행하세요':'진행하세요'}</div>
         </div>
       </div>` : '';
       return `
@@ -4698,6 +4704,15 @@ async function onOrderChange(){
       // showing it as done. resumeWork_ checks order-completion before it
       // even looks at whether THIS entry was paused, so calling it here
       // unconditionally closes that gap for both cases at once.
+      // v14.71 — this whole branch is async and, until now, changed NOTHING
+      // visible until the resumeWork round-trip finished — on a slow
+      // connection the screen just sat on the stale "Select an order above
+      // to begin" placeholder with the dropdown already showing the new
+      // value, which is exactly the "did my selection register?" confusion
+      // reported. Show an immediate, synchronous "checking..." state the
+      // instant this branch is entered, before awaiting anything.
+      const wrapNow = document.getElementById('inspScanStartWrap');
+      if (wrapNow) wrapNow.innerHTML = `<div style="font-size:12px;color:var(--t2);text-align:center;padding:10px 0"><i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> ${oid} 세션 확인 중...</div>`;
       const worker = WS ? WS.worker : CW, wpin = WS ? WS.wpin : '';
       const results = await Promise.all(myActiveHere.map(w => apiOp('resumeWork', { entryId: w.id, worker, wpin })));
       const blocked = results.find(out => out.net && out.res && out.res.ok === false && out.res.error === 'order_completed');
@@ -4716,6 +4731,27 @@ async function onOrderChange(){
       // excluded from NetMinutes this one time, which is a minor KPI nit,
       // not a safety problem.
       myActiveHere.forEach(w => unhideInspSessionLocal(w.id));
+      // v14.71 — the worker may have already picked a different order while
+      // this resume call was in flight; don't clobber whatever's selected
+      // now with feedback for the old one.
+      if (document.getElementById('workOrder')?.value === oid) {
+        // Same "✅ started" confirmation + glow as a brand-new session (see
+        // _justStartedWid/doStartWork), worded as "재개됨"(resumed) instead
+        // of "시작됨"(started) — selecting an order you already have open
+        // (파란 나가기/이석 상태) used to give NO feedback at all beyond the
+        // dropdown going blank-looking, which was the exact confusion
+        // reported.
+        const resumed = myActiveHere[0];
+        if (resumed) {
+          _justStartedWid = resumed.id;
+          _justStartedKind = 'resume';
+          clearTimeout(_justStartedTimer);
+          _justStartedTimer = setTimeout(() => {
+            _justStartedWid = null;
+            if (curPage() === 'work') renderStageContent();
+          }, 3000);
+        }
+      }
       // v10.11 — selecting an order I'm already actively inspecting has
       // nothing left for the picker card to do (the real scan UI is
       // already below in "My active sessions") — collapse the card back
@@ -5234,6 +5270,7 @@ function doStartWork(oid, items, qty, pageFrom, pageTo, reinspect){
   // glow (see renderStageContent) — expires on its own so a stale flag
   // never resurfaces on some later unrelated re-render.
   _justStartedWid = tid;
+  _justStartedKind = 'start';
   clearTimeout(_justStartedTimer);
   _justStartedTimer = setTimeout(() => {
     _justStartedWid = null;
