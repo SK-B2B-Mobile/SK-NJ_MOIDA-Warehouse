@@ -2908,6 +2908,16 @@ window.saveSkuBoxSplit = function(){
 // "rows must sum to exactly the recorded total" rule server-side too.
 let _postBoxList = null;
 let _postBoxEdit = null;
+// v14.81 — used to only collect rows that ALREADY had a box/pallet number
+// (r.boxNum), so a force-completed SKU (whose summary row carries a real
+// PackedQty but zero box-detail rows — Force Complete never asks which
+// pallet/box the gap it's closing belongs in) was invisible here, with
+// nothing to tap to fix it. Now every SKU with any recorded quantity is
+// collected, and `unassigned` (= the summary row's total minus whatever's
+// already boxed) flags exactly how much still needs a number — 0 for a
+// normally fully-boxed SKU, the whole amount for a force-completed one
+// with no box rows at all, or something in between for a partial case
+// (e.g. scanned-and-boxed up to the network drop, force-completed after).
 window.openPostSessionBoxList = async function(oid){
   const entries = S.works.filter(w => w.oid === oid && w.stage === 'INSP' && w.endT);
   if (!entries.length) { toast('이 주문에 완료된 검수 세션이 없습니다', 'err'); return; }
@@ -2917,18 +2927,32 @@ window.openPostSessionBoxList = async function(oid){
   entries.forEach((e, i) => {
     const out = perEntry[i];
     if (!out.net || !out.res.ok) return;
-    const boxRows = (out.res.rows || []).filter(r => r.boxNum);
-    if (!boxRows.length) return;
+    const allRows = out.res.rows || [];
     const byKey = {};
-    boxRows.forEach(r => {
+    allRows.forEach(r => {
       const key = r.barcode || r.sku;
-      byKey[key] = byKey[key] || { sku:r.sku, barcode:r.barcode, name:r.name, total:0, rows:[] };
-      byKey[key].total += (r.packedQty || 0);
-      byKey[key].rows.push({ n:r.boxNum, q:r.packedQty||0 });
+      if (!key) return;
+      byKey[key] = byKey[key] || { sku:r.sku, barcode:r.barcode, name:r.name, total:0, rows:[], hasSummary:false };
+      if (r.boxNum) {
+        byKey[key].rows.push({ n:r.boxNum, q:r.packedQty||0 });
+      } else if (r.reqQty !== '') {
+        // the summary row — written exactly once per item regardless of
+        // how it was completed; its PackedQty is the true recorded total.
+        byKey[key].total = r.packedQty || 0;
+        byKey[key].hasSummary = true;
+      }
     });
-    Object.keys(byKey).forEach(k => items.push(Object.assign({ entryId:e.id, worker:e.w, key:k }, byKey[k])));
+    Object.keys(byKey).forEach(k => {
+      const it = byKey[k];
+      const boxedSum = it.rows.reduce((s,r) => s + (Number(r.q)||0), 0);
+      if (!it.hasSummary && !it.rows.length) return; // nothing recorded for this SKU at all
+      if (!it.hasSummary) it.total = boxedSum; // defensive fallback — shouldn't normally happen
+      if (it.total <= 0 && !boxedSum) return;
+      const unassigned = Math.max(0, it.total - boxedSum);
+      items.push(Object.assign({ entryId:e.id, worker:e.w, key:k, boxedSum, unassigned }, it));
+    });
   });
-  if (!items.length) { toast('이 주문에 저장된 박스/팔렛 데이터가 없습니다', 'err'); return; }
+  if (!items.length) { toast('이 주문에 저장된 검수 데이터가 없습니다', 'err'); return; }
   _postBoxList = { oid, items };
   renderPostBoxList();
 };
@@ -2945,6 +2969,15 @@ function renderPostBoxList(){
     bySku[it.key].entries.push(it);
   });
   const skuGroups = Object.values(bySku);
+  // v14.82 — order-wide total of still-unassigned quantity, across every
+  // SKU and every ended session. When this is 0, nothing on this order
+  // needs the new scan-to-assign screen at all, so the button is hidden
+  // rather than shown disabled.
+  const totalUnassigned = st.items.reduce((s, it) => s + (it.unassigned || 0), 0);
+  const scanBtnHtml = totalUnassigned > 0 ? `
+    <button type="button" class="btn btn-sm" style="width:100%;border:1px dashed var(--amber-bd);background:var(--amber-bg);color:var(--amber);font-weight:800;margin-bottom:12px;justify-content:center;padding:10px" onclick="openBoxScanRecovery('${st.oid}')">
+      <i class="ri-camera-line"></i> 미배정 ${totalUnassigned.toLocaleString()}개 — 스캔으로 한번에 배정하기
+    </button>` : '';
   const html = `
     <div style="font-size:15px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:8px">
       <i class="ri-archive-2-line" style="color:var(--purple)"></i> 박스/팔렛 배정 수정 — 주문 전체
@@ -2952,6 +2985,7 @@ function renderPostBoxList(){
     <div style="font-size:10.5px;color:var(--t3);background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 10px;margin-bottom:12px;line-height:1.6">
       <i class="ri-information-line"></i> ${st.oid}의 완료된 모든 검수 세션에서 가져온 것 — 누가 스캔했는지와 무관하게 전체를 보고 고칠 수 있습니다. 태그를 눌러 팔렛을 다시 나누면 바로 구글시트에 반영됩니다.
     </div>
+    ${scanBtnHtml}
     ${skuGroups.map(g => {
       const multi = g.entries.length > 1;
       return `<div style="padding:9px 2px;border-bottom:1px solid var(--bd)">
@@ -2960,11 +2994,17 @@ function renderPostBoxList(){
         ${g.entries.map(it => {
           const keyEsc = String(it.key).replace(/'/g, "\\'");
           const entryIdEsc = String(it.entryId).replace(/'/g, "\\'");
+          // v14.81 — a SKU with any unassigned remainder (zero box rows at
+          // all for a force-completed item, or fewer than its recorded
+          // total for a partial one) gets this extra amber tag, alongside
+          // whatever blue "already boxed" tags it has. Tapping either kind
+          // opens the same per-SKU editor.
+          const missTag = it.unassigned > 0 ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 7px;cursor:pointer;background:var(--amber-bg,rgba(245,158,11,.12));border:1px solid var(--amber-bd,rgba(245,158,11,.4));color:var(--amber)" onclick="openPostSessionBoxModal('${entryIdEsc}','${keyEsc}')"><i class="ri-error-warning-line"></i> 미배정 ${it.unassigned.toLocaleString()}</span>` : '';
           return `<div style="margin-bottom:6px">
             ${multi ? `<div style="font-size:9.5px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px"><i class="ri-user-line"></i> ${it.worker} 세션 · 총 ${it.total.toLocaleString()}</div>` : ''}
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <div style="display:flex;gap:4px;flex-wrap:wrap">${it.rows.sort((a,b)=>a.n-b.n).map(r => `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 7px;cursor:pointer;background:var(--blue-bg);border:1px solid var(--blue-bd);color:var(--blue)" onclick="openPostSessionBoxModal('${entryIdEsc}','${keyEsc}')"><i class="ri-archive-2-line"></i> ${r.n} · ${r.q}</span>`).join('')}</div>
-              ${!multi ? `<span style="font-family:var(--mono);font-weight:800;color:var(--green);font-size:12px">${it.total.toLocaleString()}</span>` : ''}
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:5px">
+              <div style="display:flex;gap:4px;flex-wrap:wrap">${it.rows.sort((a,b)=>a.n-b.n).map(r => `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 7px;cursor:pointer;background:var(--blue-bg);border:1px solid var(--blue-bd);color:var(--blue)" onclick="openPostSessionBoxModal('${entryIdEsc}','${keyEsc}')"><i class="ri-archive-2-line"></i> ${r.n} · ${r.q}</span>`).join('')}${missTag}</div>
+              ${!multi ? `<span style="font-family:var(--mono);font-weight:800;color:${it.unassigned>0?'var(--amber)':'var(--green)'};font-size:12px">${it.total.toLocaleString()}</span>` : ''}
             </div>
           </div>`;
         }).join('')}
@@ -2980,7 +3020,21 @@ function renderPostBoxList(){
 window.openPostSessionBoxModal = function(entryId, key){
   const listSt = _postBoxList; if (!listSt) return;
   const it = listSt.items.find(x => x.entryId === entryId && x.key === key); if (!it) return;
-  _postBoxEdit = { entryId, key, sku: it.sku, barcode: it.barcode, name: it.name, total: it.total, rows: it.rows.map(r => ({...r})) };
+  // v14.81 — if this SKU has an unassigned remainder (zero box rows at
+  // all, or fewer than its recorded total), pre-fill one extra row for
+  // exactly that remainder so the manager only has to type the correct
+  // pallet/box NUMBER, not re-figure-out or re-type the quantity. The
+  // suggested number is one past whatever's already in use ANYWHERE on
+  // this order (not just this SKU), so it doesn't collide with a pallet
+  // another SKU already occupies — still freely editable either way.
+  const rows = it.rows.map(r => ({...r}));
+  if (it.unassigned > 0) {
+    const usedNums = [];
+    (listSt.items || []).forEach(x => (x.rows || []).forEach(r => usedNums.push(r.n)));
+    const nextNum = usedNums.length ? Math.max(...usedNums) + 1 : 1;
+    rows.push({ n: nextNum, q: it.unassigned });
+  }
+  _postBoxEdit = { entryId, key, sku: it.sku, barcode: it.barcode, name: it.name, total: it.total, rows };
   openModal(`
     <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
       <i class="ri-archive-2-line" style="color:var(--purple)"></i> 팔렛 재배정
@@ -2989,9 +3043,11 @@ window.openPostSessionBoxModal = function(entryId, key){
       <span class="mono" style="font-size:11.5px;color:var(--t3);white-space:nowrap;flex-shrink:0;padding-top:2px">${it.barcode||it.sku||'—'}</span>
       <span style="font-size:12.5px;color:var(--t);line-height:1.5;flex:1">${(it.name||'').replace(/</g,'&lt;')}</span>
     </div>
-    <div style="background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber);border-radius:var(--r);padding:8px 10px;font-size:10.5px;line-height:1.5;margin-bottom:12px">
+    ${it.unassigned > 0 ? `<div style="background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber);border-radius:var(--r);padding:8px 10px;font-size:10.5px;line-height:1.5;margin-bottom:12px">
+      <i class="ri-error-warning-line"></i> 이 중 <b>${it.unassigned.toLocaleString()}개</b>는 아직 팔렛/박스 번호가 없습니다(강제완료 등으로 끝난 몫) — 아래에서 실제 번호를 입력하세요.
+    </div>` : `<div style="background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber);border-radius:var(--r);padding:8px 10px;font-size:10.5px;line-height:1.5;margin-bottom:12px">
       <i class="ri-error-warning-line"></i> 이미 완료되어 저장된 기록을 직접 고치는 것입니다 — 저장하면 즉시 구글시트에 반영됩니다.
-    </div>
+    </div>`}
     <div style="font-size:11.5px;color:var(--t3);margin-bottom:10px;text-align:center">기록된 총 <b style="color:var(--t)">${it.total.toLocaleString()}</b>개를 다시 나눠보세요</div>
     <div id="postBoxRows"></div>
     <button type="button" class="btn btn-sm" style="width:100%;border-style:dashed;color:var(--blue);margin-bottom:10px" onclick="addPostBoxRow()"><i class="ri-add-line"></i> 번호 추가</button>
@@ -3090,11 +3146,280 @@ window.savePostBoxSplit = async function(){
   // just-saved split instead of stale pre-save numbers.
   if (_postBoxList) {
     const it = _postBoxList.items.find(x => x.entryId === ed.entryId && x.key === ed.key);
-    if (it) it.rows = ed.rows.filter(r => r.q > 0).map(r => ({ n:r.n, q:r.q }));
+    if (it) {
+      it.rows = ed.rows.filter(r => r.q > 0).map(r => ({ n:r.n, q:r.q }));
+      // v14.81 — a save here always covers this SKU's FULL recorded total
+      // (savePostBoxSplit's own guard above refuses to submit otherwise),
+      // so it's always fully assigned afterward regardless of where it
+      // started (fully unboxed, partially boxed, or just redistributed).
+      it.boxedSum = it.total;
+      it.unassigned = 0;
+    }
   }
   closeModal();
   toast('저장되었습니다 — 구글시트에 반영됨', 'ok');
   if (_postBoxList) renderPostBoxList();
+};
+
+// ── Scan-to-assign recovery (v14.82) ─────────────────────────────────
+// The per-SKU typed-number editor above (openPostSessionBoxModal) works
+// fine for one or two items, but a force-completed order can have a
+// dozen+ unassigned SKUs at once (see IM00235008) — typing each one's
+// number and quantity by hand is slow and error-prone. This lets a
+// manager instead pick which pallet/box number they're standing at, then
+// just scan the real barcodes sitting in it: each scan is matched against
+// this order's still-unassigned pool and auto-assigned to the selected
+// number, exactly like a normal inspection scan, EXCEPT the match rule is
+// deliberately different from a normal scan's duplicate-scan check. A
+// normal scan rejects a barcode once its REQUIRED quantity is already
+// met — but every item here already has its required quantity met (that's
+// what "검수 완료" means, force-completed or not). What this screen checks
+// instead is whether that item still has any quantity with NO box/pallet
+// number attached yet — a completely separate fact from whether it's
+// "done" — so a force-completed item (quantity complete, zero box rows)
+// is correctly recognized as fully scannable here, and only an item
+// that's ALREADY fully boxed gets the "already assigned" rejection.
+let _boxRecover = null;
+let _boxRecoverPendingKey = null;
+window.openBoxScanRecovery = async function(oid){
+  const listSt = _postBoxList; if (!listSt || listSt.oid !== oid) return;
+  const buckets = listSt.items.filter(it => it.unassigned > 0).map(it => ({
+    entryId: it.entryId, key: it.key, sku: it.sku, barcode: it.barcode, name: it.name,
+    total: it.total, existingRows: it.rows.map(r => ({...r})),
+    remaining: it.unassigned, newRows: {} // boxNum -> qty, accumulated in this screen only
+  }));
+  if (!buckets.length) { toast('미배정 수량이 없습니다', 'err'); return; }
+  let items = _orderItemsCache[oid];
+  if (!items) {
+    toast('제품 목록 불러오는 중...', '');
+    const out = await apiOp('getOrderItems', { oid });
+    if (out.net && out.res.ok) { items = mergeDuplicateOrderItems(out.res.items || []); _orderItemsCache[oid] = items; }
+    else { toast('⚠ 제품 목록을 불러오지 못했습니다', 'err'); return; }
+  }
+  const usedNums = [];
+  listSt.items.forEach(it => (it.rows||[]).forEach(r => usedNums.push(r.n)));
+  _boxRecover = { oid, curNum: usedNums.length ? Math.max(...usedNums) + 1 : 1, buckets, lastBanner: null };
+  renderBoxScanRecovery();
+};
+function boxRecoverTotals(){
+  const rc = _boxRecover; if (!rc) return { remaining:0, total:0 };
+  return {
+    remaining: rc.buckets.reduce((s,b) => s + b.remaining, 0),
+    total: rc.buckets.reduce((s,b) => s + b.total, 0)
+  };
+}
+function boxRecoverBannerHtml(msg, kind){
+  const color = kind === 'err' ? 'var(--red)' : 'var(--green)';
+  const bg = kind === 'err' ? 'var(--red-bg)' : 'var(--green-bg)';
+  const bd = kind === 'err' ? 'var(--red-bd)' : 'var(--green-bd)';
+  return `<div style="display:flex;align-items:center;gap:8px;background:${bg};border:1px solid ${bd};border-radius:var(--r);padding:8px 10px;font-size:11.5px;color:${color}"><i class="${kind==='err'?'ri-error-warning-line':'ri-checkbox-circle-line'}"></i> ${msg}</div>`;
+}
+// Direct DOM update only (no renderBoxScanRecovery rebuild) for a plain
+// scan rejection — keeps the scan input focused for the next scan, same
+// reasoning as updateSkuChecklistLive avoiding a full re-render mid-burst.
+function showBoxRecoverBanner(msg, kind){
+  const rc = _boxRecover; if (rc) rc.lastBanner = { msg, kind };
+  const el = document.getElementById('boxRecoverBanner');
+  if (el) el.innerHTML = boxRecoverBannerHtml(msg, kind);
+}
+function renderBoxRecoverRemListHtml(){
+  const rc = _boxRecover; if (!rc) return '';
+  const byKey = {};
+  rc.buckets.forEach(b => {
+    if (b.remaining <= 0) return;
+    byKey[b.key] = byKey[b.key] || { sku:b.sku, name:b.name, key:b.key, qty:0 };
+    byKey[b.key].qty += b.remaining;
+  });
+  const list = Object.values(byKey);
+  if (!list.length) return `<div style="text-align:center;font-size:12px;color:var(--green);font-weight:700;padding:14px 0"><i class="ri-checkbox-circle-fill"></i> 전부 배정 완료</div>`;
+  return list.map(x => `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--bd);border-radius:6px;padding:6px 8px;margin-bottom:5px;font-size:11px;cursor:pointer" onclick="jumpToManualFromRecover('${String(x.key).replace(/'/g,"\\'")}')">
+    <span style="font-family:var(--mono);font-weight:700">${x.sku||'—'}</span>
+    <span style="color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${(x.name||'').replace(/</g,'&lt;')}</span>
+    <span style="color:var(--amber);font-weight:700">${x.qty.toLocaleString()}</span>
+  </div>`).join('');
+}
+function renderBoxScanRecovery(){
+  const rc = _boxRecover; if (!rc) return;
+  const { remaining, total } = boxRecoverTotals();
+  const done = total - remaining;
+  const pct = total ? Math.round(done / total * 100) : 0;
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+      <i class="ri-camera-line" style="color:var(--amber)"></i> 스캔으로 배정 — ${rc.oid}
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--purple-bg);border:2px solid var(--purple-bd);border-radius:var(--r);padding:9px 12px;margin-bottom:10px;cursor:pointer" onclick="editBoxRecoverNum()" title="탭해서 번호 변경">
+      <span style="font-size:12px;color:var(--purple);font-weight:700">지금 스캔하는 것은 몇 번 팔렛/박스?</span>
+      <span style="font-size:18px;font-weight:800" id="boxRecoverNumVal">${rc.curNum} <i class="ri-pencil-line" style="font-size:12px;opacity:.6"></i></span>
+    </div>
+    <input class="fi" type="text" id="boxRecoverScanIn" placeholder="바코드 스캔" autocomplete="off"
+      oninput="armScanAutoTrigger('boxRecoverScanIn', boxRecoverScanHit)"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();boxRecoverScanHit()}">
+    <div id="boxRecoverBanner" style="margin-top:10px">${rc.lastBanner ? boxRecoverBannerHtml(rc.lastBanner.msg, rc.lastBanner.kind) : ''}</div>
+    <div style="background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 10px;margin-top:10px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--t2)"><span>배정 진행</span><b style="color:var(--t)">${done.toLocaleString()} / ${total.toLocaleString()}</b></div>
+      <div style="height:6px;border-radius:3px;background:var(--bg4);overflow:hidden;margin-top:6px"><div style="height:100%;background:var(--green);width:${pct}%"></div></div>
+    </div>
+    <div style="font-size:10px;color:var(--t3);font-weight:700;text-transform:uppercase;margin:12px 0 6px">남은 미배정 (탭하면 직접 입력으로 전환)</div>
+    <div id="boxRecoverRemList">${renderBoxRecoverRemListHtml()}</div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-sm" style="width:100%;justify-content:center" onclick="closeBoxScanRecovery()"><i class="ri-check-line"></i> 닫기</button>
+    </div>
+  `, { wide:true });
+  setTimeout(() => document.getElementById('boxRecoverScanIn')?.focus(), 60);
+}
+window.closeBoxScanRecovery = function(){
+  _boxRecover = null;
+  closeModal();
+  if (_postBoxList) renderPostBoxList();
+};
+window.editBoxRecoverNum = function(){
+  const rc = _boxRecover; if (!rc) return;
+  openModal(`<div class="end-modal-inner">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px;text-align:center"><i class="ri-archive-2-line"></i> 팔렛/박스 번호 변경</div>
+    <div style="font-size:11.5px;color:var(--t3);text-align:center;margin-bottom:14px">지금부터 스캔하는 제품을 넣을 번호</div>
+    <label class="fl" style="text-align:center;display:block">번호</label>
+    ${qtyFieldHtml('boxRecoverNumEditVal', rc.curNum)}
+    ${numpadHtml()}
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">
+      <button class="btn btn-sm" onclick="renderBoxScanRecovery()">취소</button>
+      <button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="confirmBoxRecoverNum()"><i class="ri-checkbox-circle-line"></i> 확인</button>
+    </div>
+  </div>`, { wide:true });
+  setTimeout(() => numpadFocus('boxRecoverNumEditVal'), 0);
+};
+window.confirmBoxRecoverNum = function(){
+  const rc = _boxRecover; if (!rc) return;
+  rc.curNum = Math.max(1, parseInt(document.getElementById('boxRecoverNumEditVal')?.value) || 1);
+  renderBoxScanRecovery();
+};
+window.boxRecoverScanHit = function(){
+  const inp = document.getElementById('boxRecoverScanIn');
+  const raw = inp ? inp.value.trim() : '';
+  if (!raw) return;
+  if (inp) inp.value = '';
+  const rc = _boxRecover; if (!rc) return;
+  const items = _orderItemsCache[rc.oid] || [];
+  const match = items.find(it => it.barcode && it.barcode === raw)
+             || items.find(it => it.sku && it.sku.toUpperCase() === raw.toUpperCase());
+  if (!match) {
+    playScanBeep('error'); if (navigator.vibrate) try { navigator.vibrate([40,40,40]); } catch(_){}
+    showBoxRecoverBanner(`⚠ 이 주문에 없는 바코드: ${raw}`, 'err');
+    return;
+  }
+  const key = match.barcode || match.sku;
+  // v14.82 — the check that matters here: does this SKU still have ANY
+  // quantity with no box/pallet number yet? Not "is it fully scanned" —
+  // every item reaching this screen already is. See the block comment
+  // above openBoxScanRecovery for why these are different questions.
+  const remainingForKey = rc.buckets.filter(b => b.key === key && b.remaining > 0)
+    .reduce((s,b) => s + b.remaining, 0);
+  if (!remainingForKey) {
+    playScanBeep('error'); if (navigator.vibrate) try { navigator.vibrate([50,50,50,50]); } catch(_){}
+    showBoxRecoverBanner(`⚠ ${match.sku||key} — 이미 전부 팔렛/박스에 배정 완료됨`, 'err');
+    return;
+  }
+  openBoxRecoverQtyModal(key, match, remainingForKey);
+};
+window.openBoxRecoverQtyModal = function(key, match, remainingForKey){
+  const rc = _boxRecover; if (!rc) return;
+  _boxRecoverPendingKey = key;
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
+      <i class="ri-archive-2-line" style="color:var(--purple)"></i> ${rc.curNum}번에 배정
+    </div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:14px" class="mono">${match.sku||'—'} · ${(match.name||'').replace(/</g,'&lt;')}</div>
+    <div style="font-size:11px;color:var(--t3);text-align:center;margin-bottom:8px">미배정 ${remainingForKey.toLocaleString()}개 중 몇 개를 지금 ${rc.curNum}번에 넣을까요?</div>
+    <div class="fg" style="text-align:center">
+      ${qtyFieldHtml('boxRecoverQtyVal', remainingForKey)}
+      ${numpadHtml()}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-sm" onclick="cancelBoxRecoverQty()">취소</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-purple btn-sm" onclick="confirmBoxRecoverAssign(${remainingForKey})"><i class="ri-check-line"></i> 배정</button>
+    </div>
+  `, { wide:true });
+  setTimeout(() => numpadFocus('boxRecoverQtyVal'), 0);
+};
+window.cancelBoxRecoverQty = function(){
+  _boxRecoverPendingKey = null;
+  renderBoxScanRecovery();
+};
+window.confirmBoxRecoverAssign = async function(maxQty){
+  const rc = _boxRecover; if (!rc) return;
+  const key = _boxRecoverPendingKey; if (!key) return;
+  let qty = Math.max(0, parseInt(document.getElementById('boxRecoverQtyVal')?.value) || 0);
+  if (qty <= 0) { toast('수량을 입력하세요', 'err'); return; }
+  if (qty > maxQty) qty = maxQty;
+  _boxRecoverPendingKey = null;
+
+  // Allocate across this key's open buckets, first-bucket-first — usually
+  // just one bucket (one entry), but a SKU split across more than one
+  // worker's ended session can have more than one.
+  let left = qty;
+  const touched = [];
+  for (const b of rc.buckets) {
+    if (left <= 0) break;
+    if (b.key !== key || b.remaining <= 0) continue;
+    const take = Math.min(left, b.remaining);
+    b.remaining -= take;
+    b.newRows[rc.curNum] = (b.newRows[rc.curNum] || 0) + take;
+    left -= take;
+    touched.push(b);
+  }
+  const match = (_orderItemsCache[rc.oid] || []).find(it => (it.barcode||it.sku) === key);
+  playScanBeep('ok'); if (navigator.vibrate) try { navigator.vibrate(25); } catch(_){}
+
+  // v14.82 — auto-save any bucket that's now fully assigned (its summary
+  // total is completely covered by existing + newly-scanned box rows),
+  // immediately, rather than waiting for one big "완료" at the end — so a
+  // dropped connection partway through never loses more than whatever
+  // hasn't finished a SKU yet, matching this app's general bias toward
+  // durable incremental saves over large batched ones.
+  for (const b of touched) { if (b.remaining === 0) await saveBoxRecoverBucket(b); }
+
+  rc.lastBanner = { msg: `✓ ${match?match.sku:key} ${qty.toLocaleString()}개 → ${rc.curNum}번에 배정됨 · 남음 ${boxRecoverTotals().remaining.toLocaleString()}`, kind: 'ok' };
+  renderBoxScanRecovery();
+};
+async function saveBoxRecoverBucket(b){
+  const mergedRows = {};
+  b.existingRows.forEach(r => { mergedRows[r.n] = (mergedRows[r.n]||0) + (Number(r.q)||0); });
+  Object.keys(b.newRows).forEach(n => { mergedRows[n] = (mergedRows[n]||0) + b.newRows[n]; });
+  const rows = Object.keys(mergedRows).map(n => ({ n:Number(n), q:mergedRows[n] })).filter(r => r.q > 0);
+  const payload = { entryId: b.entryId, sku: b.sku, barcode: b.barcode, rows };
+  const out = _mgrOK ? await mgrOp('updateBoxAssignment', payload)
+    : await apiOp('updateBoxAssignment', Object.assign({}, payload, { worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : '' }));
+  if (!out.net || !out.res.ok) {
+    // Couldn't save — give this bucket's just-assigned units back to
+    // "remaining" so nothing scanned is silently lost, and surface why.
+    const assignedBack = Object.values(b.newRows).reduce((s,q) => s+q, 0);
+    b.remaining += assignedBack;
+    b.newRows = {};
+    const err = out.res && out.res.error;
+    const msg = err === 'total_mismatch' ? '⚠ 합계가 서버 기록과 달라 저장하지 못했습니다 — 목록을 새로고침 후 다시 시도하세요'
+      : err === 'unauthorized' ? '⚠ 권한이 없습니다'
+      : '⚠ 저장 실패 — 다시 시도하세요: ' + (err || 'network');
+    toast(msg, 'err');
+    return;
+  }
+  if (_postBoxList) {
+    const it = _postBoxList.items.find(x => x.entryId === b.entryId && x.key === b.key);
+    if (it) { it.rows = rows; it.boxedSum = it.total; it.unassigned = 0; }
+  }
+}
+// Switches a still-unassigned SKU from scanning to the manual typed-number
+// editor. Re-fetches fresh from the server rather than handing off this
+// screen's in-memory state, so there's no risk of the two editors (scan
+// screen + manual modal) disagreeing about what's already been assigned.
+window.jumpToManualFromRecover = async function(key){
+  const rc = _boxRecover; if (!rc) return;
+  const oid = rc.oid;
+  _boxRecover = null;
+  closeModal();
+  toast('최신 데이터로 다시 불러오는 중...', '');
+  await openPostSessionBoxList(oid);
+  const it = (_postBoxList && _postBoxList.items || []).find(x => x.key === key && x.unassigned > 0);
+  if (it) openPostSessionBoxModal(it.entryId, it.key);
 };
 
 // Builds the "just scanned" banner shown directly above the scan box (never
