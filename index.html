@@ -5074,6 +5074,7 @@ function renderInspDoneCard(wrap, oid, prog){
         <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat',this)"><i class="ri-file-list-3-line"></i> Flat List</button>
         <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${oid}',this)"><i class="ri-price-tag-3-line"></i> Labels</button>
       </div>
+      <button class="btn btn-sm btn-block" style="color:var(--purple);border-color:var(--purple-bd);margin-bottom:10px" onclick="openPostSessionBoxList('${oid}')"><i class="ri-archive-2-line"></i> 박스/팔렛 배정 수정</button>
       <button class="btn ${SBTN[CS]} btn-block" onclick="startWork()"><i class="ri-play-circle-line"></i> Continue inspecting (남은 항목 계속 검수)</button>
     </div>`;
     return;
@@ -5086,6 +5087,14 @@ function renderInspDoneCard(wrap, oid, prog){
         <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="printOrderPackingSlip('${oid}','flat',this)"><i class="ri-file-list-3-line"></i> Flat List</button>
         <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${oid}',this)"><i class="ri-price-tag-3-line"></i> Labels</button>
       </div>
+      <!-- v14.83 — this is exactly the screen a manager lands on after
+           selecting a completed order from the INSP dropdown (see the
+           reported "아무리 찾아도 수정하는 곳을 찾지 못하겠다" confusion) —
+           the 📦 tool previously only lived in the order-detail/Manager
+           Entries views, which this screen's own Re-inspect copy pointed
+           to but didn't actually link to. Putting the button right here,
+           where the manager is already looking, removes that hunt. -->
+      <button class="btn btn-sm btn-block" style="color:var(--purple);border-color:var(--purple-bd);margin-bottom:8px" onclick="openPostSessionBoxList('${oid}')"><i class="ri-archive-2-line"></i> 박스/팔렛 배정 수정</button>
       <button class="btn btn-sm" style="color:var(--t3)" onclick="confirmStartReinspect('${oid}')"><i class="ri-add-line"></i> Re-inspect (재검수 시작)</button>
     </div>`;
   reconcileOrderInspSessionsOnce(oid);
