@@ -2969,14 +2969,17 @@ function renderPostBoxList(){
     bySku[it.key].entries.push(it);
   });
   const skuGroups = Object.values(bySku);
-  // v14.82 — order-wide total of still-unassigned quantity, across every
+  // v14.84 — order-wide total of still-unassigned quantity, across every
   // SKU and every ended session. When this is 0, nothing on this order
   // needs the new scan-to-assign screen at all, so the button is hidden
-  // rather than shown disabled.
+  // rather than shown disabled. Per feedback, a bare QTY number here
+  // ("미배정 13,650개") read as ambiguous — paired with the SKU count so
+  // it reads as "13 SKUs, 13,650 units total" at a glance.
+  const unassignedSkuCount = st.items.filter(it => it.unassigned > 0).length;
   const totalUnassigned = st.items.reduce((s, it) => s + (it.unassigned || 0), 0);
   const scanBtnHtml = totalUnassigned > 0 ? `
     <button type="button" class="btn btn-sm" style="width:100%;border:1px dashed var(--amber-bd);background:var(--amber-bg);color:var(--amber);font-weight:800;margin-bottom:12px;justify-content:center;padding:10px" onclick="openBoxScanRecovery('${st.oid}')">
-      <i class="ri-camera-line"></i> 미배정 ${totalUnassigned.toLocaleString()}개 — 스캔으로 한번에 배정하기
+      <i class="ri-camera-line"></i> 미배정 ${unassignedSkuCount.toLocaleString()}개 SKU · ${totalUnassigned.toLocaleString()} QTY — 스캔으로 한번에 배정하기
     </button>` : '';
   const html = `
     <div style="font-size:15px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:8px">
