@@ -6446,11 +6446,22 @@ window.finalizeInspEnd = async function(wid){
     <div id="inspSaveStatus_${wid}" style="font-size:11.5px;color:var(--t3);margin-top:4px">잠시만 기다려주세요 — 화면을 벗어나지 마세요</div>
   </div>`, { closable:false });
 
+  // v14.84 — set when any chunk reports back as a recognized duplicate
+  // retry (see logInspectionResultsToServer / Code.gs logInspectionResults_)
+  // so the final success toast below can say so explicitly, per the
+  // explicit requirement that a caught duplicate must actually surface as
+  // a message, not just be silently absorbed.
+  let anyDeduped = false;
   const ok = await logInspectionResultsToServer(wid, w.oid, pend.rows, pend.result, pend.boxScans, unitType,
     (phase, attempt, maxAttempts, chunkIndex, chunkTotal) => {
       const el = document.getElementById(`inspSaveStatus_${wid}`);
-      if (!el) return;
       const partLabel = chunkTotal > 1 ? ` (${chunkIndex+1}/${chunkTotal})` : '';
+      if (phase === 'deduped') {
+        anyDeduped = true;
+        if (el) el.innerHTML = `<span style="color:var(--amber);font-weight:700">⚠ 중복 저장 시도 감지됨 — 자동으로 무시했습니다${partLabel}</span>`;
+        return;
+      }
+      if (!el) return;
       el.innerHTML = attempt > 1
         ? `<span style="color:var(--amber);font-weight:700">자동 재시도 중 ${attempt}/${maxAttempts}${partLabel}</span> — 화면을 벗어나지 마세요`
         : `잠시만 기다려주세요${partLabel} — 화면을 벗어나지 마세요`;
@@ -6502,7 +6513,13 @@ window.finalizeInspEnd = async function(wid){
   // needed. The completion card above already confirms it's done; the
   // order-selection screen (rendered by doEndWork's renderStageContent)
   // now shows the print buttons directly, no extra popup needed.
-  toast('✓ Inspection saved — print buttons are on the order screen', 'ok');
+  // v14.84 — explicit confirmation that a detected duplicate retry was
+  // safely ignored (not just logged to the console where nobody would
+  // see it), directly covering every SKU/box number this save touched —
+  // not only shown transiently on the now-closed "저장 중..." screen.
+  toast(anyDeduped
+    ? '✓ Inspection saved — 저장 중 중복 시도가 감지되어 자동으로 무시했습니다 (데이터는 정상입니다)'
+    : '✓ Inspection saved — print buttons are on the order screen', 'ok');
 };
 
 // ── v13.0 fix — "checklist says 87/87 but the slip/label modal says
@@ -7387,6 +7404,16 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
   // across sessions — see the reinspect block in logInspectionResults_.
   const isReinspect = !!(loadScanState(wid) || {}).reinspect;
 
+  // v14.84 — one id per logical SAVE (not per attempt), so every retry of
+  // a given chunk carries the SAME idemKey and the server can recognize
+  // "I already applied this exact chunk" when a retry follows a reply
+  // that got lost rather than a write that actually failed. See the
+  // matching Code.gs note (logInspectionResults_) for the duplicate-
+  // box-row bug this closes — a retried append chunk used to re-insert
+  // the same box/pallet rows a second time, inflating that pallet's
+  // printed quantity.
+  const saveId = 'S' + Date.now() + '_' + Math.floor(Math.random()*1e6);
+
   const MAX_ATTEMPTS = 3;
   async function sendChunk(rowsChunk, replace, chunkIndex){
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++){
@@ -7394,9 +7421,19 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
       const out = await apiOp('logInspectionResults', {
         entryId: wid, orderId, result, rows: rowsChunk, replace,
         unitType: unitType || 'box', reinspect: isReinspect,
+        idemKey: saveId + '_' + chunkIndex,
         worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
       }, 45000);
-      if (out.net && out.res.ok) return true;
+      if (out.net && out.res.ok) {
+        // v14.84 — the server recognized this exact chunk as an
+        // already-applied retry (its idemKey was seen before) and skipped
+        // writing it again — surface that back up to the UI instead of
+        // silently swallowing it, so a worker/manager watching the "저장
+        // 중..." screen during a flaky connection can actually see that a
+        // duplicate attempt happened AND that it was safely caught.
+        if (out.res.deduped && onProgress) onProgress('deduped', attempt, MAX_ATTEMPTS, chunkIndex, chunks.length);
+        return true;
+      }
       console.warn('logInspectionResults chunk failed', chunkIndex, 'attempt', attempt, out);
       if (attempt < MAX_ATTEMPTS) await _sleep(1000 * attempt); // short backoff: 1s, 2s
     }
