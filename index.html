@@ -1298,6 +1298,40 @@ function othersQtyForCap(wid, key){
   return (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
 }
 
+// v14.87 — DUPLICATE ISSUE BLOCK (IM00235336: one 5-unit shortage was
+// registered by three workers → 15 on the packing slip). _liveIssues[wid]
+// is filled by refreshLiveBaseline from the server: wid -> { key: [{worker,
+// qty}] } for every issue another session has flagged (in progress) or
+// already saved. If any exists for this SKU, a second registration is
+// refused outright. allowSelf lets the manual "Report issue / 수량 조정"
+// tool still edit an issue THIS worker registered. A 재검수(reinspect)
+// session is exempt, same as the server (it replaces the SKU's total).
+let _liveIssues = {};
+function issueTakenByOthers(wid, key, allowSelf){
+  if (loadScanState(wid).reinspect) return null;
+  const me = WS ? WS.worker : CW;
+  const rel = ((_liveIssues[wid] && _liveIssues[wid][key]) || [])
+    .filter(x => x.qty > 0 && !(allowSelf && x.worker === me));
+  if (!rel.length) return null;
+  return { by: rel.map(x => x.worker).join(', '), qty: rel.reduce((s, x) => s + x.qty, 0) };
+}
+function issueBlockedHtml(taken){
+  const by = String(taken.by).replace(/</g, '&lt;');
+  return `<b>${by}</b>님이 이 SKU의 이슈를 <b>${taken.qty}개</b> 이미 등록했습니다.<br>같은 SKU의 이슈는 중복으로 등록할 수 없습니다.`;
+}
+window.showIssueBlockedModal = function(wid, it, taken){
+  openModal(`
+    <div style="text-align:center;padding:4px 0">
+      <i class="ri-forbid-2-line" style="font-size:34px;color:var(--red);display:block;margin-bottom:8px"></i>
+      <div style="font-size:15px;font-weight:800;color:var(--red);margin-bottom:8px">이미 이슈 등록됨 — 등록 차단</div>
+      <div class="mono" style="font-size:11.5px;color:var(--t3);margin-bottom:2px">${it.barcode||it.sku||'—'}</div>
+      <div style="font-size:12.5px;color:var(--t);margin-bottom:12px">${(it.name||'').replace(/</g,'&lt;')}</div>
+      <div style="font-size:13px;color:var(--t2);line-height:1.6;margin-bottom:16px">${issueBlockedHtml(taken)}</div>
+      <button class="btn btn-purple" style="padding:10px 28px;font-weight:700" onclick="closeModal();var i=document.getElementById('scanIn_${wid}');if(i)i.focus({preventScroll:true})">확인</button>
+    </div>
+  `);
+};
+
 // ── v14.20 — "나가기" on an in-progress INSP session: a complete exit.
 // The session card disappears, and (as of v14.19/14.20) EVERY visible
 // "active" indicator for it disappears too — the order dropdown's "⚡
@@ -2420,6 +2454,11 @@ window.openSkuIssueModal = function(wid, key){
   const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
   const st = loadScanState(wid);
   const existing = (st.skuIssues || {})[key] || null;
+  // v14.87 — somebody else already registered an issue for this SKU →
+  // refuse to even open the entry form (this worker's OWN earlier issue is
+  // still editable here).
+  const takenByOther = issueTakenByOthers(wid, key, true);
+  if (takenByOther) { showIssueBlockedModal(wid, it, takenByOther); return; }
   const reqQty = it.reqQty || 0;
   const othersQty = othersQtyForCap(wid, key);
   const mineBefore = st.skuCounts[key] || 0;
@@ -2556,6 +2595,15 @@ window.saveSkuIssue = async function(wid, key, btn){
   }
 
   await withBtnBusy(btn, BTN_BUSY_HTML, async () => {
+    // v14.87 — re-check against FRESH server state right before saving: a
+    // teammate may have registered an issue for this SKU after this modal
+    // opened. (A failed refresh just keeps the cached view; the server also
+    // enforces this on the session-end save.)
+    if (qty > 0) {
+      try { await refreshLiveBaseline(wid); } catch(_){}
+      const taken = issueTakenByOthers(wid, key, true);
+      if (taken) { showIssueBlockedModal(wid, it, taken); return; }
+    }
     const st = loadScanState(wid);
     const row = {
       sku: it.sku, barcode: it.barcode, name: it.name, reqQty,
@@ -2636,6 +2684,9 @@ window.clearSkuIssue = function(wid, key){
   if (st.skuIssues) delete st.skuIssues[key];
   saveScanState(wid, st);
   closeModal();
+  // v14.87 — tell teammates this in-progress flag is gone, so it stops
+  // blocking them from registering the SKU's issue.
+  pushMyLiveScan(wid);
   toast('Issue flag cleared', '');
   renderStageContent();
 };
@@ -3849,6 +3900,8 @@ window.openScanQtyModal = function(wid, key){
       ${numpadHtml()}
     </div>
     <div id="scanQtyIssueWrap" style="display:none">
+      <div id="scanQtyIssueBlock" style="display:none;font-size:12px;color:var(--red);background:var(--red-bg);border:1px solid var(--red);border-radius:var(--r);padding:10px 12px;line-height:1.6;margin-bottom:6px"></div>
+      <div id="scanQtyIssueFields">
       <div style="font-size:11px;color:var(--amber);margin-bottom:6px"><i class="ri-error-warning-line"></i> 남은 <b id="scanQtyShortfall">0</b>개는 사유를 선택하세요</div>
       <div class="chip-group" id="scanQtyIssueTypeGroup">
         ${SKU_ISSUE_TYPES.map(t => `<button type="button" class="chip-opt${existingIssue&&existingIssue.type===t.v?' selected':''}" data-val="${t.v}" onclick="pickScanQtyIssueType('${t.v}')">${t.l}</button>`).join('')}
@@ -3857,6 +3910,7 @@ window.openScanQtyModal = function(wid, key){
       <div class="fg" style="margin-top:8px">
         <label class="fl">Note (Other 선택 시 필수)</label>
         <input class="fi" id="scanQtyIssueNote" placeholder="e.g. torn box, wrong expiry date..." value="${existingIssue&&existingIssue.note?String(existingIssue.note).replace(/"/g,'&quot;'):''}">
+      </div>
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:12px">
@@ -3887,6 +3941,16 @@ window._onScanQtyOkInput = function(wid, key){
   const sfEl = document.getElementById('scanQtyShortfall');
   if (sfEl) sfEl.textContent = shortfall;
   if (wrap) wrap.style.display = shortfall > 0 ? 'block' : 'none';
+  // v14.87 — shortfall means "register an issue"; if someone else already
+  // did for this SKU, show the block message instead of the reason picker.
+  const taken = shortfall > 0 ? issueTakenByOthers(wid, key, false) : null;
+  const blkEl = document.getElementById('scanQtyIssueBlock');
+  const fldEl = document.getElementById('scanQtyIssueFields');
+  if (blkEl) {
+    blkEl.style.display = taken ? 'block' : 'none';
+    if (taken) blkEl.innerHTML = '<b>🚫 이미 이슈 등록됨 — 등록 차단</b><br>' + issueBlockedHtml(taken) + '<br>정상 수량을 남은 수량 그대로 입력해야 저장할 수 있습니다.';
+  }
+  if (fldEl) fldEl.style.display = taken ? 'none' : 'block';
 };
 
 window.pickScanQtyIssueType = function(val){
@@ -3916,6 +3980,15 @@ window.saveScanQty = async function(wid, key){
   if (isNaN(ok) || ok < 0) { toast('⚠ Enter a valid quantity', 'err'); return; }
   if (ok > maxMine) ok = maxMine;
   const shortfall = Math.max(0, maxMine - ok);
+
+  // v14.87 — a shortfall is a new issue registration. Re-check against
+  // FRESH server state first; if another worker already registered an issue
+  // for this SKU, refuse (nothing is saved, the worker adjusts the qty).
+  if (shortfall > 0 && !st.reinspect) {
+    try { await refreshLiveBaseline(wid); } catch(_){}
+    const taken = issueTakenByOthers(wid, key, false);
+    if (taken) { showIssueBlockedModal(wid, it, taken); return; }
+  }
 
   const existingIssue = (st.skuIssues || {})[key] || null;
   let issueType = existingIssue ? existingIssue.type : '';
@@ -4028,8 +4101,13 @@ function pushMyLiveScan(wid){
   _livePushTimers[wid] = setTimeout(async () => {
     const w = S.works.find(x => x.id === wid); if (!w || w.endT) return;
     const st = loadScanState(wid);
+    // v14.87 — also share this session's in-progress issue flags (key ->
+    // qty) so a teammate opening the same SKU sees "이미 등록됨" right away,
+    // not only after this session has ended.
+    const liveIssues = {};
+    Object.entries(st.skuIssues || {}).forEach(([k, v]) => { const q = Number(v && v.qty) || 0; if (q > 0) liveIssues[k] = q; });
     await apiOp('pushLiveScan', {
-      orderId: w.oid, entryId: wid, skuCounts: st.skuCounts || {},
+      orderId: w.oid, entryId: wid, skuCounts: st.skuCounts || {}, skuIssues: liveIssues,
       worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
     });
   }, 700);
@@ -4089,6 +4167,30 @@ async function refreshLiveBaseline(wid){
     baseline[key] = (baseline[key] || 0) + (s.packedQty||0) + (s.issueQty||0);
   });
   _liveBaseline[wid] = baseline;
+  // v14.87 — who has already registered an issue for which SKU: other
+  // workers' in-progress flags (live) plus every ended/saved one (durable).
+  const issueMap = {};
+  rawLive.forEach(entry => {
+    Object.entries(entry.skuIssues || {}).forEach(([k, q]) => {
+      q = Number(q) || 0;
+      if (q > 0) (issueMap[k] = issueMap[k] || []).push({ worker: entry.worker, qty: q });
+    });
+  });
+  (endedOut.res.skus || []).forEach(s => {
+    const k = s.barcode || s.sku;
+    (s.issueBy || []).forEach(x => {
+      if ((Number(x.qty) || 0) > 0) (issueMap[k] = issueMap[k] || []).push({ worker: x.worker, qty: Number(x.qty) });
+    });
+  });
+  // The same worker can show up twice for one SKU (their live flag AND the
+  // durable row they saved) — keep one entry per worker (the larger qty) so
+  // the "N개 등록됨" message never double-counts.
+  Object.keys(issueMap).forEach(k => {
+    const byW = {};
+    issueMap[k].forEach(x => { byW[x.worker] = Math.max(byW[x.worker] || 0, x.qty); });
+    issueMap[k] = Object.keys(byW).map(wk => ({ worker: wk, qty: byW[wk] }));
+  });
+  _liveIssues[wid] = issueMap;
   // v13.3 — the very first sync for a freshly-opened session needs a full
   // re-render (to swap the "syncing..." placeholder for the real
   // checklist below); every poll after that stays a targeted update so
@@ -6452,10 +6554,19 @@ window.finalizeInspEnd = async function(wid){
   // explicit requirement that a caught duplicate must actually surface as
   // a message, not just be silently absorbed.
   let anyDeduped = false;
+  // v14.87 — issue quantities the server refused/trimmed (see Code.gs
+  // logInspectionResults_ issue guard). Collected across chunks, de-duped
+  // by SKU, shown to the worker after the save completes.
+  const blockedIssues = {}, clampedIssues = {};
   const ok = await logInspectionResultsToServer(wid, w.oid, pend.rows, pend.result, pend.boxScans, unitType,
-    (phase, attempt, maxAttempts, chunkIndex, chunkTotal) => {
+    (phase, attempt, maxAttempts, chunkIndex, chunkTotal, extra) => {
       const el = document.getElementById(`inspSaveStatus_${wid}`);
       const partLabel = chunkTotal > 1 ? ` (${chunkIndex+1}/${chunkTotal})` : '';
+      if (phase === 'issueResult') {
+        ((extra && extra.blocked) || []).forEach(b => { blockedIssues[b.barcode || b.sku] = b; });
+        ((extra && extra.clamped) || []).forEach(c => { clampedIssues[c.barcode || c.sku] = c; });
+        return;
+      }
       if (phase === 'deduped') {
         anyDeduped = true;
         if (el) el.innerHTML = `<span style="color:var(--amber);font-weight:700">⚠ 중복 저장 시도 감지됨 — 자동으로 무시했습니다${partLabel}</span>`;
@@ -6492,7 +6603,11 @@ window.finalizeInspEnd = async function(wid){
   clearScanState(wid);
   // v14.11 — total issue-flagged quantity for this session, as its own
   // issueQty field (see confirmInspEnd + Code.gs's EC.ISSUE_QTY column).
-  const totalIssueQty = pend.rows.reduce((s,r) => s + (r.hasIssue ? (r.issue.qty||0) : 0), 0);
+  let totalIssueQty = pend.rows.reduce((s,r) => s + (r.hasIssue ? (r.issue.qty||0) : 0), 0);
+  // v14.87 — what the server actually kept: subtract refused/trimmed issue qty.
+  Object.values(blockedIssues).forEach(b => { totalIssueQty -= Number(b.qty) || 0; });
+  Object.values(clampedIssues).forEach(c => { totalIssueQty -= Math.max(0, (Number(c.requested) || 0) - (Number(c.kept) || 0)); });
+  totalIssueQty = Math.max(0, totalIssueQty);
   // v14.17 — distinct SKU count actually handled by THIS worker's own
   // session (r.got is this worker's own portion, never the combined/
   // everyone total — see the comment on `rows` above). A SKU counts as
@@ -6520,6 +6635,24 @@ window.finalizeInspEnd = async function(wid){
   toast(anyDeduped
     ? '✓ Inspection saved — 저장 중 중복 시도가 감지되어 자동으로 무시했습니다 (데이터는 정상입니다)'
     : '✓ Inspection saved — print buttons are on the order screen', 'ok');
+
+  // v14.87 — tell the worker plainly which issue registrations the server
+  // refused (already registered by someone else) or trimmed (over the
+  // required qty). Opened after the completion card so it isn't buried.
+  const blockedList = Object.values(blockedIssues), clampedList = Object.values(clampedIssues);
+  if (blockedList.length || clampedList.length) {
+    const esc = s => String(s == null ? '' : s).replace(/</g, '&lt;');
+    const li = [];
+    blockedList.forEach(b => li.push(`<li style="margin-bottom:8px"><span class="mono" style="font-size:11px;color:var(--t3)">${esc(b.barcode || b.sku)}</span> ${esc(b.name)}<br><b style="color:var(--red)">🚫 이미 이슈 등록됨 — 차단됨</b>: <b>${esc(b.by)}</b>님이 ${Number(b.existingQty) || 0}개 등록 (내 ${Number(b.qty) || 0}개는 저장되지 않음)</li>`));
+    clampedList.forEach(c => li.push(`<li style="margin-bottom:8px"><span class="mono" style="font-size:11px;color:var(--t3)">${esc(c.barcode || c.sku)}</span> ${esc(c.name)}<br><b style="color:var(--amber)">⚠ 수량 초과 — 자동 조정됨</b>: 요청 ${Number(c.requested) || 0}개 → ${Number(c.kept) || 0}개만 저장 (요청수량 ${Number(c.req) || 0})</li>`));
+    setTimeout(() => {
+      openModal(`<div style="padding:2px 0">
+        <div style="font-size:15px;font-weight:800;margin-bottom:10px;color:var(--red)"><i class="ri-forbid-2-line"></i> 이슈 등록 일부가 저장되지 않았습니다</div>
+        <ul style="margin:0 0 14px;padding-left:18px;font-size:12.5px;color:var(--t2);line-height:1.55">${li.join('')}</ul>
+        <div style="text-align:center"><button class="btn btn-purple" style="padding:10px 28px;font-weight:700" onclick="closeModal()">확인</button></div>
+      </div>`);
+    }, 400);
+  }
 };
 
 // ── v13.0 fix — "checklist says 87/87 but the slip/label modal says
@@ -7512,6 +7645,15 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
         // 중..." screen during a flaky connection can actually see that a
         // duplicate attempt happened AND that it was safely caught.
         if (out.res.deduped && onProgress) onProgress('deduped', attempt, MAX_ATTEMPTS, chunkIndex, chunks.length);
+        // v14.87 — the server refused (issueBlocked: someone else already
+        // registered an issue for that SKU) or trimmed (issueClamped: over
+        // the required qty) some issue quantities in this chunk — hand
+        // that up so the worker is told plainly instead of finding out
+        // from the packing slip.
+        if (onProgress && ((out.res.issueBlocked || []).length || (out.res.issueClamped || []).length)) {
+          onProgress('issueResult', attempt, MAX_ATTEMPTS, chunkIndex, chunks.length,
+            { blocked: out.res.issueBlocked || [], clamped: out.res.issueClamped || [] });
+        }
         return true;
       }
       console.warn('logInspectionResults chunk failed', chunkIndex, 'attempt', attempt, out);
