@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스캐너 키패드 테스트</title>
+<style>
+  :root{--bg:#0a0e1a;--bg2:#121829;--bg3:#1a2235;--bg4:#222c44;--t:#e8ecf5;--t2:#aab4cc;--t3:#6b7694;--pu:#8b5cf6;--gr:#22c55e;--rd:#ef4444;--am:#f59e0b}
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--bg);color:var(--t);margin:0;padding:14px 14px 80px;line-height:1.45}
+  h1{font-size:16px;margin:0 0 4px}
+  .sub{font-size:12px;color:var(--t3);margin-bottom:12px}
+  .how{background:rgba(139,92,246,.15);border:1px solid var(--pu);border-radius:10px;padding:11px 13px;font-size:12.5px;margin-bottom:14px}
+  .how ol{margin:6px 0 0;padding-left:18px}.how li{margin-bottom:4px}
+  .kb{position:sticky;top:0;z-index:5;padding:9px 12px;border-radius:9px;font-weight:800;font-size:13px;margin-bottom:12px;text-align:center}
+  .kb.hide{background:rgba(34,197,94,.18);color:var(--gr);border:1px solid var(--gr)}
+  .kb.show{background:rgba(239,68,68,.18);color:var(--rd);border:1px solid var(--rd)}
+  section{background:var(--bg2);border:1px solid #232c44;border-radius:12px;padding:13px;margin-bottom:13px}
+  .ttl{font-size:13.5px;font-weight:800;margin-bottom:2px}
+  .desc{font-size:11.5px;color:var(--t3);margin-bottom:8px}
+  input.t{width:100%;padding:12px;font-size:15px;border-radius:9px;border:1px solid var(--pu);background:var(--bg4);color:var(--t)}
+  .res{margin-top:8px;font-family:'Courier New',monospace;font-size:11.5px;color:var(--t2);background:var(--bg3);border-radius:7px;padding:8px 10px;min-height:56px;white-space:pre-wrap;word-break:break-all}
+  .badge{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;margin-left:6px}
+  .b-ok{background:rgba(34,197,94,.18);color:var(--gr)}.b-no{background:rgba(239,68,68,.18);color:var(--rd)}.b-wait{background:var(--bg4);color:var(--t3)}
+  button{padding:9px 13px;border-radius:8px;border:1px solid #333f5c;background:var(--bg4);color:var(--t);font-weight:700;font-size:12.5px}
+  textarea{width:100%;height:150px;background:var(--bg3);color:var(--t);border:1px solid #333f5c;border-radius:8px;padding:8px;font-size:11.5px;font-family:'Courier New',monospace}
+</style>
+</head>
+<body>
+<h1>스캐너 키패드 테스트 (운영 앱과 무관 — 아무것도 저장 안 함)</h1>
+<div class="sub">워크폰에서 열어서 아래 A~D 칸을 하나씩 테스트하고, 맨 아래 "결과 요약"을 캡처해서 보내주세요.</div>
+
+<div class="how"><b>테스트 방법 (칸마다 똑같이)</b>
+<ol>
+<li>칸을 손가락으로 <b>한 번 탭</b> (커서가 들어가게)</li>
+<li>화면 위 띠가 <b>"키패드 숨김"(초록)</b>인지 <b>"키패드 표시됨"(빨강)</b>인지 확인</li>
+<li>그 상태에서 <b>실제 스캐너로 바코드를 스캔</b> (2~3번)</li>
+<li>칸 아래 회색 박스에 <b>입력이 들어왔는지</b> 확인 — 값이 찍히면 ✅</li>
+<li>키패드가 빨강으로 뜨면, 그 칸은 "키패드 안 숨겨짐"입니다</li>
+</ol></div>
+
+<div class="kb hide" id="kb">키패드 숨김</div>
+
+<section>
+  <div class="ttl">A. 지금 운영 앱과 동일 (기준)<span class="badge b-wait" id="bA">대기</span></div>
+  <div class="desc">아무 처리 없음 — 스캔은 되지만 키패드가 뜨는 현재 상태</div>
+  <input class="t" id="A" placeholder="여기 탭 후 스캔" autocomplete="off">
+  <div class="res" id="rA"></div>
+</section>
+
+<section>
+  <div class="ttl">B. 포커스 순간 잠깐 readonly 후 해제<span class="badge b-wait" id="bB">대기</span></div>
+  <div class="desc">탭하면 키패드가 안 뜨고 커서만 유지, 해제 후에도 입력창으로 동작해야 함 (스캔 후 자동 재포커스 포함)</div>
+  <input class="t" id="B" placeholder="여기 탭 후 스캔" autocomplete="off">
+  <div class="res" id="rB"></div>
+</section>
+
+<section>
+  <div class="ttl">C. readonly 유지 + 화면 전체에서 스캔 키 입력 직접 받기<span class="badge b-wait" id="bC">대기</span></div>
+  <div class="desc">입력창은 읽기전용(키패드 절대 안 뜸), 스캐너가 보내는 키 입력을 페이지가 직접 수신</div>
+  <input class="t" id="C" placeholder="여기 탭 후 스캔" autocomplete="off" readonly>
+  <div class="res" id="rC"></div>
+</section>
+
+<section>
+  <div class="ttl">D. inputmode="none" (이미 실패 확인된 방식 — 비교용)<span class="badge b-wait" id="bD">대기</span></div>
+  <div class="desc">키패드는 안 뜨지만 스캔이 안 들어가는 것으로 확인된 방식. 같은 기기에서 결과 비교용</div>
+  <input class="t" id="D" placeholder="여기 탭 후 스캔" autocomplete="off" inputmode="none">
+  <div class="res" id="rD"></div>
+</section>
+
+<section>
+  <div class="ttl">결과 요약 (이 박스를 캡처해서 보내주세요)</div>
+  <textarea id="sum" readonly></textarea>
+  <div style="margin-top:8px"><button onclick="resetAll()">전체 초기화</button></div>
+</section>
+
+<script>
+(function(){
+  var kbEl = document.getElementById('kb');
+  var baseH = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+  var kbShown = false, kbEverShown = {A:false,B:false,C:false,D:false};
+  var activeId = null;
+  function checkKb(){
+    var h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    var shown = (baseH - h) > 120;
+    kbShown = shown;
+    kbEl.className = 'kb ' + (shown ? 'show' : 'hide');
+    kbEl.textContent = shown ? '키패드 표시됨' : '키패드 숨김';
+    if (shown && activeId) kbEverShown[activeId] = true;
+    summary();
+  }
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', checkKb);
+  window.addEventListener('resize', checkKb);
+  setInterval(checkKb, 400);
+
+  var got = {A:0,B:0,C:0,D:0}, last = {A:'',B:'',C:'',D:''}, ev = {A:{},B:{},C:{},D:{}};
+  function note(id, type){ ev[id][type] = (ev[id][type]||0) + 1; }
+  function show(id){
+    var r = document.getElementById('r'+id), b = document.getElementById('b'+id);
+    var evs = Object.keys(ev[id]).map(function(k){return k+'×'+ev[id][k];}).join('  ');
+    r.textContent = '받은 스캔: ' + got[id] + '회\n마지막 값: ' + (last[id]||'-') + '\n이벤트: ' + (evs||'-');
+    b.className = 'badge ' + (got[id] > 0 ? 'b-ok' : 'b-wait');
+    b.textContent = got[id] > 0 ? '스캔 입력 OK' : '대기';
+    summary();
+  }
+  function summary(){
+    var lines = ['기기 시간: ' + new Date().toLocaleTimeString(), ''];
+    ['A','B','C','D'].forEach(function(id){
+      lines.push(id + ': 스캔 ' + (got[id] ? '들어옴('+got[id]+'회)' : '안 들어옴/미테스트') + ' | 키패드 ' + (kbEverShown[id] ? '떴음' : '안 뜸'));
+    });
+    lines.push('', 'UA: ' + navigator.userAgent.slice(0,120));
+    document.getElementById('sum').value = lines.join('\n');
+  }
+
+  // Shared: a "scan" = text arriving followed by Enter, or a burst of chars.
+  function wireInput(id, opts){
+    var el = document.getElementById(id);
+    el.addEventListener('focus', function(){ activeId = id; });
+    el.addEventListener('keydown', function(e){
+      note(id,'keydown');
+      if (e.key === 'Enter') { e.preventDefault(); finish(id, el.value); el.value = ''; refocus(id, el); }
+    });
+    el.addEventListener('beforeinput', function(e){ note(id,'beforeinput:'+(e.inputType||'?')); });
+    el.addEventListener('input', function(){ note(id,'input'); last[id] = el.value; show(id); });
+    el.addEventListener('compositionend', function(){ note(id,'compositionend'); });
+    // Barcodes that arrive WITHOUT an Enter key (IME-style): treat a quiet
+    // 250ms after typing as one completed scan.
+    var t = null;
+    el.addEventListener('input', function(){ clearTimeout(t); t = setTimeout(function(){ if (el.value.length >= 4) { finish(id, el.value); el.value=''; refocus(id, el); } }, 250); });
+    if (opts && opts.onfocus) el.addEventListener('focus', function(){ opts.onfocus(el); });
+  }
+  function finish(id, v){ got[id]++; last[id] = v; show(id); }
+  function refocus(id, el){
+    if (id === 'B') setTimeout(function(){ focusNoKeypad(el); }, 60);
+    else setTimeout(function(){ try{ el.focus({preventScroll:true}); }catch(_){} }, 60);
+  }
+
+  // B: make the field read-only for a moment around focus so Chrome never
+  // raises the soft keypad, then make it a normal editable field again so
+  // scanner text can still be typed/pasted into it.
+  function focusNoKeypad(el){
+    el.setAttribute('readonly','readonly');
+    try { el.focus({preventScroll:true}); } catch(_){}
+    setTimeout(function(){ el.removeAttribute('readonly'); }, 120);
+  }
+  wireInput('A'); wireInput('D');
+  wireInput('B', { onfocus: function(el){
+    if (el.hasAttribute('readonly')) return;
+    el.setAttribute('readonly','readonly');
+    setTimeout(function(){ el.removeAttribute('readonly'); }, 120);
+  }});
+
+  // C: read-only field + document-level key capture.
+  var cbuf = '', ctimer = null;
+  var cEl = document.getElementById('C');
+  cEl.addEventListener('focus', function(){ activeId = 'C'; });
+  document.addEventListener('keydown', function(e){
+    if (activeId !== 'C') return;
+    note('C','keydown');
+    if (e.key === 'Enter') { if (cbuf) { finish('C', cbuf); cEl.value = cbuf; cbuf = ''; } return; }
+    if (e.key && e.key.length === 1) {
+      cbuf += e.key; cEl.value = cbuf; last.C = cbuf;
+      clearTimeout(ctimer);
+      ctimer = setTimeout(function(){ if (cbuf.length >= 4) { finish('C', cbuf); } cbuf=''; }, 250);
+      show('C');
+    }
+  });
+  ['A','B','C','D'].forEach(function(id){
+    document.getElementById(id).addEventListener('blur', function(){ if (activeId === id) activeId = null; });
+  });
+
+  window.resetAll = function(){
+    got = {A:0,B:0,C:0,D:0}; last = {A:'',B:'',C:'',D:''}; ev = {A:{},B:{},C:{},D:{}}; kbEverShown = {A:false,B:false,C:false,D:false};
+    ['A','B','C','D'].forEach(function(id){ document.getElementById(id).value=''; show(id); });
+  };
+  ['A','B','C','D'].forEach(show);
+  summary();
+})();
+</script>
+</body>
+</html>
