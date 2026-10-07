@@ -1298,6 +1298,20 @@ function othersQtyForCap(wid, key){
   return (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
 }
 
+// v14.88 — scan field no longer pops up the device's on-screen keypad.
+// The field keeps focus and stays a normal editable input (scanner text is
+// typed into it exactly as before); it is only made read-only for ~120ms
+// around each focus event, which is when Chrome decides whether to raise the
+// soft keypad. Verified on the actual warehouse handheld with
+// scanner_keypad_test.html (variant B: scan value received, keypad hidden).
+// Deliberately NOT inputmode="none" — that variant was tested on the same
+// device and the scanner's text never reaches the field (v14.86 regression).
+window.scanNoKeypad = function(el){
+  if (!el || el.hasAttribute('readonly')) return;
+  el.setAttribute('readonly', 'readonly');
+  setTimeout(function(){ try { el.removeAttribute('readonly'); } catch(_){} }, 120);
+};
+
 // v14.87 — DUPLICATE ISSUE BLOCK (IM00235336: one 5-unit shortage was
 // registered by three workers → 15 on the packing slip). _liveIssues[wid]
 // is filled by refreshLiveBaseline from the server: wid -> { key: [{worker,
@@ -3579,6 +3593,7 @@ function renderSkuChecklistUI(w, items, st){
     <div id="lastScanBanner_${w.id}">${lastScanHtml}</div>
     <div class="scan-input-row" style="display:flex;gap:6px">
       <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
+        onfocus="scanNoKeypad(this)"
         oninput="armScanAutoTrigger('scanIn_${w.id}', () => scanHit('${w.id}'))"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
       <button type="button" class="btn btn-sm" style="flex-shrink:0" title="바코드/SKU 직접 입력 (스캔이 안 될 때)" onclick="openManualScanModal('${w.id}')"><i class="ri-keyboard-line"></i></button>
@@ -3635,6 +3650,7 @@ function renderAggScanUI(w, st){
     <div class="scan-progress" style="margin-top:6px"><div class="scan-progress-fill" id="scanBar_${w.id}" style="width:${pct}%;background:${color}"></div></div>
     <div class="scan-input-row" style="margin-top:10px">
       <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
+        onfocus="scanNoKeypad(this)"
         oninput="armScanAutoTrigger('scanIn_${w.id}', () => scanHit('${w.id}'))"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
     </div>
