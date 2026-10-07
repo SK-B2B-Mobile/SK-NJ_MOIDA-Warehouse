@@ -3527,7 +3527,7 @@ function renderSkuChecklistUI(w, items, st){
 
     <div id="lastScanBanner_${w.id}">${lastScanHtml}</div>
     <div class="scan-input-row" style="display:flex;gap:6px">
-      <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" inputmode="none" style="flex:1"
+      <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
         oninput="armScanAutoTrigger('scanIn_${w.id}', () => scanHit('${w.id}'))"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
       <button type="button" class="btn btn-sm" style="flex-shrink:0" title="바코드/SKU 직접 입력 (스캔이 안 될 때)" onclick="openManualScanModal('${w.id}')"><i class="ri-keyboard-line"></i></button>
@@ -3583,7 +3583,7 @@ function renderAggScanUI(w, st){
     <div class="scan-counter-sub" style="margin-top:0">${hasExp ? 'of ' + exp.qty + ' scanned' : 'scanned so far'}</div>
     <div class="scan-progress" style="margin-top:6px"><div class="scan-progress-fill" id="scanBar_${w.id}" style="width:${pct}%;background:${color}"></div></div>
     <div class="scan-input-row" style="margin-top:10px">
-      <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" inputmode="none" style="flex:1"
+      <input class="fi" type="text" id="scanIn_${w.id}" placeholder="Scan barcode, then Enter" autocomplete="off" style="flex:1"
         oninput="armScanAutoTrigger('scanIn_${w.id}', () => scanHit('${w.id}'))"
         onkeydown="if(event.key==='Enter'){event.preventDefault();scanHit('${w.id}')}">
     </div>
