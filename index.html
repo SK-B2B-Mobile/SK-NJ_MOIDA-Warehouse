@@ -3018,8 +3018,61 @@ window.openPostSessionBoxList = async function(oid){
     });
   });
   if (!items.length) { toast('이 주문에 저장된 검수 데이터가 없습니다', 'err'); return; }
-  _postBoxList = { oid, items };
+  // v14.88 — which unit this order is recorded as (every row carries its
+  // own UnitType). 'mixed' only happens for old data; the switch below
+  // unifies it.
+  const unitSet = new Set();
+  perEntry.forEach(out => {
+    if (!out.net || !out.res.ok) return;
+    (out.res.rows || []).forEach(r => unitSet.add(String(r.unitType || 'box').toLowerCase() === 'pallet' ? 'pallet' : 'box'));
+  });
+  const orderUnit = unitSet.size > 1 ? 'mixed' : (unitSet.has('pallet') ? 'pallet' : 'box');
+  _postBoxList = { oid, items, unitType: orderUnit, pendingUnit: null, unitBusy: false };
   renderPostBoxList();
+};
+
+// v14.88 — box ↔ pallet display helpers + order-wide switch.
+function unitKo(u){ return u === 'pallet' ? '팔렛' : (u === 'mixed' ? '박스/팔렛' : '박스'); }
+function unitEn(u){ return u === 'pallet' ? 'PALLET' : (u === 'mixed' ? 'MIXED' : 'BOX'); }
+function unitIconCls(u){ return u === 'pallet' ? 'ri-truck-line' : 'ri-archive-2-line'; }
+function unitColors(u){
+  return u === 'pallet'
+    ? { c:'var(--amber)', bg:'var(--amber-bg,rgba(245,158,11,.12))', bd:'var(--amber-bd,rgba(245,158,11,.4))' }
+    : { c:'var(--blue)',  bg:'var(--blue-bg)', bd:'var(--blue-bd)' };
+}
+window.askUnitSwitch = function(to){
+  const st = _postBoxList; if (!st || st.unitBusy || to === st.unitType) return;
+  st.pendingUnit = to;
+  renderPostBoxList();
+};
+window.cancelUnitSwitch = function(){
+  const st = _postBoxList; if (!st || st.unitBusy) return;
+  st.pendingUnit = null;
+  renderPostBoxList();
+};
+window.applyUnitSwitch = async function(){
+  const st = _postBoxList; if (!st || !st.pendingUnit || st.unitBusy) return;
+  const to = st.pendingUnit;
+  st.unitBusy = true;
+  renderPostBoxList();
+  const payload = { oid: st.oid, unitType: to };
+  const out = _mgrOK ? await mgrOp('setOrderUnitType', payload)
+    : await apiOp('setOrderUnitType', Object.assign({}, payload, { worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : '' }));
+  st.unitBusy = false;
+  if (!out.net || !out.res.ok) {
+    const err = out.res && out.res.error;
+    const msg = err === 'unauthorized' ? '⚠ 권한이 없습니다 (로그인된 작업자 이름/PIN을 확인하세요)'
+      : err === 'order_not_found' ? '⚠ 이 주문의 저장된 검수 기록을 찾을 수 없습니다'
+      : '⚠ 변경 실패: ' + (err || '네트워크 확인 후 다시 시도하세요');
+    toast(msg, 'err');
+    renderPostBoxList(); // keeps the confirm panel open so it can be retried
+    return;
+  }
+  st.unitType = to;
+  st.pendingUnit = null;
+  delete _inspProgCache[st.oid];
+  renderPostBoxList();
+  toast(`✓ 주문 전체가 ${unitKo(to)}(으)로 변경되었습니다 — 구글시트에 반영됨`, 'ok');
 };
 function renderPostBoxList(){
   const st = _postBoxList; if (!st) return;
@@ -3046,6 +3099,33 @@ function renderPostBoxList(){
     <button type="button" class="btn btn-sm" style="width:100%;border:1px dashed var(--amber-bd);background:var(--amber-bg);color:var(--amber);font-weight:800;margin-bottom:12px;justify-content:center;padding:10px" onclick="openBoxScanRecovery('${st.oid}')">
       <i class="ri-camera-line"></i> 미배정 ${unassignedSkuCount.toLocaleString()}개 SKU · ${totalUnassigned.toLocaleString()} QTY — 스캔으로 한번에 배정하기
     </button>` : '';
+  // v14.88 — order-wide box ↔ pallet switch + "현재: …" badge, shown above
+  // the list. Tapping a side asks for confirmation first (a wrong tap would
+  // relabel the whole order); numbers/quantities never change.
+  const curU = st.unitType, uc = unitColors(curU === 'mixed' ? 'box' : curU);
+  const numSet = new Set(); st.items.forEach(it => (it.rows || []).forEach(r => numSet.add(r.n)));
+  const segBtn = (u, ico) => {
+    const on = curU === u;
+    return `<button type="button" ${st.unitBusy ? 'disabled' : ''} onclick="askUnitSwitch('${u}')" style="border:none;padding:8px 16px;font-weight:800;font-size:12.5px;cursor:pointer;${on ? 'background:var(--purple);color:#fff' : 'background:var(--bg4);color:var(--t2)'}"><i class="${ico}"></i> ${unitKo(u)}</button>`;
+  };
+  const pendU = st.pendingUnit;
+  const confirmHtml = pendU ? `
+    <div style="background:var(--bg2);border:2px solid var(--amber);border-radius:var(--r);padding:12px 13px;margin-bottom:12px">
+      <div style="font-size:13.5px;font-weight:800;color:var(--amber);margin-bottom:6px">${unitKo(curU)} → ${unitKo(pendU)} 로 변경할까요?</div>
+      <div style="font-size:11.5px;color:var(--t2);line-height:1.65">이 주문(${st.oid}) <b style="color:var(--t)">전체 ${skuGroups.length.toLocaleString()}개 SKU · 총 ${numSet.size.toLocaleString()}개 번호</b>가 <b style="color:var(--t)">${unitKo(curU)}</b>에서 <b style="color:var(--t)">${unitKo(pendU)}</b>(으)로 바뀝니다.<br>번호와 수량은 <b style="color:var(--t)">그대로</b> 유지되고, 패킹슬립·라벨에 표시되는 단위만 바뀝니다.<br>저장하면 즉시 구글시트에 반영되며, 언제든 다시 되돌릴 수 있습니다.</div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button type="button" class="btn btn-sm" ${st.unitBusy ? 'disabled' : ''} onclick="cancelUnitSwitch()">취소</button>
+        <div style="flex:1"></div>
+        <button type="button" class="btn btn-purple btn-sm" ${st.unitBusy ? 'disabled' : ''} onclick="applyUnitSwitch()">${st.unitBusy ? '<i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> 변경 중...' : unitKo(pendU) + '로 변경'}</button>
+      </div>
+    </div>` : '';
+  const unitSwitchHtml = `
+    ${confirmHtml}
+    <div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--t3);font-weight:700">출고 단위</span>
+      <div style="display:inline-flex;border:1px solid var(--bd);border-radius:9px;overflow:hidden">${segBtn('box','ri-archive-2-line')}${segBtn('pallet','ri-truck-line')}</div>
+      <span style="margin-left:auto;font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;border:1px solid ${curU==='mixed'?'var(--red)':uc.bd};color:${curU==='mixed'?'var(--red)':uc.c};background:${curU==='mixed'?'var(--red-bg)':uc.bg}">현재: ${curU==='mixed' ? '혼합 — 한 종류로 통일하세요' : unitKo(curU) + ' (' + unitEn(curU) + ')'}</span>
+    </div>`;
   const html = `
     <div style="font-size:15px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:8px">
       <i class="ri-archive-2-line" style="color:var(--purple)"></i> 박스/팔렛 배정 수정 — 주문 전체
@@ -3053,6 +3133,7 @@ function renderPostBoxList(){
     <div style="font-size:10.5px;color:var(--t3);background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 10px;margin-bottom:12px;line-height:1.6">
       <i class="ri-information-line"></i> ${st.oid}의 완료된 모든 검수 세션에서 가져온 것 — 누가 스캔했는지와 무관하게 전체를 보고 고칠 수 있습니다. 태그를 눌러 팔렛을 다시 나누면 바로 구글시트에 반영됩니다.
     </div>
+    ${unitSwitchHtml}
     ${scanBtnHtml}
     ${skuGroups.map(g => {
       const multi = g.entries.length > 1;
@@ -3071,7 +3152,7 @@ function renderPostBoxList(){
           return `<div style="margin-bottom:6px">
             ${multi ? `<div style="font-size:9.5px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px"><i class="ri-user-line"></i> ${it.worker} 세션 · 총 ${it.total.toLocaleString()}</div>` : ''}
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:5px">
-              <div style="display:flex;gap:4px;flex-wrap:wrap">${it.rows.sort((a,b)=>a.n-b.n).map(r => `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 7px;cursor:pointer;background:var(--blue-bg);border:1px solid var(--blue-bd);color:var(--blue)" onclick="openPostSessionBoxModal('${entryIdEsc}','${keyEsc}')"><i class="ri-archive-2-line"></i> ${r.n} · ${r.q}</span>`).join('')}${missTag}</div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap">${it.rows.sort((a,b)=>a.n-b.n).map(r => `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 7px;cursor:pointer;background:${uc.bg};border:1px solid ${uc.bd};color:${uc.c}" onclick="openPostSessionBoxModal('${entryIdEsc}','${keyEsc}')"><i class="${unitIconCls(curU==='mixed'?'box':curU)}"></i> ${unitKo(curU==='mixed'?'box':curU)} ${r.n} · ${r.q}</span>`).join('')}${missTag}</div>
               ${!multi ? `<span style="font-family:var(--mono);font-weight:800;color:${it.unassigned>0?'var(--amber)':'var(--green)'};font-size:12px">${it.total.toLocaleString()}</span>` : ''}
             </div>
           </div>`;
@@ -3103,9 +3184,14 @@ window.openPostSessionBoxModal = function(entryId, key){
     rows.push({ n: nextNum, q: it.unassigned });
   }
   _postBoxEdit = { entryId, key, sku: it.sku, barcode: it.barcode, name: it.name, total: it.total, rows };
+  // v14.88 — title and badge follow the order's actual unit (was hard-coded
+  // "팔렛 재배정" even for box orders).
+  const edU = listSt.unitType === 'mixed' ? 'box' : (listSt.unitType || 'box');
+  const edC = unitColors(edU);
   openModal(`
     <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
-      <i class="ri-archive-2-line" style="color:var(--purple)"></i> 팔렛 재배정
+      <i class="${unitIconCls(edU)}" style="color:var(--purple)"></i> ${unitKo(edU)} 재배정
+      <span style="font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;border:1px solid ${edC.bd};color:${edC.c};background:${edC.bg}">${unitEn(edU)}</span>
     </div>
     <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
       <span class="mono" style="font-size:11.5px;color:var(--t3);white-space:nowrap;flex-shrink:0;padding-top:2px">${it.barcode||it.sku||'—'}</span>
