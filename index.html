@@ -2367,6 +2367,8 @@ function skuRowHtml(it, st, wid){
   // Tapping a tag opens openSkuBoxModal to reassign just this one SKU.
   const boxTags = boxTagsForSku(st, key);
   let boxTagsHtml = '';
+  // v14.91 — high-visibility SPLIT button (solid purple, larger than the tags).
+  const splitChipCss = 'display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;letter-spacing:.04em;border-radius:7px;padding:4px 12px;cursor:pointer;background:var(--purple);border:1px solid var(--purple);color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35)';
   // v14.89 — 수량이 있는 모든 SKU에 "✂ 분할" 버튼을 항상 표시한다. 예전에는 박스/팔렛
   // 태그(스캔 기록이 있어야 생김)를 눌러야만 분할창이 열려서, 연필/마스터 케이스/강제
   // 완료로 수량을 넣은 SKU는 분할창에 들어갈 방법이 없었다. 아직 어느 팔렛/박스에도
@@ -2382,12 +2384,12 @@ function skuRowHtml(it, st, wid){
       return `<span style="${tagCss}${isRare
         ? 'background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber)'
         : 'background:var(--blue-bg);border:1px solid var(--blue-bd);color:var(--blue)'}"
-        title="탭해서 이 SKU의 ${uw} 분할/수정" onclick="event.stopPropagation();openSkuBoxModal('${wid}','${keyEsc}')">${isRare?'<i class="ri-error-warning-line"></i> ':''}${uw} ${t.n} · ${t.q}</span>`;
+        title="Tap to split / edit this SKU's ${uw}s" onclick="event.stopPropagation();openSkuBoxModal('${wid}','${keyEsc}')">${isRare?'<i class="ri-error-warning-line"></i> ':''}${uw} ${t.n} · ${t.q}</span>`;
     }).join('');
     const unassignedTag = unassigned > 0
-      ? `<span style="${tagCss}background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber)" title="아직 ${uw}에 배정되지 않은 수량 — 탭해서 분할/배정" onclick="event.stopPropagation();openSkuBoxModal('${wid}','${keyEsc}')"><i class="ri-error-warning-line"></i> 미배정 ${unassigned.toLocaleString()}</span>`
+      ? `<span style="${tagCss}background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber)" title="Quantity not yet assigned to a ${uw} — tap to assign" onclick="event.stopPropagation();openSkuBoxModal('${wid}','${keyEsc}')"><i class="ri-error-warning-line"></i> Unassigned ${unassigned.toLocaleString()}</span>`
       : '';
-    const splitChip = `<span style="${tagCss}background:var(--bg4);border:1px solid var(--bd2);color:var(--t2)" title="이 SKU를 ${uw}별로 분할 / 수량 수정" onclick="event.stopPropagation();openSkuBoxModal('${wid}','${keyEsc}')">✂ 분할</span>`;
+    const splitChip = `<span style="${splitChipCss}" title="Split this SKU across ${uw}s / edit quantity" onclick="event.stopPropagation();openSkuBoxModal('${wid}','${keyEsc}')">✂ SPLIT</span>`;
     boxTagsHtml = `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${tagsInner}${unassignedTag}${splitChip}</div>`;
   } else if (others > 0) {
     // v14.90 — 이 SKU 수량이 전부 "다른 작업자(이미 저장된 세션)" 몫이면 내 수량은 0이라
@@ -2395,7 +2397,7 @@ function skuRowHtml(it, st, wid){
     // 주문 전체 편집기(openPostSessionBoxList)를 이 SKU 기준으로 바로 연다.
     const uw0 = unitWord(st.unitType, true);
     const w0 = S.works.find(x => x.id === wid);
-    if (w0) boxTagsHtml = `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"><span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 7px;cursor:pointer;background:var(--bg4);border:1px solid var(--bd2);color:var(--t2)" title="저장된 기록의 ${uw0} 분할 수정" onclick="event.stopPropagation();openPostSessionBoxList('${w0.oid}','${keyEsc}')">✂ 분할</span></div>`;
+    if (w0) boxTagsHtml = `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"><span style="${splitChipCss}" title="Split the saved record across ${uw0}s" onclick="event.stopPropagation();openPostSessionBoxList('${w0.oid}','${keyEsc}')">✂ SPLIT</span></div>`;
   }
   return `<div class="sku-row ${cls}" id="skurow_${wid}_${skuIdSafe(key)}">
     <div class="sku-check ${issue?'issue':(ok?'ok':'')}" title="탭해서 제품 정보 확인" onclick="event.stopPropagation();openSkuDetailModal('${wid}','${keyEsc}')">${issue ? '<i class="ri-flag-2-fill"></i>' : (ok ? '<i class="ri-check-line"></i>' : '')}</div>
@@ -2865,7 +2867,7 @@ window.openSkuBoxModal = function(wid, key){
   const it = items.find(x => (x.barcode||x.sku) === key); if (!it) return;
   const st = loadScanState(wid);
   const mine = st.skuCounts[key] || 0;
-  if (mine <= 0) { toast('아직 입력된 수량이 없습니다 — 먼저 스캔하거나 연필(✎)로 수량을 입력하세요', 'err'); return; }
+  if (mine <= 0) { toast('No quantity entered yet — scan first, or enter it with the pencil (✎)', 'err'); return; }
   const existing = boxTagsForSku(st, key);
   const rows = existing.map(t => ({ n: t.n, q: t.q }));
   // 아직 어느 팔렛/박스에도 배정되지 않은 수량(연필·MC·강제완료로 들어간 수량)은
@@ -2881,35 +2883,35 @@ window.openSkuBoxModal = function(wid, key){
   if (!rows.length) rows.push({ n: st.currentBox || 1, q: mine });
   const uw = unitWord(st.unitType), uwCap = unitWord(st.unitType, true);
   const issueQty = Number((st.skuIssues && st.skuIssues[key] && st.skuIssues[key].qty) || 0) || 0;
-  _skuBoxEdit = { wid, key, rows, uw, uwCap, uk: unitKo(st.unitType), reqQty: it.reqQty || 0, issueQty, origTotal: mine };
+  _skuBoxEdit = { wid, key, rows, uw, uwCap, uk: uwCap, reqQty: it.reqQty || 0, issueQty, origTotal: mine };
   const ed = _skuBoxEdit;
   const othersQty = othersQtyForCap(wid, key);
   const noteParts = [];
-  if (othersQty > 0) noteParts.push(`다른 작업자 기록 ${othersQty.toLocaleString()}개`);
-  if (issueQty > 0) noteParts.push(`내 이슈 ${issueQty.toLocaleString()}개`);
+  if (othersQty > 0) noteParts.push(`Others logged ${othersQty.toLocaleString()}`);
+  if (issueQty > 0) noteParts.push(`Your issue ${issueQty.toLocaleString()}`);
   openModal(`
     <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
-      <i class="ri-scissors-cut-line" style="color:var(--purple)"></i> ${ed.uk} 분할 · 수량 수정
+      <i class="ri-scissors-cut-line" style="color:var(--purple)"></i> Split ${ed.uk} · Edit Qty
     </div>
     <div style="display:flex;align-items:flex-start;gap:10px;margin:8px 0 12px">
       <span class="mono" style="font-size:11.5px;color:var(--t3);white-space:nowrap;flex-shrink:0;padding-top:2px">${it.barcode||it.sku||'—'}</span>
       <span style="font-size:12.5px;color:var(--t);line-height:1.5;flex:1">${(it.name||'').replace(/</g,'&lt;')}</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px;margin-bottom:${noteParts.length?'6':'12'}px">
-      <div style="text-align:center"><div style="font-size:9.5px;color:var(--t3);margin-bottom:3px">필요수량</div><div id="skuBoxReq" class="mono" style="font-size:16px;font-weight:800;color:var(--t2)">${ed.reqQty>0?ed.reqQty.toLocaleString():'—'}</div></div>
-      <div style="text-align:center"><div style="font-size:9.5px;color:var(--t3);margin-bottom:3px">지금 입력</div><div id="skuBoxEntered" class="mono" style="font-size:16px;font-weight:800;color:var(--blue)">0</div></div>
-      <div style="text-align:center"><div style="font-size:9.5px;color:var(--t3);margin-bottom:3px">남은 수량</div><div id="skuBoxDiff" class="mono" style="font-size:16px;font-weight:800">0</div></div>
+      <div style="text-align:center"><div style="font-size:9.5px;color:var(--t3);margin-bottom:3px">Required</div><div id="skuBoxReq" class="mono" style="font-size:16px;font-weight:800;color:var(--t2)">${ed.reqQty>0?ed.reqQty.toLocaleString():'—'}</div></div>
+      <div style="text-align:center"><div style="font-size:9.5px;color:var(--t3);margin-bottom:3px">Entered</div><div id="skuBoxEntered" class="mono" style="font-size:16px;font-weight:800;color:var(--blue)">0</div></div>
+      <div style="text-align:center"><div style="font-size:9.5px;color:var(--t3);margin-bottom:3px">Remaining</div><div id="skuBoxDiff" class="mono" style="font-size:16px;font-weight:800">0</div></div>
     </div>
-    ${noteParts.length ? `<div style="font-size:10.5px;color:var(--t3);text-align:center;margin-bottom:12px">필요수량에서 제외됨: ${noteParts.join(' · ')}</div>` : ''}
+    ${noteParts.length ? `<div style="font-size:10.5px;color:var(--t3);text-align:center;margin-bottom:12px">Already deducted from required: ${noteParts.join(' · ')}</div>` : ''}
     <div id="skuBoxRows"></div>
-    <button type="button" class="btn btn-sm" style="width:100%;border-style:dashed;color:var(--blue);margin-bottom:10px" onclick="addSkuBoxRow()"><i class="ri-add-line"></i> ${ed.uk} 추가</button>
+    <button type="button" class="btn btn-sm" style="width:100%;border-style:dashed;color:var(--blue);margin-bottom:10px" onclick="addSkuBoxRow()"><i class="ri-add-line"></i> Add ${ed.uk}</button>
     <div id="skuBoxCapNote" style="display:none;font-size:11.5px;font-weight:700;color:var(--red);text-align:center;margin-bottom:8px"></div>
     <div id="skuBoxSumline"></div>
-    <div style="font-size:10.5px;color:var(--t3);text-align:center;margin-top:8px;line-height:1.6">수량을 직접 고치면 저장 시 내 수량이 이 합계로 바뀝니다. 이슈(파손/유통기한 등)는 목록의 <i class="ri-flag-2-line"></i> 버튼에서 등록하세요.</div>
+    <div style="font-size:10.5px;color:var(--t3);text-align:center;margin-top:8px;line-height:1.6">Editing quantities here sets YOUR quantity to the new total on save. Report issues (damaged / expired, etc.) with the <i class="ri-flag-2-line"></i> button on the list.</div>
     <div style="display:flex;gap:8px;margin-top:12px">
-      <button class="btn btn-sm" onclick="closeModal()">취소</button>
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
       <div style="flex:1"></div>
-      <button class="btn btn-purple btn-sm" id="skuBoxSaveBtn" onclick="saveSkuBoxSplit()"><i class="ri-check-line"></i> 저장</button>
+      <button class="btn btn-purple btn-sm" id="skuBoxSaveBtn" onclick="saveSkuBoxSplit()"><i class="ri-check-line"></i> Save</button>
     </div>
   `);
   renderSkuBoxEdit();
@@ -2930,7 +2932,7 @@ function renderSkuBoxRows(){
         <input id="skuBoxN_${i}" type="text" inputmode="numeric" pattern="[0-9]*" value="${r.n}" style="width:44px;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-weight:700;text-align:center;padding:4px 2px" oninput="updateSkuBoxRowNum(${i},this)">
       </div>
       <input id="skuBoxQ_${i}" type="text" inputmode="numeric" pattern="[0-9]*" value="${r.q}" style="flex:1;min-width:0;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--t);font-family:var(--mono);font-weight:700;padding:7px 9px;text-align:right" oninput="updateSkuBoxRowQty(${i},this)">
-      <button type="button" title="남은 수량을 이 ${ed.uk}에 모두 넣기" style="flex-shrink:0;height:26px;padding:0 7px;border-radius:6px;border:1px solid var(--bd2);background:var(--bg4);color:var(--blue);font-size:10.5px;font-weight:800" onclick="fillSkuBoxRow(${i})">남은것</button>
+      <button type="button" title="Put all remaining qty into this ${ed.uk}" style="flex-shrink:0;height:26px;padding:0 7px;border-radius:6px;border:1px solid var(--bd2);background:var(--bg4);color:var(--blue);font-size:10.5px;font-weight:800" onclick="fillSkuBoxRow(${i})">Rest</button>
       <button type="button" style="width:26px;height:26px;border-radius:50%;border:none;background:transparent;color:var(--t3);font-size:15px;flex-shrink:0" onclick="removeSkuBoxRow(${i})">✕</button>
     </div>`).join('');
 }
@@ -2962,21 +2964,21 @@ function updateSkuBoxSum(){
     if (dup.size) {
       bad = true;
       sumEl.style.cssText = base + 'background:var(--red-bg);color:var(--red)';
-      sumEl.innerHTML = `<span>⚠ 같은 ${ed.uk} 번호(${[...dup].join(', ')})가 중복되어 있습니다 — 하나로 합쳐주세요</span>${tot}`;
+      sumEl.innerHTML = `<span>⚠ Duplicate ${ed.uk} number (${[...dup].join(', ')}) — merge into one</span>${tot}`;
     } else if (hasCap && sum > cap) {
       bad = true;
       sumEl.style.cssText = base + 'background:var(--red-bg);color:var(--red)';
-      sumEl.innerHTML = `<span>⚠ ${(sum-cap).toLocaleString()}개 초과 — 줄여야 저장할 수 있습니다</span>${tot}`;
+      sumEl.innerHTML = `<span>⚠ Over by ${(sum-cap).toLocaleString()} — reduce to save</span>${tot}`;
     } else if (sum <= 0) {
       bad = true;
       sumEl.style.cssText = base + 'background:var(--amber-bg);color:var(--amber)';
-      sumEl.innerHTML = `<span>수량을 입력하세요</span>${tot}`;
+      sumEl.innerHTML = `<span>Enter a quantity</span>${tot}`;
     } else if (hasCap && sum < cap) {
       sumEl.style.cssText = base + 'background:var(--amber-bg);color:var(--amber)';
-      sumEl.innerHTML = `<span>${(cap-sum).toLocaleString()}개 남음 — 저장하면 아직 미완료로 남습니다</span>${tot}`;
+      sumEl.innerHTML = `<span>${(cap-sum).toLocaleString()} remaining — will stay incomplete if saved</span>${tot}`;
     } else {
       sumEl.style.cssText = base + 'background:var(--green-bg);color:var(--green)';
-      sumEl.innerHTML = `<span>✓ 필요수량과 정확히 일치</span>${tot}`;
+      sumEl.innerHTML = `<span>✓ Matches required quantity</span>${tot}`;
     }
   }
   if (ed.rows.some(r => (Number(r.q) || 0) > 0 && (!r.n || r.n < 1))) bad = true;
@@ -2985,7 +2987,7 @@ function updateSkuBoxSum(){
 let _skuBoxCapTimer = null;
 function skuBoxCapFlash(max){
   const el = document.getElementById('skuBoxCapNote'); if (!el) return;
-  el.textContent = `⚠ 총수량을 넘을 수 없습니다 — 이 ${_skuBoxEdit ? _skuBoxEdit.uk : ''}에는 최대 ${max.toLocaleString()}개까지만 입력됩니다`;
+  el.textContent = `⚠ Cannot exceed the total — max ${max.toLocaleString()} for this ${_skuBoxEdit ? _skuBoxEdit.uk : ''}`;
   el.style.display = 'block';
   clearTimeout(_skuBoxCapTimer);
   _skuBoxCapTimer = setTimeout(() => { const e2 = document.getElementById('skuBoxCapNote'); if (e2) e2.style.display = 'none'; }, 3500);
@@ -3013,7 +3015,7 @@ window.updateSkuBoxRowQty = function(i, el){
 window.fillSkuBoxRow = function(i){
   const ed = _skuBoxEdit; if (!ed) return;
   const cap = skuBoxCap(ed);
-  if (cap === Infinity) { toast('필요수량이 없는 항목은 직접 입력하세요', 'err'); return; }
+  if (cap === Infinity) { toast('This item has no required qty — type the number directly', 'err'); return; }
   const max = Math.max(0, cap - skuBoxSum(ed, i));
   ed.rows[i].q = max;
   const inp = document.getElementById('skuBoxQ_' + i); if (inp) inp.value = String(max);
@@ -3036,14 +3038,14 @@ window.saveSkuBoxSplit = function(){
   const ed = _skuBoxEdit; if (!ed) return;
   const live = ed.rows.filter(r => (Number(r.q) || 0) > 0);
   const sum = live.reduce((s,r) => s + r.q, 0);
-  if (sum <= 0) { toast('⚠ 수량을 입력하세요', 'err'); return; }
+  if (sum <= 0) { toast('⚠ Enter a quantity', 'err'); return; }
   // Re-check the ceiling against FRESH numbers: a teammate's live scan may
   // have landed while this window was open.
   const cap = skuBoxCap(ed);
-  if (cap !== Infinity && sum > cap) { toast(`⚠ 총수량(${cap.toLocaleString()})을 ${(sum-cap).toLocaleString()}개 초과했습니다 — 줄여주세요`, 'err'); updateSkuBoxSum(); return; }
+  if (cap !== Infinity && sum > cap) { toast(`⚠ Over the total (${cap.toLocaleString()}) by ${(sum-cap).toLocaleString()} — please reduce`, 'err'); updateSkuBoxSum(); return; }
   const nums = live.map(r => r.n);
-  if (nums.some(n => !n || n < 1)) { toast(`⚠ ${ed.uk} 번호는 1 이상이어야 합니다`, 'err'); return; }
-  if (new Set(nums).size !== nums.length) { toast(`⚠ 같은 ${ed.uk} 번호가 중복되어 있습니다 — 하나로 합쳐주세요`, 'err'); return; }
+  if (nums.some(n => !n || n < 1)) { toast(`⚠ ${ed.uk} number must be 1 or higher`, 'err'); return; }
+  if (new Set(nums).size !== nums.length) { toast(`⚠ Duplicate ${ed.uk} number — merge into one`, 'err'); return; }
   const st = loadScanState(ed.wid);
   // Clear every box's existing entry for this key first, then write the
   // new per-row split fresh — "replace, don't add" (same as saveQtyEdit).
@@ -3063,7 +3065,7 @@ window.saveSkuBoxSplit = function(){
   const wid2 = ed.wid, uk2 = ed.uk;
   _skuBoxEdit = null;
   closeModal();
-  toast(changed ? `${uk2} 분할 저장 · 수량 ${sum.toLocaleString()}개로 수정됨` : `${uk2} 배정이 저장되었습니다`, 'ok');
+  toast(changed ? `${uk2} split saved · quantity set to ${sum.toLocaleString()}` : `${uk2} assignment saved`, 'ok');
   renderStageContent();
   if (changed) pushMyLiveScan(wid2);
 };
@@ -3096,8 +3098,8 @@ let _postBoxEdit = null;
 // (e.g. scanned-and-boxed up to the network drop, force-completed after).
 window.openPostSessionBoxList = async function(oid, focusKey){
   const entries = S.works.filter(w => w.oid === oid && w.stage === 'INSP' && w.endT);
-  if (!entries.length) { toast('이 주문에 완료된 검수 세션이 없습니다', 'err'); return; }
-  toast('불러오는 중...', '');
+  if (!entries.length) { toast('No finished inspection sessions on this order yet', 'err'); return; }
+  toast('Loading...', '');
   const perEntry = await Promise.all(entries.map(e => apiOp('getInspectionResults', { entryId: e.id })));
   const items = [];
   entries.forEach((e, i) => {
@@ -3128,7 +3130,7 @@ window.openPostSessionBoxList = async function(oid, focusKey){
       items.push(Object.assign({ entryId:e.id, worker:e.w, key:k, boxedSum, unassigned }, it));
     });
   });
-  if (!items.length) { toast('이 주문에 저장된 검수 데이터가 없습니다', 'err'); return; }
+  if (!items.length) { toast('No saved inspection data on this order', 'err'); return; }
   // v14.88 — which unit this order is recorded as (every row carries its
   // own UnitType). 'mixed' only happens for old data; the switch below
   // unifies it.
@@ -3305,7 +3307,7 @@ window.openPostSessionBoxModal = function(entryId, key){
   const edC = unitColors(edU);
   openModal(`
     <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px">
-      <i class="${unitIconCls(edU)}" style="color:var(--purple)"></i> ${unitKo(edU)} 재배정
+      <i class="${unitIconCls(edU)}" style="color:var(--purple)"></i> ${unitEn(edU).charAt(0)+unitEn(edU).slice(1).toLowerCase()} Re-assign
       <span style="font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;border:1px solid ${edC.bd};color:${edC.c};background:${edC.bg}">${unitEn(edU)}</span>
     </div>
     <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
@@ -3313,18 +3315,18 @@ window.openPostSessionBoxModal = function(entryId, key){
       <span style="font-size:12.5px;color:var(--t);line-height:1.5;flex:1">${(it.name||'').replace(/</g,'&lt;')}</span>
     </div>
     ${it.unassigned > 0 ? `<div style="background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber);border-radius:var(--r);padding:8px 10px;font-size:10.5px;line-height:1.5;margin-bottom:12px">
-      <i class="ri-error-warning-line"></i> 이 중 <b>${it.unassigned.toLocaleString()}개</b>는 아직 팔렛/박스 번호가 없습니다(강제완료 등으로 끝난 몫) — 아래에서 실제 번호를 입력하세요.
+      <i class="ri-error-warning-line"></i> <b>${it.unassigned.toLocaleString()}</b> of these have no pallet/box number yet (e.g. force-completed) — enter the actual number below.
     </div>` : `<div style="background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber);border-radius:var(--r);padding:8px 10px;font-size:10.5px;line-height:1.5;margin-bottom:12px">
-      <i class="ri-error-warning-line"></i> 이미 완료되어 저장된 기록을 직접 고치는 것입니다 — 저장하면 즉시 구글시트에 반영됩니다.
+      <i class="ri-error-warning-line"></i> You are editing an already-saved record — saving updates the Google Sheet immediately.
     </div>`}
-    <div style="font-size:11.5px;color:var(--t3);margin-bottom:10px;text-align:center">기록된 총 <b style="color:var(--t)">${it.total.toLocaleString()}</b>개를 다시 나눠보세요</div>
+    <div style="font-size:11.5px;color:var(--t3);margin-bottom:10px;text-align:center">Split the recorded total of <b style="color:var(--t)">${it.total.toLocaleString()}</b> again</div>
     <div id="postBoxRows"></div>
-    <button type="button" class="btn btn-sm" style="width:100%;border-style:dashed;color:var(--blue);margin-bottom:10px" onclick="addPostBoxRow()"><i class="ri-add-line"></i> 번호 추가</button>
+    <button type="button" class="btn btn-sm" style="width:100%;border-style:dashed;color:var(--blue);margin-bottom:10px" onclick="addPostBoxRow()"><i class="ri-add-line"></i> Add number</button>
     <div id="postBoxSumline"></div>
     <div style="display:flex;gap:8px;margin-top:10px">
-      <button class="btn btn-sm" onclick="closeModal()">취소</button>
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
       <div style="flex:1"></div>
-      <button class="btn btn-purple btn-sm" id="postBoxSaveBtn" onclick="savePostBoxSplit()"><i class="ri-check-line"></i> 서버에 저장</button>
+      <button class="btn btn-purple btn-sm" id="postBoxSaveBtn" onclick="savePostBoxSplit()"><i class="ri-check-line"></i> Save to server</button>
     </div>
   `);
   renderPostBoxEdit();
@@ -3360,10 +3362,10 @@ function updatePostBoxSum(){
   if (sumEl) {
     if (diff === 0) {
       sumEl.style.cssText = 'display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;padding:9px 10px;border-radius:var(--r);background:var(--green-bg);color:var(--green)';
-      sumEl.innerHTML = `<span>✓ 기록된 수량과 일치</span><span class="mono">${sum.toLocaleString()} / ${ed.total.toLocaleString()}</span>`;
+      sumEl.innerHTML = `<span>✓ Matches recorded quantity</span><span class="mono">${sum.toLocaleString()} / ${ed.total.toLocaleString()}</span>`;
     } else {
       sumEl.style.cssText = 'display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;padding:9px 10px;border-radius:var(--r);background:var(--red-bg);color:var(--red)';
-      sumEl.innerHTML = `<span>⚠ ${Math.abs(diff).toLocaleString()}개 ${diff>0?'부족':'초과'}</span><span class="mono">${sum.toLocaleString()} / ${ed.total.toLocaleString()}</span>`;
+      sumEl.innerHTML = `<span>⚠ ${Math.abs(diff).toLocaleString()} ${diff>0?'short':'over'}</span><span class="mono">${sum.toLocaleString()} / ${ed.total.toLocaleString()}</span>`;
     }
   }
   if (saveBtn) saveBtn.disabled = (diff !== 0) || ed.rows.some(r => !r.n || r.n < 1);
@@ -3393,21 +3395,21 @@ window.removePostBoxRow = function(i){
 window.savePostBoxSplit = async function(){
   const ed = _postBoxEdit; if (!ed) return;
   const sum = ed.rows.reduce((s,r) => s + (Number(r.q)||0), 0);
-  if (sum !== ed.total) { toast('⚠ 합계를 기록된 수량과 맞춰야 저장할 수 있습니다', 'err'); return; }
+  if (sum !== ed.total) { toast('⚠ Total must match the recorded quantity to save', 'err'); return; }
   const nums = ed.rows.map(r => r.n);
-  if (new Set(nums).size !== nums.length) { toast('⚠ 같은 번호가 중복되어 있습니다 — 하나로 합쳐주세요', 'err'); return; }
+  if (new Set(nums).size !== nums.length) { toast('⚠ Duplicate number — merge into one', 'err'); return; }
   const btn = document.getElementById('postBoxSaveBtn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> 저장 중...'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> Saving...'; }
   const payload = { entryId: ed.entryId, sku: ed.sku, barcode: ed.barcode, rows: ed.rows.map(r => ({ n:r.n, q:r.q })) };
   const out = _mgrOK ? await mgrOp('updateBoxAssignment', payload)
     : await apiOp('updateBoxAssignment', Object.assign({}, payload, { worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : '' }));
   if (!out.net || !out.res.ok) {
     const err = out.res && out.res.error;
-    const msg = err === 'total_mismatch' ? '⚠ 합계가 서버 기록과 달라 저장할 수 없습니다 — 새로고침 후 다시 시도하세요'
-      : err === 'unauthorized' ? '⚠ 권한이 없습니다 (로그인된 작업자 이름을 확인하세요 — PIN이 설정되어 있다면 PIN도 필요합니다)'
-      : '⚠ 저장 실패: ' + (err || 'network');
+    const msg = err === 'total_mismatch' ? '⚠ Total differs from the server record — refresh and try again'
+      : err === 'unauthorized' ? '⚠ Not authorized (check the signed-in worker name — a PIN is also required if one is set)'
+      : '⚠ Save failed: ' + (err || 'network');
     toast(msg, 'err');
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ri-check-line"></i> 서버에 저장'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ri-check-line"></i> Save to server'; }
     return;
   }
   // Keep the list's in-memory copy in sync, so re-opening a tag right
@@ -3426,7 +3428,7 @@ window.savePostBoxSplit = async function(){
     }
   }
   closeModal();
-  toast('저장되었습니다 — 구글시트에 반영됨', 'ok');
+  toast('Saved — Google Sheet updated', 'ok');
   if (_postBoxList) renderPostBoxList();
 };
 
