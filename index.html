@@ -3097,10 +3097,26 @@ let _postBoxEdit = null;
 // with no box rows at all, or something in between for a partial case
 // (e.g. scanned-and-boxed up to the network drop, force-completed after).
 window.openPostSessionBoxList = async function(oid, focusKey){
-  const entries = S.works.filter(w => w.oid === oid && w.stage === 'INSP' && w.endT);
-  if (!entries.length) { toast('No finished inspection sessions on this order yet', 'err'); return; }
+  const realEntries = S.works.filter(w => w.oid === oid && w.stage === 'INSP' && w.endT);
   toast('Loading...', '');
-  const perEntry = await Promise.all(entries.map(e => apiOp('getInspectionResults', { entryId: e.id })));
+  // v14.93 — also pull rows written by single-SKU corrections (the 🚩 Report
+  // issue modal saves under a synthetic 'FIX…' entryId that belongs to no
+  // WorkEntry). Without this, a SKU whose only record is such a row never
+  // showed up here at all, so it could not be split.
+  const [perReal, fixOut] = await Promise.all([
+    Promise.all(realEntries.map(e => apiOp('getInspectionResults', { entryId: e.id }))),
+    apiOp('getInspectionResults', { oid, fixOnly: true })
+  ]);
+  const entries = realEntries.slice(), perEntry = perReal.slice();
+  if (fixOut.net && fixOut.res.ok) {
+    const byFix = {};
+    (fixOut.res.rows || []).forEach(r => { (byFix[r.entryId] = byFix[r.entryId] || []).push(r); });
+    Object.keys(byFix).forEach(eid => {
+      entries.push({ id: eid, w: 'Correction', oid, stage: 'INSP', endT: true });
+      perEntry.push({ net: true, res: { ok: true, rows: byFix[eid] } });
+    });
+  }
+  if (!entries.length) { toast('No finished inspection sessions on this order yet', 'err'); return; }
   const items = [];
   entries.forEach((e, i) => {
     const out = perEntry[i];
@@ -3130,6 +3146,19 @@ window.openPostSessionBoxList = async function(oid, focusKey){
       items.push(Object.assign({ entryId:e.id, worker:e.w, key:k, boxedSum, unassigned }, it));
     });
   });
+  // v14.93 — a 'Correction' (FIX) item carries the SKU's authoritative total
+  // as a summary row. If that SKU's pallet rows were preserved under the
+  // original sessions (server restore), the correction item has nothing left
+  // to assign — hide it so the SKU isn't shown twice. Otherwise its
+  // unassigned amount is whatever the other sessions' pallet rows don't cover.
+  const otherBoxedByKey = {};
+  items.forEach(it => { if (it.worker !== 'Correction') otherBoxedByKey[it.key] = (otherBoxedByKey[it.key] || 0) + it.boxedSum; });
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    if (it.worker !== 'Correction') continue;
+    it.unassigned = Math.max(0, it.total - it.boxedSum - (otherBoxedByKey[it.key] || 0));
+    if (!it.rows.length && it.unassigned <= 0) items.splice(i, 1);
+  }
   if (!items.length) { toast('No saved inspection data on this order', 'err'); return; }
   // v14.88 — which unit this order is recorded as (every row carries its
   // own UnitType). 'mixed' only happens for old data; the switch below
@@ -6971,6 +7000,15 @@ async function getPrintReadyProgress(oid){
 // -still-in-progress worker's box assignment won't appear until they end.
 async function getOrderBoxGroups(oid){
   const entries = S.works.filter(w => w.oid === oid && w.stage === 'INSP' && w.endT);
+  // v14.93 — include box rows saved under single-SKU correction ('FIX…')
+  // entryIds, so a pallet split done on such a SKU shows in the box breakdown.
+  const fixOut = await apiOp('getInspectionResults', { oid, fixOnly: true });
+  const fixPer = [];
+  if (fixOut.net && fixOut.res.ok) {
+    const byFix = {};
+    (fixOut.res.rows || []).forEach(r => { if (r.boxNum) (byFix[r.entryId] = byFix[r.entryId] || []).push(r); });
+    Object.keys(byFix).forEach(eid => { entries.push({ id: eid, w: 'Correction' }); fixPer.push({ net: true, res: { ok: true, rows: byFix[eid] } }); });
+  }
   const multiWorker = new Set(entries.map(e => e.w)).size > 1;
   let unitType = 'box';
   // v14.7 — this used to await one getInspectionResults call PER ended
@@ -6981,7 +7019,8 @@ async function getOrderBoxGroups(oid){
   // long time. Firing them all at once and assembling the groups
   // afterward, in the original entries order, cuts the wait to whichever
   // single call is slowest instead of the sum of all of them.
-  const perEntry = await Promise.all(entries.map(e => apiOp('getInspectionResults', { entryId: e.id })));
+  const realCount = entries.length - fixPer.length;
+  const perEntry = (await Promise.all(entries.slice(0, realCount).map(e => apiOp('getInspectionResults', { entryId: e.id })))).concat(fixPer);
   const groups = [];
   entries.forEach((e, i) => {
     const out = perEntry[i];
