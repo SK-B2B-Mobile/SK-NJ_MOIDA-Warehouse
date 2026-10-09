@@ -2389,6 +2389,13 @@ function skuRowHtml(it, st, wid){
       : '';
     const splitChip = `<span style="${tagCss}background:var(--bg4);border:1px solid var(--bd2);color:var(--t2)" title="이 SKU를 ${uw}별로 분할 / 수량 수정" onclick="event.stopPropagation();openSkuBoxModal('${wid}','${keyEsc}')">✂ 분할</span>`;
     boxTagsHtml = `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${tagsInner}${unassignedTag}${splitChip}</div>`;
+  } else if (others > 0) {
+    // v14.90 — 이 SKU 수량이 전부 "다른 작업자(이미 저장된 세션)" 몫이면 내 수량은 0이라
+    // 위 분할창(내 수량 전용)이 의미가 없다. 대신 저장된 기록의 팔렛/박스 분할을 고치는
+    // 주문 전체 편집기(openPostSessionBoxList)를 이 SKU 기준으로 바로 연다.
+    const uw0 = unitWord(st.unitType, true);
+    const w0 = S.works.find(x => x.id === wid);
+    if (w0) boxTagsHtml = `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"><span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 7px;cursor:pointer;background:var(--bg4);border:1px solid var(--bd2);color:var(--t2)" title="저장된 기록의 ${uw0} 분할 수정" onclick="event.stopPropagation();openPostSessionBoxList('${w0.oid}','${keyEsc}')">✂ 분할</span></div>`;
   }
   return `<div class="sku-row ${cls}" id="skurow_${wid}_${skuIdSafe(key)}">
     <div class="sku-check ${issue?'issue':(ok?'ok':'')}" title="탭해서 제품 정보 확인" onclick="event.stopPropagation();openSkuDetailModal('${wid}','${keyEsc}')">${issue ? '<i class="ri-flag-2-fill"></i>' : (ok ? '<i class="ri-check-line"></i>' : '')}</div>
@@ -3087,7 +3094,7 @@ let _postBoxEdit = null;
 // normally fully-boxed SKU, the whole amount for a force-completed one
 // with no box rows at all, or something in between for a partial case
 // (e.g. scanned-and-boxed up to the network drop, force-completed after).
-window.openPostSessionBoxList = async function(oid){
+window.openPostSessionBoxList = async function(oid, focusKey){
   const entries = S.works.filter(w => w.oid === oid && w.stage === 'INSP' && w.endT);
   if (!entries.length) { toast('이 주문에 완료된 검수 세션이 없습니다', 'err'); return; }
   toast('불러오는 중...', '');
@@ -3132,6 +3139,10 @@ window.openPostSessionBoxList = async function(oid){
   });
   const orderUnit = unitSet.size > 1 ? 'mixed' : (unitSet.has('pallet') ? 'pallet' : 'box');
   _postBoxList = { oid, items, unitType: orderUnit, pendingUnit: null, unitBusy: false };
+  // v14.90 — opened from a checklist row's "✂ 분할": jump straight into that
+  // SKU's editor when it has exactly one saved entry; otherwise show the list.
+  const focusItems = focusKey ? items.filter(x => x.key === focusKey) : [];
+  if (focusItems.length === 1) { openPostSessionBoxModal(focusItems[0].entryId, focusKey); return; }
   renderPostBoxList();
 };
 
