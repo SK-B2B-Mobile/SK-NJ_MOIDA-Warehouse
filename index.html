@@ -2367,8 +2367,8 @@ function skuRowHtml(it, st, wid){
   // Tapping a tag opens openSkuBoxModal to reassign just this one SKU.
   const boxTags = boxTagsForSku(st, key);
   let boxTagsHtml = '';
-  // v14.91 — high-visibility SPLIT button (solid purple, larger than the tags).
-  const splitChipCss = 'display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;letter-spacing:.04em;border-radius:7px;padding:4px 12px;cursor:pointer;background:var(--purple);border:1px solid var(--purple);color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35)';
+  // v14.92 — SPLIT button: soft purple tint + purple outline (larger than the tags, but not a solid fill).
+  const splitChipCss = 'display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;letter-spacing:.04em;border-radius:7px;padding:4px 12px;cursor:pointer;background:rgba(168,85,247,.16);border:1px solid rgba(168,85,247,.6);color:#c9a3fb';
   // v14.89 — 수량이 있는 모든 SKU에 "✂ 분할" 버튼을 항상 표시한다. 예전에는 박스/팔렛
   // 태그(스캔 기록이 있어야 생김)를 눌러야만 분할창이 열려서, 연필/마스터 케이스/강제
   // 완료로 수량을 넣은 SKU는 분할창에 들어갈 방법이 없었다. 아직 어느 팔렛/박스에도
