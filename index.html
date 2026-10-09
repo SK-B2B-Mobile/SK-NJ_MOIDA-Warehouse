@@ -6834,6 +6834,23 @@ window.finalizeInspEnd = async function(wid){
         ? `<span style="color:var(--amber);font-weight:700">자동 재시도 중 ${attempt}/${maxAttempts}${partLabel}</span> — 화면을 벗어나지 마세요`
         : `잠시만 기다려주세요${partLabel} — 화면을 벗어나지 마세요`;
     });
+  if (ok && ok.over) {
+    // v14.95 — nothing was saved; the session is still open with every scan intact.
+    const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const li = ok.over.map(o => `<li style="margin-bottom:10px;line-height:1.55"><span class="mono" style="font-size:11px;color:var(--t3)">${esc(o.barcode || o.sku)}</span> ${esc(o.name)}<br>
+      Required <b>${Number(o.req)}</b> · Already saved <b>${Number(o.alreadySaved)}</b>${o.by ? ' (' + esc(o.by) + ')' : ''} · Yours <b>${Number(o.mine)}</b><br>
+      <b style="color:var(--red)">Over by ${Number(o.excess)}</b> — ${Number(o.maxAllowed) > 0 ? 'set your quantity to <b style="color:var(--green)">' + Number(o.maxAllowed) + ' or less</b>' : 'this item is already fully recorded — set your quantity to <b style="color:var(--green)">0</b>'}</li>`).join('');
+    refreshLiveBaseline(wid);
+    openModal(`<div class="end-modal-inner" style="text-align:left">
+      <div style="text-align:center"><i class="ri-error-warning-line" style="font-size:28px;color:var(--red);display:block;margin-bottom:8px"></i></div>
+      <div style="font-size:15px;font-weight:800;margin-bottom:6px;color:var(--red);text-align:center">Not saved — quantity is over the required amount</div>
+      <div style="font-size:12.5px;color:var(--t2);margin-bottom:12px;line-height:1.55;text-align:center">Saving would make these items exceed what the order needs. <b style="color:var(--t)">Nothing was saved. Your session is still open and all your scans are kept.</b></div>
+      <ul style="margin:0 0 14px;padding-left:18px;font-size:12.5px;color:var(--t2)">${li}</ul>
+      <div style="font-size:11.5px;color:var(--t3);margin-bottom:14px;line-height:1.55">Tap the quantity of each item above to correct it (it will not allow more than is left), then press End Inspection again.</div>
+      <div style="display:flex;justify-content:center"><button class="btn btn-purple" style="padding:10px 22px;font-weight:700" onclick="closeModal();renderStageContent()">Back to checklist</button></div>
+    </div>`);
+    return;
+  }
   if (!ok) {
     openModal(`<div class="end-modal-inner">
       <i class="ri-error-warning-line" style="font-size:28px;color:var(--red);display:block;margin-bottom:8px"></i>
@@ -7186,8 +7203,53 @@ async function _printOrderPackingSlip(oid, mode){
     }
   }
   closeModal();
+  // v14.95 — never print a slip that is internally inconsistent without the
+  // person seeing it first: SKU over its required qty, or (box mode) a SKU
+  // whose pallet/box rows don't add up to its recorded total.
+  const probs = slipIntegrityProblems(p, mode === 'box' ? boxGroups : null, meta.unitType);
+  if (probs.length) {
+    const go = await confirmSlipProblems(probs);
+    if (!go) return;
+  }
   printPackingSlip(w, rows, meta, mode === 'box' ? boxGroups : {}, mode === 'box' ? 'box' : 'flat');
 };
+function slipIntegrityProblems(p, boxGroups, unitType){
+  const probs = [];
+  const uw = unitWord(unitType, true);
+  const boxSum = {};
+  if (boxGroups) boxGroups.forEach(g => Object.entries(g.items || {}).forEach(([k, q]) => { boxSum[k] = (boxSum[k] || 0) + (Number(q) || 0); }));
+  (p.skus || []).forEach(s => {
+    const key = s.barcode || s.sku;
+    const req = Number(s.reqQty) || 0, packed = Number(s.packedQty) || 0, iss = Number(s.issueQty) || 0;
+    if (req > 0 && packed + iss > req) {
+      probs.push({ key, sku: s.sku, name: s.name, kind: 'over', text: `Recorded ${packed}${iss ? ' + issue ' + iss : ''} is more than required ${req} (over by ${packed + iss - req})` });
+    }
+    if (boxGroups && packed > 0 && (boxSum[key] || 0) !== packed) {
+      probs.push({ key, sku: s.sku, name: s.name, kind: 'box', text: (boxSum[key] || 0) === 0
+        ? `Not assigned to any ${uw} yet (recorded ${packed})`
+        : `${uw} breakdown adds up to ${boxSum[key]} but recorded total is ${packed}` });
+    }
+  });
+  return probs;
+}
+function confirmSlipProblems(probs){
+  return new Promise(resolve => {
+    const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const li = probs.slice(0, 15).map(x => `<li style="margin-bottom:8px;line-height:1.5"><span class="mono" style="font-size:11px;color:var(--t3)">${esc(x.sku || x.key)}</span> ${esc(x.name)}<br><b style="color:${x.kind === 'over' ? 'var(--red)' : 'var(--amber)'}">${esc(x.text)}</b></li>`).join('');
+    const more = probs.length > 15 ? `<div style="font-size:11px;color:var(--t3);margin-bottom:8px">…and ${probs.length - 15} more</div>` : '';
+    window._slipProblemsAnswer = ok => { closeModal(true); resolve(ok); };
+    openModal(`<div class="end-modal-inner" style="text-align:left">
+      <div style="text-align:center"><i class="ri-error-warning-line" style="font-size:28px;color:var(--amber);display:block;margin-bottom:8px"></i></div>
+      <div style="font-size:15px;font-weight:800;margin-bottom:6px;color:var(--amber);text-align:center">Check before printing the packing slip</div>
+      <div style="font-size:12.5px;color:var(--t2);margin-bottom:12px;line-height:1.55;text-align:center">${probs.length} item${probs.length > 1 ? 's' : ''} may print with wrong numbers. Fix them first, or print anyway if you have already checked.</div>
+      <ul style="margin:0 0 10px;padding-left:18px;font-size:12.5px;color:var(--t2)">${li}</ul>${more}
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
+        <button class="btn btn-purple" style="padding:10px 20px;font-weight:700" onclick="_slipProblemsAnswer(false)">Cancel — I'll fix it</button>
+        <button class="btn btn-sm" onclick="_slipProblemsAnswer(true)">Print anyway</button>
+      </div>
+    </div>`, { closable:false });
+  });
+}
 
 // Legacy name kept as an alias (flat list) in case anything else still
 // calls it directly — the two explicit entry points above are what the UI
@@ -7894,6 +7956,11 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
   // printed quantity.
   const saveId = 'S' + Date.now() + '_' + Math.floor(Math.random()*1e6);
 
+  // v14.95 — whole-save per-SKU totals, sent with the FIRST chunk only so the
+  // server can check "other entries' qty + this save <= required" once,
+  // before writing anything (see Code.gs over-required guard).
+  const saveTotals = rows.filter(r => (r.got || 0) > 0).map(r => ({ sku:r.sku, barcode:r.barcode, name:r.name, packed:r.got }));
+
   const MAX_ATTEMPTS = 3;
   async function sendChunk(rowsChunk, replace, chunkIndex){
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++){
@@ -7902,8 +7969,15 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
         entryId: wid, orderId, result, rows: rowsChunk, replace,
         unitType: unitType || 'box', reinspect: isReinspect,
         idemKey: saveId + '_' + chunkIndex,
+        totals: chunkIndex === 0 ? saveTotals : undefined,
         worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
       }, 45000);
+      // v14.95 — the server refused the whole save because it would push a
+      // SKU over its required qty. Not a network problem: never retry, hand
+      // the details up so the worker can fix the quantity.
+      if (out.net && out.res && out.res.error === 'over_required') {
+        return { over: out.res.over || [] };
+      }
       if (out.net && out.res.ok) {
         // v14.84 — the server recognized this exact chunk as an
         // already-applied retry (its idemKey was seen before) and skipped
@@ -7933,6 +8007,7 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
   // anything else writes, or a race could wipe rows an append chunk just
   // wrote. It now gets its own retry budget before giving up.
   const ok0 = await sendChunk(chunks[0], true, 0);
+  if (ok0 && ok0.over) return ok0;
   if (!ok0) return false;
   // Every remaining chunk is append-only. Sent ONE AT A TIME (not
   // Promise.all) — order between them still doesn't matter, but this
@@ -7940,6 +8015,7 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
   // on top of whatever the other workers are doing right now.
   for (let i = 1; i < chunks.length; i++){
     const ok = await sendChunk(chunks[i], false, i);
+    if (ok && ok.over) return ok;
     if (!ok) return false;
   }
   return true;
