@@ -119,6 +119,10 @@ async function networkFirstWithFallback(request){
 }
 
 self.addEventListener('fetch', event => {
+  // v14.97 — leave POSTs (the one-request inspection save) entirely to the
+  // browser: a request body can only be sent once, so the retry/caching
+  // wrapper below must never touch it.
+  if (event.request.method !== 'GET') return;
   const url = event.request.url;
   const isAppShellOrApi =
     event.request.mode === 'navigate' ||
