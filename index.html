@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.97</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -6811,6 +6811,7 @@ window.finalizeInspEnd = async function(wid){
   // explicit requirement that a caught duplicate must actually surface as
   // a message, not just be silently absorbed.
   let anyDeduped = false;
+  let saveTick = null; // v14.97 — elapsed-seconds painter for the one-request save
   // v14.87 — issue quantities the server refused/trimmed (see Code.gs
   // logInspectionResults_ issue guard). Collected across chunks, de-duped
   // by SKU, shown to the worker after the save completes.
@@ -6819,6 +6820,23 @@ window.finalizeInspEnd = async function(wid){
     (phase, attempt, maxAttempts, chunkIndex, chunkTotal, extra) => {
       const el = document.getElementById(`inspSaveStatus_${wid}`);
       const partLabel = chunkTotal > 1 ? ` (${chunkIndex+1}/${chunkTotal})` : '';
+      // v14.97 — one-request save: show a live elapsed-seconds counter so the
+      // worker can see it is working (and how long), instead of a static line.
+      if (phase === 'single') {
+        const t0 = Date.now(), rowsN = (extra && extra.rows) || 0;
+        if (saveTick) clearInterval(saveTick);
+        const paint = () => {
+          const e2 = document.getElementById(`inspSaveStatus_${wid}`); if (!e2) return;
+          const sec = Math.floor((Date.now() - t0) / 1000);
+          const head = attempt > 1
+            ? `<span style="color:var(--amber);font-weight:700">자동 재시도 중 ${attempt}/${maxAttempts}</span>`
+            : '서버에 저장하는 중';
+          const slow = sec >= 20 ? '<br><span style="color:var(--amber)">서버 응답이 평소보다 느립니다 — 계속 처리 중이니 그대로 기다려주세요</span>' : '';
+          e2.innerHTML = `${head} · <b>${sec}초</b>${rowsN ? ' · ' + rowsN + '행' : ''}<br>화면을 벗어나지 마세요${slow}`;
+        };
+        paint(); saveTick = setInterval(paint, 1000);
+        return;
+      }
       if (phase === 'issueResult') {
         ((extra && extra.blocked) || []).forEach(b => { blockedIssues[b.barcode || b.sku] = b; });
         ((extra && extra.clamped) || []).forEach(c => { clampedIssues[c.barcode || c.sku] = c; });
@@ -6834,6 +6852,7 @@ window.finalizeInspEnd = async function(wid){
         ? `<span style="color:var(--amber);font-weight:700">자동 재시도 중 ${attempt}/${maxAttempts}${partLabel}</span> — 화면을 벗어나지 마세요`
         : `잠시만 기다려주세요${partLabel} — 화면을 벗어나지 마세요`;
     });
+  if (saveTick) { clearInterval(saveTick); saveTick = null; }
   if (ok && ok.over) {
     // v14.95 — nothing was saved; the session is still open with every scan intact.
     const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -7899,6 +7918,40 @@ function _sleep(ms){ return new Promise(res => setTimeout(res, ms)); }
 // failure) more likely in the first place. `onProgress(phase, attempt,
 // maxAttempts, chunkIndex, chunkTotal)` lets the caller show live retry
 // status instead of a silent spinner.
+// v14.97 — POST transport for large writes. Sent as text/plain (still a JSON
+// body) so the browser needs no CORS preflight, which Apps Script cannot answer.
+function _singleSaveBlocked(){
+  try { return sessionStorage.getItem('wms_nopost') === '1'; } catch (_) { return false; }
+}
+async function postOp(op, data, timeoutMs){
+  _syncN++; setSyncing(true);
+  const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  let timer = null, timedOut = false;
+  try {
+    if (typeof fetch !== 'function') throw new Error('no fetch');
+    const req = fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ op }, data)),
+      signal: ctl ? ctl.signal : undefined,
+      cache: 'no-store', redirect: 'follow'
+    }).then(r => r.text());
+    const guard = new Promise((_, rej) => {
+      timer = setTimeout(() => { timedOut = true; if (ctl) try { ctl.abort(); } catch (_) {} rej(new Error('Timeout')); }, timeoutMs || 60000);
+    });
+    const txt = await Promise.race([req, guard]);
+    let j = null; try { j = JSON.parse(txt); } catch (_) {}
+    if (!j || typeof j !== 'object') return { net:false, res:{ ok:false, error:'bad_response' }, timedOut:false };
+    return { net:true, res:j };
+  } catch (e) {
+    setSyncFail();
+    return { net:false, res:{ ok:false, error:'network' }, timedOut };
+  } finally {
+    if (timer) clearTimeout(timer);
+    _syncN--; if (_syncN <= 0) { _syncN = 0; setSyncing(false); }
+  }
+}
+
 async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans, unitType, onProgress){
   const payload = rows.map(r => ({
     sku:r.sku, barcode:r.barcode, name:r.name, reqQty:r.req,
@@ -7955,6 +8008,62 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
   // the same box/pallet rows a second time, inflating that pallet's
   // printed quantity.
   const saveId = 'S' + Date.now() + '_' + Math.floor(Math.random()*1e6);
+
+  // v14.97 — FAST PATH: the whole save travels in ONE request (POST body, no
+  // URL-length limit) instead of ~20+ chunked GET requests that each paid a
+  // fixed Apps Script/Sheets cost one after another. One request also means
+  // the server's over-required check, its issue checks and the write all run
+  // together under one lock: the save is all-or-nothing (no half-written
+  // orders), and the separate pre-check round-trips are no longer needed.
+  // If this device/network cannot do a cross-origin POST at all (fails fast,
+  // and the server confirms it never received anything) the original chunked
+  // path below runs instead, exactly as before.
+  function reportSingle(res, attempt, fromStatus){
+    if (res.deduped && !fromStatus && onProgress) onProgress('deduped', attempt, 3, 0, 1);
+    if (onProgress && ((res.issueBlocked || []).length || (res.issueClamped || []).length)) {
+      onProgress('issueResult', attempt, 3, 0, 1, { blocked: res.issueBlocked || [], clamped: res.issueClamped || [] });
+    }
+  }
+  async function saveInOneRequest(){
+    const MAX = 3;
+    let fastFails = 0;
+    for (let attempt = 1; attempt <= MAX; attempt++){
+      if (onProgress) onProgress('single', attempt, MAX, 0, 1, { rows: payload.length });
+      const t0 = Date.now();
+      const out = await postOp('logInspectionResults', {
+        entryId: wid, orderId, result, rows: payload, replace: true,
+        unitType: unitType || 'box', reinspect: isReinspect,
+        idemKey: saveId,
+        worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
+      }, 90000);
+      if (out.net && out.res && out.res.error === 'over_required') return { over: out.res.over || [] };
+      if (out.net && out.res && out.res.ok) { reportSingle(out.res, attempt, false); return true; }
+      if (out.net) {
+        // The server answered, but with an error (busy lock, bad PIN, …).
+        console.warn('logInspectionResults (single) rejected', attempt, out.res);
+        if (attempt < MAX) await _sleep(1200 * attempt);
+        continue;
+      }
+      // No usable answer. Find out whether the server actually applied it
+      // (reply lost) — never write the same rows twice.
+      console.warn('logInspectionResults (single) no reply', attempt, out);
+      const st = await apiOp('getSaveStatus', { idemKey: saveId }, 15000);
+      if (st.net && st.res && st.res.ok && st.res.applied) { reportSingle(st.res, attempt, true); return true; }
+      const serverSaysNo = st.net && st.res && st.res.ok && st.res.applied === false;
+      const fast = !out.timedOut && (Date.now() - t0) < 8000;
+      fastFails = (serverSaysNo && fast) ? fastFails + 1 : 0;
+      if (fastFails >= 2) {
+        try { sessionStorage.setItem('wms_nopost', '1'); } catch (_) {}
+        return 'fallback';
+      }
+      if (attempt < MAX) await _sleep(1200 * attempt);
+    }
+    return false;
+  }
+  if (!_singleSaveBlocked()) {
+    const r1 = await saveInOneRequest();
+    if (r1 !== 'fallback') return r1;
+  }
 
   // v14.96 — pre-check against the server BEFORE anything is written: "other
   // entries' qty + mine <= required". Only compact [key, qty] pairs travel (a
