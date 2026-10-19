@@ -7956,10 +7956,29 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
   // printed quantity.
   const saveId = 'S' + Date.now() + '_' + Math.floor(Math.random()*1e6);
 
-  // v14.95 — whole-save per-SKU totals, sent with the FIRST chunk only so the
-  // server can check "other entries' qty + this save <= required" once,
-  // before writing anything (see Code.gs over-required guard).
-  const saveTotals = rows.filter(r => (r.got || 0) > 0).map(r => ({ sku:r.sku, barcode:r.barcode, name:r.name, packed:r.got }));
+  // v14.96 — pre-check against the server BEFORE anything is written: "other
+  // entries' qty + mine <= required". Only compact [key, qty] pairs travel (a
+  // few KB at most per request, chunked like everything else here) — v14.95
+  // put a whole-save totals array in the save request itself, which blew past
+  // the ~8KB URL limit on big orders and made every save fail. Read-only; if
+  // it can't be answered (network hiccup / older server) it is skipped and
+  // the server's own check on the first save chunk still applies.
+  if (!isReinspect) {
+    const pairs = rows.filter(r => (r.got || 0) > 0).map(r => [r.barcode || r.sku, r.got]);
+    const pre = buildImportChunks(pairs);
+    const overAll = [];
+    for (let i = 0; i < pre.length; i++) {
+      try {
+        const out = await apiOp('checkInspectionTotals', {
+          orderId, entryId: wid, items: pre[i],
+          worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
+        }, 30000);
+        if (out.net && out.res && out.res.ok && Array.isArray(out.res.over)) out.res.over.forEach(o => overAll.push(o));
+        else console.warn('checkInspectionTotals skipped', out);
+      } catch (e) { console.warn('checkInspectionTotals failed', e); }
+    }
+    if (overAll.length) return { over: overAll };
+  }
 
   const MAX_ATTEMPTS = 3;
   async function sendChunk(rowsChunk, replace, chunkIndex){
@@ -7969,7 +7988,6 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
         entryId: wid, orderId, result, rows: rowsChunk, replace,
         unitType: unitType || 'box', reinspect: isReinspect,
         idemKey: saveId + '_' + chunkIndex,
-        totals: chunkIndex === 0 ? saveTotals : undefined,
         worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
       }, 45000);
       // v14.95 — the server refused the whole save because it would push a
