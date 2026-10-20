@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.100</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.101</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -9803,11 +9803,24 @@ async function importOneEntry(entryId, btn){
   // quietly finishing server-side — which is what was corrupting data
   // with duplicated rows before (see apiCall's v13.11 comment).
   const IMPORT_TIMEOUT_MS = 60000;
+  // v14.100 — visible progress: spinning icon, progress bar, elapsed seconds
+  // and the current step, so the button never looks frozen.
+  const t0 = Date.now();
+  let impPhase = '', impPct = 0, impTick = null;
+  const paintImp = () => {
+    if (!btn) return;
+    const sec = Math.floor((Date.now() - t0) / 1000);
+    btn.disabled = true;
+    btn.style.background = `linear-gradient(90deg, rgba(34,197,94,.55) ${impPct}%, rgba(20,83,60,.9) ${impPct}%)`;
+    btn.innerHTML = `<i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> ${impPhase} · ${sec}초 <span style="opacity:.75;font-size:11px">— 화면을 닫지 마세요</span>`;
+  };
+  const stopImp = () => { if (impTick) { clearInterval(impTick); impTick = null; } if (btn) btn.style.background = ''; };
+  if (btn) { impPhase = `서버에 저장하는 중 0/${items.length}`; paintImp(); impTick = setInterval(paintImp, 500); }
 
   for (let ci = 0; ci < chunks.length; ci++) {
     const chunk = chunks[ci];
     const fromN = doneItems + 1, toN = doneItems + chunk.length;
-    if (btn) { btn.disabled = true; btn.innerHTML = `<i class="ri-loader-4-line"></i> Importing ${toN}/${items.length}...`; }
+    impPhase = `서버에 저장하는 중 ${fromN}-${toN}/${items.length}`; impPct = Math.round(doneItems / items.length * 90); paintImp();
 
     // One automatic retry on a pure transport failure (JSONP timeout/blocked
     // request) before giving up — mobile networks in this warehouse are
@@ -9821,6 +9834,7 @@ async function importOneEntry(entryId, btn){
 
     if (!out.net || !out.res.ok) {
       toast(`⚠ Import failed for ${entry.fileName} (items ${fromN}-${toN}): ` + ((out.res&&out.res.error)||'network') + ` — retry Confirm import to resume`, 'err');
+      stopImp();
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ri-check-double-line"></i> Confirm import'; }
       return false;
     }
@@ -9828,6 +9842,7 @@ async function importOneEntry(entryId, btn){
     doneItems += chunk.length;
   }
 
+  impPhase = 'SKU·수량 합계 저장 중'; impPct = 95; paintImp();
   delete _orderItemsCache[orderId];
   _importBatch = _importBatch.filter(x => x.id !== entryId);
 
@@ -9860,6 +9875,7 @@ async function importOneEntry(entryId, btn){
   // v10.3 — record the import server-side (Sheets) so "was this actually
   // saved?" has a real answer: date/time + order number, visible to any
   // manager on any device, not just a toast that vanishes in 3 seconds.
+  stopImp();
   mgrOp('logImportEvent', { orderId, itemCount: importedTotal, qtyTotal: totalQty }).then(() => renderImportLog());
 
   return true;
