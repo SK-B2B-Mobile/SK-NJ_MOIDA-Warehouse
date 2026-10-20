@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.99</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.100</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -6276,9 +6276,17 @@ function doStartWork(oid, items, qty, pageFrom, pageTo, reinspect){
     // now, by someone else, while this request was in flight) — no stage
     // can be started on it anymore. Roll back the optimistic entry and
     // refresh so the picker stops offering it.
+    if (!res.ok && res.error === 'order_items_zero') {
+      // v14.100 — the order's pick list was imported with every quantity 0.
+      S.works = S.works.filter(w => w.id !== tid);
+      toast('⚠ 이 오더의 피킹 리스트 수량이 모두 0으로 저장되어 있습니다 — 매니저가 PDF를 다시 가져와야 합니다', 'err');
+      loadData().then(() => { updateBadges(); renderStageContent(); });
+      finish(); return;
+    }
     if (!res.ok && res.error === 'order_completed') {
       S.works = S.works.filter(w => w.id !== tid);
-      toast('✔ 이 오더는 이미 완료되었습니다 — 더 이상 시작할 수 없습니다', 'err');
+      const d = res.detail;
+      toast('✔ 이 오더는 이미 완료되었습니다 — 더 이상 시작할 수 없습니다' + (d ? ` (SKU ${d.skuDone}/${d.skuTotal} · 수량 ${d.qtyDone}/${d.qtyTotal})` : ''), 'err');
       loadData().then(() => { updateBadges(); renderStageContent(); });
       finish(); return;
     }
@@ -9774,6 +9782,17 @@ async function importOneEntry(entryId, btn){
   }
 
   const items = entry.parsed.items;
+  // v14.100 — a pick list whose quantities were not read must never reach the
+  // sheet as ReqQty 0 (the order then looks "completed" / cannot be worked).
+  const zeroQty = items.filter(it => !(Number(it.reqQty) > 0)).length;
+  if (items.length && zeroQty === items.length) {
+    toast(`⚠ ${entry.fileName}: 모든 행의 수량이 0입니다 — PDF에서 수량을 읽지 못했습니다. 가져오지 않았습니다. (PDF를 개발자에게 보내 주세요)`, 'err');
+    return false;
+  }
+  if (zeroQty && !confirm(`${zeroQty}개 행의 수량이 0입니다. 이대로 가져오면 해당 SKU는 작업할 수 없습니다.\n\n수량을 고친 뒤 가져오시겠습니까? [취소=돌아가서 수정]`)) {
+    toast('Import cancelled — fix the quantities first', 'err');
+    return false;
+  }
   const chunks = buildImportChunks(items);
   let importedTotal = 0, doneItems = 0;
   // v13.11 — a Sheets write for a real pick list (dozens of rows, into a
