@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.98</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.99</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -9178,7 +9178,7 @@ function cleanPdfText(raw){
 }
 
 function detectOrderIdFromText(text){
-  const m = String(text || '').match(/IM\d{5,}/g);
+  const m = String(text || '').match(/I[MN]\d{5,}/g);
   if (!m || !m.length) return '';
   const freq = {}; m.forEach(x => freq[x] = (freq[x]||0) + 1);
   return Object.keys(freq).sort((a,b) => freq[b]-freq[a])[0];
@@ -9234,6 +9234,140 @@ function parsePickListText(rawText){
   return { orderId, items };
 }
 
+// <<PLGEO
+// v14.99 — GEOMETRY pick-list parser (replaces trusting the external parser
+// server). IM00236849: the server read 85 of 123 rows and cut two different
+// 13-digit barcodes down to the same 7 digits, so SKUs vanished/merged on
+// import. This reads the PDF's own text positions: every table row is
+// anchored by its "Stock Q'ty" cell (e.g. 5(0)); SKU / name / barcode /
+// quantities / rack are then taken from the columns by position, and the
+// result is VERIFIED against the PDF's own TOTAL row before anything can be
+// imported. Pure function of positioned text, so it can be tested outside a
+// browser (pages = [{items:[{str,x,y,w,h}]}], y measured downward).
+const PL_STOCK_RE = /^\d[\d,]*\(\d+\)$/;
+const PL_RACK_RE  = /^[A-Z]{1,4}-[A-Za-z0-9]+(-[A-Za-z0-9]+)*$/;
+const PL_HEADER_WORDS = new Set(['SKU','Product','name','UPC','bar','code','Imov','Invc','Request','Rack','Stock',"Q'ty","Q'ty(pick","Q'ty)"]);
+function plWords(items){
+  const out = [];
+  (items || []).forEach(it => {
+    const raw = String(it.str || '');
+    if (!raw.trim()) return;
+    const w = Number(it.w) || 0, n = raw.length || 1;
+    const re = /\S+/g; let m;
+    while ((m = re.exec(raw))) {
+      const x0 = it.x + w * m.index / n, x1 = it.x + w * (m.index + m[0].length) / n;
+      cleanPdfText(m[0]).split(/\s+/).filter(Boolean).forEach(t => out.push({ t, x0, x1, c:(x0 + x1) / 2, y:it.y, h:Number(it.h) || 0 }));
+    }
+  });
+  return out;
+}
+function plInt(t){ return /^[\d,]+$/.test(t) ? parseInt(t.replace(/,/g, ''), 10) : NaN; }
+function parsePickListGeometry(pages){
+  const problems = [];
+  const pageWords = (pages || []).map(pg => plWords(pg.items));
+  const fullText = pageWords.map(ws => ws.map(w => w.t).join(' ')).join('\n');
+  const orderId = detectOrderIdFromText(fullText);
+  const rows = [];
+  let pdfTotal = null, geoPrev = null;
+
+  pageWords.forEach((ws, pi) => {
+    const pno = pi + 1;
+    const reqH = ws.find(w => w.t === 'Request');
+    let geo = null;
+    if (reqH) {
+      const sameLine = (w, tol) => Math.abs(w.y - reqH.y) <= (tol || 8);
+      const imovH = ws.find(w => (w.t === 'Imov' || w.t === 'Invc') && sameLine(w));
+      const rackH = ws.find(w => w.t === 'Rack' && w.x0 > reqH.x1 && sameLine(w, 12));
+      const stockH = ws.find(w => w.t === 'Stock' && w.x0 > reqH.x1 && Math.abs(w.y - reqH.y) <= 16);
+      let bcC = null;
+      const upc = ws.find(w => w.t === 'UPC' && sameLine(w, 12));
+      if (upc) bcC = upc.c;
+      else {
+        const bar = ws.find(w => w.t === 'bar' && sameLine(w, 12));
+        const code = bar && ws.find(w => w.t === 'code' && w.x0 > bar.x1 && Math.abs(w.y - bar.y) <= 4);
+        if (bar && code) bcC = (bar.x0 + code.x1) / 2;
+      }
+      let hb = reqH.y;
+      ws.forEach(w => { if (PL_HEADER_WORDS.has(w.t) && Math.abs(w.y - reqH.y) <= 22 && w.y > hb) hb = w.y; });
+      if (bcC !== null && rackH && stockH) {
+        geo = { rc:reqH.c, ic: imovH ? imovH.c : reqH.c - 46, rackLeft:rackH.x0 - 12, stockLeft:stockH.x0 - 6, bcC, headerBottom:hb + 3 };
+      }
+    }
+    if (!geo) geo = geoPrev;
+    if (!geo) { problems.push('Page ' + pno + ': table header not found'); return; }
+    geoPrev = geo;
+
+    const totalW = ws.find(w => w.t === 'TOTAL' && w.x0 < 260 && w.y > geo.headerBottom);
+    const isTotalTok = w => totalW && Math.abs(w.y - totalW.y) < 4;
+    const stocks = ws.filter(w => PL_STOCK_RE.test(w.t) && w.x0 >= geo.stockLeft - 24 && w.y > geo.headerBottom && !isTotalTok(w))
+                     .sort((a, b) => a.y - b.y);
+    if (totalW) {
+      const half0 = (geo.rc - geo.ic) / 2;
+      const tv = ws.filter(w => isTotalTok(w) && !isNaN(plInt(w.t)) && w.c >= geo.rc - half0 && w.c < geo.rc + half0 + 6);
+      if (tv.length) pdfTotal = plInt(tv[0].t);
+      else problems.push('Page ' + pno + ': TOTAL row found but its Request quantity could not be read');
+    }
+    if (!stocks.length) return;
+    let footerY = Infinity;
+    const lastY = stocks[stocks.length - 1].y;
+    ws.forEach(w => { if (w.t === 'Shipment' && w.x0 < 120 && w.y > lastY && w.y < footerY) footerY = w.y; });
+    const half = (geo.rc - geo.ic) / 2;
+    const reqLo = geo.rc - half, reqHi = geo.rc + half + 6, imLo = geo.ic - half - 6;
+
+    const pageRows = stocks.map((st, i) => {
+      const lo = i === 0 ? geo.headerBottom : (stocks[i - 1].y + st.y) / 2;
+      let hi = i === stocks.length - 1 ? Infinity : (st.y + stocks[i + 1].y) / 2;
+      if (i === stocks.length - 1) {
+        if (totalW) hi = Math.min(hi, (st.y + totalW.y) / 2);
+        hi = Math.min(hi, footerY - 2);
+      }
+      const band = ws.filter(w => w.y > lo && w.y <= hi).sort((a, b) => (a.y - b.y) || (a.x0 - b.x0));
+      const bc = band.filter(w => w.c >= geo.bcC - 60 && w.c <= geo.bcC + 60 &&
+                                  ((w.h > 0 && w.h <= 8.6 && /^[0-9A-Za-z]{6,16}$/.test(w.t)) || /^\d{8,14}$/.test(w.t)))
+                     .sort((a, b) => Math.abs(a.c - geo.bcC) - Math.abs(b.c - geo.bcC))[0];
+      const req = band.find(w => !isNaN(plInt(w.t)) && w.c >= reqLo && w.c < reqHi && w.c < geo.rackLeft);
+      const rackW = band.filter(w => w.x0 >= geo.rackLeft && w.x0 < geo.stockLeft && PL_RACK_RE.test(w.t));
+      return { st, band, bc, req, rack: rackW.map(w => w.t).join('') };
+    });
+
+    // name column starts where every wrapped line of every row starts (mode
+    // of x0), SKU column is everything left of it; the name ends where the
+    // barcode digits begin.
+    const bcX0 = pageRows.filter(r => r.bc).map(r => r.bc.x0);
+    const nameRight = (bcX0.length ? Math.min.apply(null, bcX0) : geo.bcC - 30) - 2;
+    const hist = {};
+    pageRows.forEach(r => r.band.forEach(w => { if (w.x0 >= 40 && w.x0 < nameRight) { const k = Math.round(w.x0); hist[k] = (hist[k] || 0) + 1; } }));
+    let nameStart = 95, best = 0;
+    Object.keys(hist).forEach(k => { if (hist[k] > best || (hist[k] === best && +k < nameStart)) { best = hist[k]; nameStart = +k; } });
+    const skuB = nameStart - 2;
+
+    pageRows.forEach(r => {
+      const skuW = r.band.filter(w => w.x1 <= skuB + 1 || w.x0 < skuB - 3);
+      const sku = skuW.map(w => w.t).join('');
+      const nameW = r.band.filter(w => w !== r.bc && w.x0 >= skuB - 1 && w.c < nameRight);
+      const name = nameW.map(w => w.t).join(' ').trim();
+      rows.push({ page:pno, sku, name, barcode: r.bc ? r.bc.t : '', reqQty: r.req ? plInt(r.req.t) : NaN, rack: r.rack });
+    });
+  });
+
+  let sum = 0;
+  rows.forEach((r, i) => {
+    if (!r.sku) problems.push('Row ' + (i + 1) + ' (page ' + r.page + '): SKU not read');
+    if (!r.barcode) problems.push('Row ' + (i + 1) + ' (' + (r.sku || '?') + ', page ' + r.page + '): barcode not read');
+    if (isNaN(r.reqQty)) problems.push('Row ' + (i + 1) + ' (' + (r.sku || '?') + ', page ' + r.page + '): request qty not read');
+    else sum += r.reqQty;
+  });
+  if (!rows.length) problems.push('No table rows found');
+  if (pdfTotal === null) problems.push('TOTAL row not found — the PDF may be missing its last page');
+  else if (rows.length && sum !== pdfTotal) problems.push('Request qty of the rows read adds up to ' + sum + ' but the PDF TOTAL says ' + pdfTotal);
+  return {
+    orderId,
+    items: rows.map(r => ({ sku:r.sku, name:r.name, barcode:r.barcode, reqQty:isNaN(r.reqQty) ? 0 : r.reqQty, rack:r.rack })),
+    verify: { ok: !problems.length, problems, lines: rows.length, sum, pdfTotal, pages: pageWords.length }
+  };
+}
+// PLGEO>>
+
 // PDF parsing — primary path calls the proven sk-sorting-parser service
 // (Flask + pdfplumber, same backend used by SK B2B Fulfillment batch.html).
 // It reads the PDF's actual table structure (cell coordinates) instead of
@@ -9243,7 +9377,41 @@ function parsePickListText(rawText){
 // is unreachable (e.g. Render free-tier cold start taking too long, or offline).
 const PDF_PARSER_API = 'https://sk-sorting-parser.onrender.com';
 
+// v14.99 — page text with positions, for parsePickListGeometry above.
+async function extractPdfPages(file){
+  const buf = await file.arrayBuffer();
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const pages = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const vp = page.getViewport({ scale: 1 });
+    const tc = await page.getTextContent();
+    pages.push({ width: vp.width, height: vp.height, items: tc.items
+      .filter(it => it.str && it.str.trim())
+      .map(it => ({ str: it.str, x: it.transform[4], y: vp.height - it.transform[5], w: it.width, h: it.height || Math.abs(it.transform[3]) })) });
+  }
+  return pages;
+}
+
 async function parsePdfFile(file){
+  // v14.99 — built-in geometry parser first: no server round-trip, and its
+  // result is checked against the PDF's own TOTAL row. The external parser
+  // below is only a backup (it dropped 38 of 123 rows on IM00236849).
+  try {
+    const g = parsePickListGeometry(await extractPdfPages(file));
+    if (g.items.length) return g;
+    console.warn('geometry parser found no rows — trying backup parser');
+  } catch (err) {
+    console.warn('geometry parser failed — trying backup parser', err);
+  }
+  const r = await parsePdfFileBackup(file);
+  r.verify = { ok:false, backup:true, problems:['A backup parser was used — this result could NOT be checked against the PDF total. Compare it with the PDF before importing.'],
+               lines:(r.items || []).length, sum:(r.items || []).reduce((a, it) => a + (Number(it.reqQty) || 0), 0), pdfTotal:null, pages:0 };
+  return r;
+}
+
+async function parsePdfFileBackup(file){
   try {
     const fd = new FormData();
     fd.append('pdf', file);
@@ -9363,7 +9531,7 @@ async function processImportFiles(files){
     const zoneMsg = document.getElementById('importDropZoneMsg');
     if (zoneMsg) zoneMsg.textContent = `Uploading file ${i+1}/${files.length}: ${file.name}`;
     statusEl.innerHTML = `<i class="ri-loader-4-line" style="animation:spin .8s linear infinite;display:inline-block"></i> Uploading &amp; parsing file ${i+1}/${files.length}: ${file.name}` +
-      (isPdf ? ' (server pdfplumber — first request can take ~20-30s if idle)' : '');
+      (isPdf ? ' (reading PDF…)' : '');
     try {
       const ext = file.name.split('.').pop().toLowerCase();
       let parsed;
@@ -9449,6 +9617,23 @@ async function processImportFiles(files){
   });
 })();
 
+// v14.99 — verification of an import card against the PDF's own TOTAL row,
+// recomputed from the rows as they are NOW (a deleted row or an edited
+// quantity must show up). kind:'none' for CSV/XLSX (nothing to compare to).
+function importVerifyState(entry){
+  const parsed = entry.parsed || {}, v = parsed.verify;
+  if (!v) return { kind:'none', ok:true, problems:[] };
+  const items = parsed.items || [];
+  const sum = items.reduce((a, it) => a + (Number(it.reqQty) || 0), 0);
+  const problems = (v.problems || []).filter(m => /^(Page |No table|TOTAL row|A backup parser)/.test(m));
+  const bad = items.filter(it => !String(it.sku || '').trim() || !String(it.barcode || '').trim());
+  if (bad.length) problems.push(bad.length + ' row' + (bad.length > 1 ? 's have' : ' has') + ' no SKU or no barcode');
+  if (v.pdfTotal !== null && v.pdfTotal !== undefined && sum !== v.pdfTotal) {
+    problems.push('Request qty of the rows adds up to ' + sum + ' but the PDF TOTAL says ' + v.pdfTotal);
+  }
+  return { kind:'pdf', ok: !problems.length, problems, sum, pdfTotal: v.pdfTotal, lines: v.lines };
+}
+
 // Renders one review card per file in the batch — each independently
 // editable, confirmable, or removable, since a day's work often has
 // 2-3 order pick lists to import at once.
@@ -9483,6 +9668,15 @@ function renderImportBatch(){
         </select>
       </div>
       ${(() => {
+        const vs = importVerifyState(entry); if (vs.kind === 'none') return '';
+        const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        if (vs.ok) return `<div style="font-size:12px;color:var(--green);background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.35);border-radius:var(--r);padding:8px 10px;margin-bottom:8px;line-height:1.55">
+          <i class="ri-checkbox-circle-line"></i> <b>Verified against the PDF</b> — <b>${vs.lines}</b> table lines · request qty <b>${vs.sum}</b> = PDF TOTAL <b>${vs.pdfTotal}</b></div>`;
+        return `<div style="font-size:12px;color:var(--red);background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.45);border-radius:var(--r);padding:8px 10px;margin-bottom:8px;line-height:1.6">
+          <i class="ri-error-warning-line"></i> <b>Does NOT match the PDF — check before importing</b>
+          <ul style="margin:4px 0 0;padding-left:18px">${vs.problems.slice(0, 6).map(m => '<li>' + esc(m) + '</li>').join('')}${vs.problems.length > 6 ? '<li>… and ' + (vs.problems.length - 6) + ' more</li>' : ''}</ul></div>`;
+      })()}
+      ${(() => {
         const mi = parsed.mergeInfo; if (!mi || mi.items >= mi.lines) return '';
         const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
         let h = `<div style="font-size:11.5px;color:var(--t2);background:var(--bg3,rgba(255,255,255,.04));border:1px solid var(--bd);border-radius:var(--r);padding:8px 10px;margin-bottom:8px;line-height:1.6">
@@ -9499,9 +9693,13 @@ function renderImportBatch(){
           <th>SKU</th><th>Product name</th><th>Barcode</th><th>Req Qty</th><th>Rack</th><th></th>
         </tr></thead><tbody id="importRowsBody_${entry.id}">${rowsHtml}</tbody></table>
       </div>
-      <button class="btn btn-teal btn-block" style="margin-top:12px;padding:12px;font-weight:700" onclick="confirmImportItems('${entry.id}',this)">
+      ${importVerifyState(entry).ok
+        ? `<button class="btn btn-teal btn-block" style="margin-top:12px;padding:12px;font-weight:700" onclick="confirmImportItems('${entry.id}',this)">
         <i class="ri-check-double-line"></i> Confirm import (${parsed.items.length} items)
-      </button>
+      </button>`
+        : `<button class="btn btn-block" style="margin-top:12px;padding:12px;font-weight:700;background:var(--red);border-color:var(--red);color:#fff" onclick="confirmImportItems('${entry.id}',this)">
+        <i class="ri-error-warning-line"></i> Import anyway (${parsed.items.length} items) — does not match the PDF
+      </button>`}
     </div>`;
   }).join('');
 
@@ -9567,6 +9765,13 @@ async function importOneEntry(entryId, btn){
   const orderId = document.getElementById('importOrderSel_' + entryId)?.value || entry.parsed.orderId;
   if (!orderId) { toast(`Select the target order for ${entry.fileName}`, 'err'); return false; }
   if (!S.orders.find(o => o.id === orderId)) { toast(`Order ${orderId} not found — create it first in Orders above`, 'err'); return false; }
+
+  // v14.99 — never let a list that does not add up to the PDF slip in unnoticed.
+  const vs = importVerifyState(entry);
+  if (!vs.ok && !confirm(`${entry.fileName} does NOT match the PDF:\n\n• ${vs.problems.slice(0, 5).join('\n• ')}\n\nImport it anyway?`)) {
+    toast('Import cancelled — fix the rows or re-upload the PDF', 'err');
+    return false;
+  }
 
   const items = entry.parsed.items;
   const chunks = buildImportChunks(items);
