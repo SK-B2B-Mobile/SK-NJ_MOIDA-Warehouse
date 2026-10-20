@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.97</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.98</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -1488,6 +1488,11 @@ function mergeDuplicateOrderItems(items){
     if (byKey.has(key)) {
       const existing = byKey.get(key);
       existing.reqQty = (existing.reqQty || 0) + (it.reqQty || 0);
+      // v14.98 — two DIFFERENT SKU codes can share one barcode (IN00486235:
+      // SESALOHS02-ORR and SESALOHS02-OR). They are one scannable item, but
+      // the second code used to vanish silently (186 SKUs on the pick list →
+      // 185 imported). Keep every code on the merged row so nothing is lost.
+      if (it.sku && existing.sku && existing.sku.split(' / ').indexOf(it.sku) < 0) existing.sku += ' / ' + it.sku;
       if (it.rack && existing.rack && !existing.rack.includes(it.rack)) existing.rack += ', ' + it.rack;
       else if (it.rack && !existing.rack) existing.rack = it.rack;
     } else {
@@ -1497,6 +1502,28 @@ function mergeDuplicateOrderItems(items){
     }
   });
   return order;
+}
+
+// v14.98 — explains, for the import review card, why "lines on the PDF" and
+// "items imported" differ: same SKU split over several lines (qty added up)
+// vs. different SKU codes sharing one barcode (merged into one scannable item).
+function analyzePickListMerges(items){
+  const byKey = new Map();
+  (items || []).forEach(it => {
+    const k = it.barcode || it.sku;
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(it);
+  });
+  const sameSku = [], shared = [];
+  byKey.forEach((list, k) => {
+    if (list.length < 2) return;
+    const skus = Array.from(new Set(list.map(x => x.sku)));
+    const total = list.reduce((a, x) => a + (Number(x.reqQty) || 0), 0);
+    if (skus.length === 1) sameSku.push({ sku: skus[0], qtys: list.map(x => Number(x.reqQty) || 0), total });
+    else shared.push({ barcode: k, rows: list.map(x => ({ sku: x.sku, qty: Number(x.reqQty) || 0 })), total });
+  });
+  const skuCodes = new Set((items || []).map(x => x.sku || x.barcode)).size;
+  return { lines: (items || []).length, skuCodes, items: byKey.size, sameSku, shared };
 }
 
 function ensureOrderItems(oid){
@@ -9360,6 +9387,7 @@ async function processImportFiles(files){
       // combined qty — same rule already used for on-screen scanning
       // (mergeDuplicateOrderItems, used by ensureOrderItems).
       const beforeMerge = parsed.items.length;
+      parsed.mergeInfo = analyzePickListMerges(parsed.items); // v14.98 — shown on the review card
       parsed.items = mergeDuplicateOrderItems(parsed.items);
       if (parsed.items.length < beforeMerge) {
         console.warn(`${file.name}: merged ${beforeMerge} parsed rows into ${parsed.items.length} unique SKUs (same barcode/SKU split across rows)`);
@@ -9454,6 +9482,17 @@ function renderImportBatch(){
           <option value="">— Select order —</option>${orderOpts}
         </select>
       </div>
+      ${(() => {
+        const mi = parsed.mergeInfo; if (!mi || mi.items >= mi.lines) return '';
+        const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        let h = `<div style="font-size:11.5px;color:var(--t2);background:var(--bg3,rgba(255,255,255,.04));border:1px solid var(--bd);border-radius:var(--r);padding:8px 10px;margin-bottom:8px;line-height:1.6">
+          <b>${mi.lines}</b> lines on the PDF · <b>${mi.skuCodes}</b> SKU codes · <b>${mi.items}</b> scan items imported`;
+        if (mi.sameSku.length) h += `<br>• ${mi.sameSku.length} SKU${mi.sameSku.length > 1 ? 's were' : ' was'} split over 2 lines — quantities added together (${mi.sameSku.map(x => esc(x.sku) + ' ' + x.qtys.join('+') + '=' + x.total).join(', ')})`;
+        mi.shared.forEach(x => {
+          h += `<br><span style="color:var(--amber)"><i class="ri-alert-line"></i> Barcode <span class="mono">${esc(x.barcode)}</span> is used by ${x.rows.length} different SKUs: ${x.rows.map(r => esc(r.sku) + ' (' + r.qty + ')').join(' + ')} → imported as ONE item, qty ${x.total}. The scanner cannot tell them apart.</span>`;
+        });
+        return h + '</div>';
+      })()}
       <div style="font-size:11px;color:var(--amber);margin-bottom:8px"><i class="ri-alert-line"></i> Review each row carefully — fix any parsing errors before confirming.</div>
       <div style="overflow-x:auto;max-height:280px;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--r)">
         <table class="import-preview-tbl"><thead><tr>
