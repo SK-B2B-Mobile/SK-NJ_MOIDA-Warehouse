@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.104</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.105</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -8072,7 +8072,9 @@ async function logInspectionResultsToServer(wid, orderId, rows, result, boxScans
     // items this worker simply never touched (someone else's share of a
     // split order) — which made InspResult read as "ISSUE" on rows with
     // PackedQty 0 and no IssueType at all. See Code.gs's RC.RESULT note.
-    result: r.hasIssue ? 'ISSUE' : (r.ok ? 'OK' : 'SHORT')
+    // v14.105 — a SKU someone ELSE already flagged as an issue is accounted for:
+    // it is not this worker's shortage (it used to be written as SHORT).
+    result: r.hasIssue ? 'ISSUE' : ((r.ok || r.otherIssue) ? 'OK' : 'SHORT')
   }));
   // Box-detail rows (boxNum set, no reqQty/issue — those live on the
   // summary row above) — lets a reprint reconstruct the box breakdown.
