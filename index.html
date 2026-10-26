@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.103</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.104</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -4617,7 +4617,20 @@ function startLivePoll(wid){
   // pure cost with no safety benefit, so this goes back to 5000ms —
   // cross-worker "X/Y scanned" counts converge in ~5s instead of ~12s,
   // closer to what workers expect from a "shared" number.
-  _livePollTimers[wid] = setInterval(() => refreshLiveBaseline(wid), 5000);
+  // v14.103 — HEARTBEAT. A worker's live scan counts were only pushed when a
+  // NEW scan happened, and the server keeps them for 30 minutes. So a device
+  // that was reloaded, restarted, or simply paused scanning for 30 minutes
+  // dropped out of the shared view — its teammate then saw only their own
+  // scans (183 vs 167 of 350) even though both sessions were still open and
+  // the scans were safe in the device's own storage. Re-publish right away
+  // when the session opens/reloads and again every minute while it is open.
+  const _hasLive = () => { const st = loadScanState(wid); return Object.keys(st.skuCounts || {}).length || Object.keys(st.skuIssues || {}).length; };
+  if (_hasLive()) pushMyLiveScan(wid);
+  let _hbTick = 0;
+  _livePollTimers[wid] = setInterval(() => {
+    refreshLiveBaseline(wid);
+    if (++_hbTick % 12 === 0 && _hasLive()) pushMyLiveScan(wid);
+  }, 5000);
 }
 function stopLivePoll(wid){
   clearInterval(_livePollTimers[wid]);
