@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.102</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.103</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -3836,6 +3836,7 @@ function renderSkuChecklistUI(w, items, st){
   return `
   <div class="scan-counter-wrap" style="text-align:left">
     <div style="margin-bottom:8px">
+      <div id="liveSyncStat_${w.id}" style="font-size:11px;font-weight:600;margin:0 0 6px;line-height:1.35">${liveSyncHtml(w.id)}</div>
       <span id="skuDoneCount_${w.id}" style="font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase">SKU checklist · ${doneCount}/${items.length} complete
         ${Object.keys(others).length ? `<span style="color:var(--blue);text-transform:none;font-weight:600;margin-left:4px"><i class="ri-refresh-line"></i> live-synced</span>` : ''}
       </span>
@@ -4402,11 +4403,44 @@ function pushMyLiveScan(wid){
     // not only after this session has ended.
     const liveIssues = {};
     Object.entries(st.skuIssues || {}).forEach(([k, v]) => { const q = Number(v && v.qty) || 0; if (q > 0) liveIssues[k] = q; });
-    await apiOp('pushLiveScan', {
+    const body = {
       orderId: w.oid, entryId: wid, skuCounts: st.skuCounts || {}, skuIssues: liveIssues,
       worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : ''
-    });
+    };
+    // v14.103 — this used to travel in the URL (GET), which silently fails
+    // once a worker has scanned ~250 SKUs (URL limit ~8KB), and nothing ever
+    // reported the failure: the teammate just never saw those scans. POST has
+    // no such limit; the old GET stays as a fallback when POST can't connect.
+    let out = (typeof postOp === 'function' && !_singleSaveBlocked()) ? await postOp('pushLiveScan', body, 20000) : { net:false };
+    if (!out.net) out = await apiOp('pushLiveScan', body, 20000);
+    const stt = liveStat(wid);
+    if (out.net && out.res && out.res.ok) { stt.pushOk = true; stt.pushErr = ''; stt.pushAt = Date.now(); }
+    else { stt.pushOk = false; stt.pushErr = (out.res && out.res.error) || 'network'; }
+    renderLiveSyncStat(wid);
   }, 700);
+}
+
+// v14.103 — make the cross-device sync VISIBLE. Before, a failed push or pull
+// was silent, so two devices could each show only their own scans (183 vs 167
+// of 350) with no hint why. This line says whether MY scans reach the server,
+// whether the teammates' scans reach me, and whose scans are counted.
+const _liveStat = {};
+function liveStat(wid){ return _liveStat[wid] || (_liveStat[wid] = { pushOk:null, pushErr:'', pushAt:0, pullOk:null, pullErr:'', pullAt:0, others:[] }); }
+function liveSyncHtml(wid){
+  const t = liveStat(wid), esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const ago = ms => { const sec = Math.max(0, Math.round((Date.now() - ms) / 1000)); return sec < 60 ? sec + '초 전' : Math.round(sec / 60) + '분 전'; };
+  const errTxt = e => ({ unauthorized:'PIN 인증 실패 — 로그아웃 후 다시 로그인', unknown_worker:'등록되지 않은 작업자', network:'서버에 연결되지 않음' }[e] || e);
+  if (t.pushOk === false) return `<span style="color:var(--red)">⚠ 내 스캔이 서버에 올라가지 않음 (${esc(errTxt(t.pushErr))}) — 상대 화면에 반영되지 않습니다</span>`;
+  if (t.pullOk === false) return `<span style="color:var(--red)">⚠ 상대 작업자 스캔을 받아오지 못함 (${esc(errTxt(t.pullErr))}) — 숫자가 내 스캔만 반영될 수 있습니다</span>`;
+  if (t.pullOk === null) return `<span style="color:var(--t3)">🔄 동기화 확인 중…</span>`;
+  const who = t.others.length
+    ? '상대 ' + t.others.map(o => esc(o.worker) + ' ' + o.n + 'SKU').join(', ') + ' 반영'
+    : '같은 오더를 스캔 중인 다른 작업자 없음';
+  return `<span style="color:var(--green)">🔄 동기화 정상 · ${who} · ${ago(t.pullAt)}</span>`;
+}
+function renderLiveSyncStat(wid){
+  const el = document.getElementById('liveSyncStat_' + wid);
+  if (el) el.innerHTML = liveSyncHtml(wid);
 }
 
 async function refreshLiveBaseline(wid){
@@ -4424,6 +4458,10 @@ async function refreshLiveBaseline(wid){
   // baseline instead of overwriting it with a partial/empty one. Without
   // this, a single dropped request made completed items flicker back to
   // "incomplete" and made the "ready to finish" state flap on and off.
+  { const t = liveStat(wid);
+    if (liveOut.net && liveOut.res.ok && endedOut.net && endedOut.res.ok) { t.pullOk = true; t.pullErr = ''; t.pullAt = Date.now(); }
+    else { t.pullOk = false; t.pullErr = (!liveOut.net || !liveOut.res.ok) ? ((liveOut.res && liveOut.res.error) || 'network') : ((endedOut.res && endedOut.res.error) || 'network'); }
+    renderLiveSyncStat(wid); }
   if (!liveOut.net || !liveOut.res.ok || !endedOut.net || !endedOut.res.ok) {
     // v10.19 — keep the "still syncing" placeholder actually refreshing
     // even while every attempt so far has failed (flaky connection, or a
@@ -4458,6 +4496,7 @@ async function refreshLiveBaseline(wid){
     });
   });
   _liveContributors[wid] = rawLive;
+  liveStat(wid).others = rawLive.map(e => ({ worker: e.worker, n: Object.keys(e.skuCounts || {}).length }));
   (endedOut.res.skus || []).forEach(s => {
     const key = s.barcode || s.sku;
     baseline[key] = (baseline[key] || 0) + (s.packedQty||0) + (s.issueQty||0);
