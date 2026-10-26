@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.101</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.102</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -1339,6 +1339,18 @@ function issueTakenByOthers(wid, key, allowSelf){
     .filter(x => x.qty > 0 && !(allowSelf && x.worker === me));
   if (!rel.length) return null;
   return { by: rel.map(x => x.worker).join(', '), qty: rel.reduce((s, x) => s + x.qty, 0) };
+}
+// v14.102 — ONE definition of "this SKU has an issue" for every device. Until
+// now each screen only knew ITS OWN issue flags (st.skuIssues): two workers who
+// each flagged different SKUs saw "7 short · 1 issue" and "1 short · 7 issue"
+// for the very same order, because the other worker's flags (live or saved,
+// already in _liveIssues) were counted as plain shortages. effIssue = my flag,
+// else anyone else's flag for the SKU, so every device counts the same way.
+function effIssue(wid, key, st){
+  const mine = ((st || loadScanState(wid)).skuIssues || {})[key];
+  if (mine) return mine;
+  const o = issueTakenByOthers(wid, key, false);
+  return o ? { type:'ISSUE', qty:o.qty, by:o.by, others:true } : null;
 }
 function issueBlockedHtml(taken){
   const by = String(taken.by).replace(/</g, '&lt;');
@@ -2387,7 +2399,7 @@ function skuRowHtml(it, st, wid){
   const mine = st.skuCounts[key] || 0;
   const others = (_liveBaseline[wid] && _liveBaseline[wid][key]) || 0;
   const got = mine + others;
-  const issue = (st.skuIssues || {})[key] || null;
+  const issue = effIssue(wid, key, st) || null;
   const isMC = !!(st.skuMasterCase || {})[key];
   const isFC = !!(st.skuForceCompleted || {})[key];
   const ok = issue ? true : (it.reqQty <= 0 || got >= it.reqQty);
@@ -2397,7 +2409,7 @@ function skuRowHtml(it, st, wid){
   const mcBadge = isMC ? `<span style="font-size:8px;font-weight:800;color:var(--amber);border:1px solid var(--amber-bd);border-radius:4px;padding:1px 4px;margin-left:4px;vertical-align:middle" title="Confirmed as one master case, not scanned unit-by-unit">MC</span>` : '';
   const fcBadge = isFC ? `<span style="font-size:8px;font-weight:800;color:var(--red);border:1px solid var(--red-bd);border-radius:4px;padding:1px 4px;margin-left:4px;vertical-align:middle" title="Force-completed without scanning — recorded under your name">FC</span>` : '';
   const qtyHtml = issue
-    ? `<span style="color:var(--red);font-size:12px;font-weight:800">${issue.type}${issue.qty?(' ×'+issue.qty):''}</span>`
+    ? `<span style="color:var(--red);font-size:12px;font-weight:800">${issue.type}${issue.qty?(' ×'+issue.qty):''}${issue.others?` <span style="font-weight:600;font-size:10px;opacity:.85">· ${esc(issue.by)}</span>`:''}</span>`
     : `<span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" title="Tap to correct YOUR scanned quantity" onclick="event.stopPropagation();openQtyEditModal('${wid}','${keyEsc}')">${got}/${it.reqQty||0}</span>${mcBadge}${fcBadge}`;
   // v14.94 — row layout reworked for narrow handheld screens (approved
   // simulation sku_row_layout_simulation.html). The old flex row let the wide
@@ -3803,7 +3815,7 @@ function renderSkuChecklistUI(w, items, st){
   items.forEach(it => {
     const key = it.barcode || it.sku;
     const got = (st.skuCounts[key] || 0) + (others[key] || 0);
-    const issue = (st.skuIssues || {})[key];
+    const issue = effIssue(w.id, key, st);
     if (issue || it.reqQty <= 0 || got >= it.reqQty) doneCount++;
   });
 
@@ -4518,7 +4530,7 @@ function updateSkuChecklistLive(wid){
   items.forEach(it => {
     const key = it.barcode || it.sku;
     const got = (st.skuCounts[key]||0) + (others[key]||0);
-    const issue = (st.skuIssues||{})[key];
+    const issue = effIssue(wid, key, st);
     if (issue || it.reqQty<=0 || got>=it.reqQty) doneCount++;
   });
   const headerEl = document.getElementById('skuDoneCount_' + wid);
@@ -4845,7 +4857,7 @@ function skuChecklistReadyInfo(w){
   items.forEach(it => {
     const key = it.barcode || it.sku;
     const got = (st.skuCounts[key] || 0) + (others[key] || 0);
-    const issue = (st.skuIssues || {})[key];
+    const issue = effIssue(w.id, key, st);
     if (issue || it.reqQty <= 0 || got >= it.reqQty) done++;
   });
   return { done, total: items.length, ready: done === items.length };
@@ -4867,7 +4879,7 @@ function skuMissingItems(w){
   items.forEach(it => {
     const key = it.barcode || it.sku;
     const got = (st.skuCounts[key] || 0) + (others[key] || 0);
-    const issue = (st.skuIssues || {})[key];
+    const issue = effIssue(w.id, key, st);
     if (!issue && it.reqQty > 0 && got < it.reqQty) {
       out.push({ key, sku: it.sku, name: it.name, barcode: it.barcode, got, reqQty: it.reqQty });
     }
@@ -6597,7 +6609,7 @@ function openInspEndModalSku(wid, items, st){
   const rows = items.map(it => {
     const key = it.barcode || it.sku;
     const got = (st.skuCounts[key] || 0) + (others[key] || 0);
-    const issue = (st.skuIssues || {})[key] || null;
+    const issue = effIssue(wid, key, st) || null;
     const fullyScanned = it.reqQty <= 0 || got >= it.reqQty;
     return { sku:it.sku, name:it.name, reqQty:it.reqQty||0, got, issue, ok: fullyScanned && !issue, hasIssue: !!issue };
   });
@@ -6608,7 +6620,7 @@ function openInspEndModalSku(wid, items, st){
   const rowsHtml = rows.map(r => {
     const cls = r.hasIssue ? 'issue' : (r.ok ? 'ok' : 'warn');
     const qtyHtml = r.hasIssue
-      ? `<span style="color:var(--red)">${r.issue.type}${r.issue.qty?(' ×'+r.issue.qty):''}</span>`
+      ? `<span style="color:var(--red)">${r.issue.type}${r.issue.qty?(' ×'+r.issue.qty):''}${r.issue.others?` <span style="font-size:10px;opacity:.85">· ${String(r.issue.by).replace(/</g,'&lt;')}</span>`:''}</span>`
       : `<span style="color:${r.ok?'var(--green)':'var(--red)'}">${r.got}/${r.reqQty}</span>`;
     return `<div class="sku-row ${cls}">
       <div class="sku-check ${r.hasIssue?'issue':(r.ok?'ok':'')}">${r.hasIssue?'<i class="ri-flag-2-fill"></i>':(r.ok?'<i class="ri-check-line"></i>':'')}</div>
@@ -6668,7 +6680,7 @@ window.proceedToPrintOptions = function(wid){
     const key = it.barcode || it.sku;
     const mine = st.skuCounts[key] || 0;
     const combined = mine + (others[key] || 0);
-    const issue = (st.skuIssues || {})[key] || null;
+    const issue = effIssue(wid, key, st) || null;
     const fullyScanned = it.reqQty <= 0 || combined >= it.reqQty;
     return { key, req: it.reqQty||0, combined, ok: fullyScanned && !issue, hasIssue: !!issue };
   });
@@ -6705,7 +6717,8 @@ window.proceedToPrintOptions = function(wid){
     const key = it.barcode || it.sku;
     const mine = st.skuCounts[key] || 0;
     const combined = mine + (others[key] || 0);
-    const issue = (st.skuIssues || {})[key] || null;
+    const issue = (st.skuIssues || {})[key] || null;   // MINE only — this is what gets saved
+    const otherIssue = issue ? null : (effIssue(wid, key, st) || null); // someone else's flag: accounted for, never saved as mine
     const isMC = !!(st.skuMasterCase || {})[key];
     const isFC = !!(st.skuForceCompleted || {})[key];
     const fullyScanned = it.reqQty <= 0 || combined >= it.reqQty;
@@ -6714,9 +6727,9 @@ window.proceedToPrintOptions = function(wid){
     // would double-count once merged with everyone else's own logged rows.
     // v14.57 — scannedAt rides along so the server can record when THIS
     // item was actually touched, not just when the whole session was saved.
-    return { sku:it.sku, name:it.name, barcode:it.barcode, got: mine, req:it.reqQty||0, issue, ok: fullyScanned && !issue, hasIssue: !!issue, mc: isMC, fc: isFC, scannedAt: (st.skuScannedAt || {})[key] || '' };
+    return { sku:it.sku, name:it.name, barcode:it.barcode, got: mine, req:it.reqQty||0, issue, otherIssue: !!otherIssue, ok: fullyScanned && !issue, hasIssue: !!issue, mc: isMC, fc: isFC, scannedAt: (st.skuScannedAt || {})[key] || '' };
   });
-  const shortRows = rows.filter(r => !r.ok && !r.hasIssue);
+  const shortRows = rows.filter(r => !r.ok && !r.hasIssue && !r.otherIssue);
   const issueRows = rows.filter(r => r.hasIssue);
   const forcedRows = rows.filter(r => r.fc);
   const allClean = shortRows.length === 0 && issueRows.length === 0;
