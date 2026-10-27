@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.105</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.106</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -1287,8 +1287,81 @@ window.setUnitType = function(wid, type){
   saveScanState(wid, st);
   renderStageContent();
 };
-function saveScanState(wid, st){ _scanState[wid] = st; try { localStorage.setItem('wms_scan_' + wid, JSON.stringify(st)); } catch(_){} }
-function clearScanState(wid){ delete _scanState[wid]; try { localStorage.removeItem('wms_scan_' + wid); } catch(_){} }
+function saveScanState(wid, st){ _scanState[wid] = st; try { localStorage.setItem('wms_scan_' + wid, JSON.stringify(st)); } catch(_){} try { scheduleDraftSave(wid); } catch(_){} }
+function clearScanState(wid){ delete _scanState[wid]; try { localStorage.removeItem('wms_scan_' + wid); } catch(_){} try { discardScanDraft(wid); } catch(_){} }
+
+// v14.106 — SERVER DRAFT AUTOSAVE. A worker's scans (and which box/pallet each
+// went into) used to live only in this device's own storage until End
+// Inspection — clear the browser, swap the tablet, or crash, and everything
+// had to be scanned again. Now the whole scan state is also saved to the
+// server's ScanDrafts sheet ~3s after every change (and re-sent each minute
+// while the session is open), and restored when the session is opened on a
+// device that holds less than the server does. Deleted when the session ends.
+const _draft = {};
+function draftStat(wid){ return _draft[wid] || (_draft[wid] = { timer:null, lastSig:'', ok:null, err:'', at:0, dirty:false, restoreTried:false }); }
+function _isRealWid(wid){ return /^W\d+/.test(String(wid || '')); }
+function scheduleDraftSave(wid){
+  if (!_isRealWid(wid) || typeof S === 'undefined') return;
+  const w = S.works.find(x => x.id === wid);
+  if (!w || w.endT || w.stage !== 'INSP') return;
+  const d = draftStat(wid); d.dirty = true;
+  clearTimeout(d.timer);
+  d.timer = setTimeout(() => flushDraft(wid), 3000);
+}
+async function flushDraft(wid, force){
+  const w = S.works.find(x => x.id === wid); if (!w || w.endT) return;
+  const st = loadScanState(wid);
+  const has = Object.keys(st.skuCounts || {}).length || Object.keys(st.skuIssues || {}).length || Object.keys(st.boxScans || {}).length || st.count;
+  if (!has) return;
+  const d = draftStat(wid), json = JSON.stringify(st);
+  if (!force && d.ok && json === d.lastSig) { d.dirty = false; return; }
+  const body = { orderId: w.oid, entryId: wid, worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : '', state: json };
+  const out = _singleSaveBlocked() ? { net:false } : await postOp('saveScanDraft', body, 30000);
+  if (out.net && out.res && out.res.ok) { d.ok = true; d.err = ''; d.at = Date.now(); d.lastSig = json; d.dirty = (JSON.stringify(loadScanState(wid)) !== json); }
+  else { d.ok = false; d.err = (out.res && out.res.error) || 'network'; d.dirty = true; }
+  renderLiveSyncStat(wid);
+}
+function discardScanDraft(wid){
+  if (!_isRealWid(wid)) return;
+  const d = _draft[wid]; if (d) { clearTimeout(d.timer); d.lastSig = ''; d.ok = null; d.dirty = false; }
+  apiOp('deleteScanDraft', { entryId: wid }).catch(() => {});
+}
+// Restore from the server draft when this device has FEWER scans than the
+// server (new/cleared device, wiped storage). Per-SKU max-merge so nothing
+// scanned since opening is lost.
+async function restoreDraftIfNeeded(wid){
+  const d = draftStat(wid); if (d.restoreTried) return; d.restoreTried = true;
+  const w = S.works.find(x => x.id === wid); if (!w || w.endT || w.stage !== 'INSP') return;
+  const out = await apiOp('loadScanDraft', { entryId: wid, worker: WS ? WS.worker : CW, wpin: WS ? WS.wpin : '' }, 25000);
+  if (!out.net || !out.res || !out.res.ok || !out.res.found) return;
+  let remote; try { remote = JSON.parse(out.res.state); } catch(_) { return; }
+  const st = loadScanState(wid);
+  const sum = o => Object.values(o || {}).reduce((a, v) => a + (Number(v) || 0), 0);
+  const tot = x => sum(x.skuCounts) + Object.values(x.boxScans || {}).reduce((a, b) => a + sum(b), 0);
+  if (tot(remote) <= tot(st)) return;
+  const maxMerge = (a, b) => { const o = Object.assign({}, a); Object.keys(b || {}).forEach(k => { o[k] = Math.max(Number(o[k]) || 0, Number(b[k]) || 0); }); return o; };
+  const boxes = Object.assign({}, st.boxScans || {});
+  Object.keys(remote.boxScans || {}).forEach(b => { boxes[b] = maxMerge(boxes[b], remote.boxScans[b]); });
+  const merged = Object.assign({}, remote, st, {
+    skuCounts: maxMerge(st.skuCounts, remote.skuCounts),
+    skuIssues: Object.assign({}, remote.skuIssues || {}, st.skuIssues || {}),
+    boxScans: boxes,
+    skuTouchOrder: Object.assign({}, remote.skuTouchOrder || {}, st.skuTouchOrder || {}),
+    skuScannedAt: Object.assign({}, remote.skuScannedAt || {}, st.skuScannedAt || {}),
+    skuTouchSeq: Math.max(Number(st.skuTouchSeq) || 0, Number(remote.skuTouchSeq) || 0),
+    maxBox: Math.max(Number(st.maxBox) || 1, Number(remote.maxBox) || 1),
+    currentBox: (Number(st.currentBox) > 1 || !remote.currentBox) ? st.currentBox : remote.currentBox,
+    unitType: Object.keys(st.boxScans || {}).length ? st.unitType : (remote.unitType || st.unitType)
+  });
+  saveScanState(wid, merged);
+  toast('💾 서버에 임시저장된 스캔을 복원했습니다 (' + tot(merged) + '개)', 'ok');
+  try { renderStageContent(); } catch(_){}
+  try { pushMyLiveScan(wid); } catch(_){}
+}
+window.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'hidden') return;
+  Object.keys(_draft).forEach(wid => { if (_draft[wid].dirty) flushDraft(wid); });
+});
 
 // v14.48 — "재검수(reinspect)" session: one explicitly (re-)started on an
 // order the server already considers 100% durably accounted for (every
@@ -4436,7 +4509,11 @@ function liveSyncHtml(wid){
   const who = t.others.length
     ? '상대 ' + t.others.map(o => esc(o.worker) + ' ' + o.n + 'SKU').join(', ') + ' 반영'
     : '같은 오더를 스캔 중인 다른 작업자 없음';
-  return `<span style="color:var(--green)">🔄 동기화 정상 · ${who} · ${ago(t.pullAt)}</span>`;
+  const dr = _draft[wid];
+  const drTxt = !dr || dr.ok === null ? '' : (dr.ok === false
+    ? ' · <span style="color:var(--red)">⚠ 서버 임시저장 실패</span>'
+    : ' · 💾 임시저장 ' + ago(dr.at));
+  return `<span style="color:var(--green)">🔄 동기화 정상 · ${who} · ${ago(t.pullAt)}${drTxt}</span>`;
 }
 function renderLiveSyncStat(wid){
   const el = document.getElementById('liveSyncStat_' + wid);
@@ -4603,6 +4680,7 @@ function startLivePoll(wid){
   if (_livePollTimers[wid]) return;
   if (!_liveSyncStartedAt[wid]) _liveSyncStartedAt[wid] = Date.now();
   refreshLiveBaseline(wid);
+  restoreDraftIfNeeded(wid).catch(() => {});
   // v14.53 slowed this from 5000ms to 12000ms as a stopgap during the
   // IM00234231 incident, because every active INSP worker's device fires
   // getLiveScans + getOrderProgress on this timer, and that was the
@@ -4629,7 +4707,7 @@ function startLivePoll(wid){
   let _hbTick = 0;
   _livePollTimers[wid] = setInterval(() => {
     refreshLiveBaseline(wid);
-    if (++_hbTick % 12 === 0 && _hasLive()) pushMyLiveScan(wid);
+    if (++_hbTick % 12 === 0 && _hasLive()) { pushMyLiveScan(wid); const dd = draftStat(wid); if (dd.dirty || dd.ok === false || dd.ok === null) flushDraft(wid, true); }
   }, 5000);
 }
 function stopLivePoll(wid){
