@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.106</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.107</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -3217,6 +3217,148 @@ let _postBoxEdit = null;
 // normally fully-boxed SKU, the whole amount for a force-completed one
 // with no box rows at all, or something in between for a partial case
 // (e.g. scanned-and-boxed up to the network drop, force-completed after).
+
+// ════════════════════════════════════════════════════
+// v14.106 — 검수 완료 후 이슈 등록 (post-completion issue registration)
+// An order can be fully inspected and closed, and only later a unit that was
+// counted as good turns out to be bad (expired / damaged / …). The Report-issue
+// flag only lived on an ACTIVE session's checklist, so on a finished order
+// there was nowhere to register it. This opens a picker on the finished-order
+// screen: choose the SKU, enter how many units are really OK / issue, pick the
+// type — saved through the same single-SKU correction the checklist flag uses
+// (logInspectionResults with a synthetic 'FIX…' entry + reinspect:true), which
+// replaces that SKU's recorded total, keeps its box/pallet split (adjusted),
+// and is what the packing slip reads — so the slip reflects it right away.
+// ════════════════════════════════════════════════════
+let _postIssue = null;
+function _pie(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+window.openPostIssueModal = async function(oid){
+  toast('Loading...', '');
+  const out = await apiOp('getOrderProgress', { oid }, 30000);
+  if (!out.net || !out.res || !out.res.ok) { toast('⚠ 오더 정보를 불러오지 못했습니다 — 다시 시도해주세요', 'err'); return; }
+  const skus = (out.res.skus || []).map(x => ({
+    key: x.barcode || x.sku, sku: x.sku, barcode: x.barcode, name: x.name,
+    req: Number(x.reqQty) || 0, packed: Number(x.packedQty) || 0, issue: Number(x.issueQty) || 0,
+    issueType: x.issueType || '', issueNote: x.issueNote || '',
+    issueBy: (x.issueBy || []).map(b => b.worker).join(', ')
+  }));
+  _postIssue = { oid, skus, q:'', sel:null, type:'' };
+  renderPostIssuePicker();
+};
+function _postIssueListHtml(){
+  const st = _postIssue;
+  const q = (st.q || '').trim().toLowerCase();
+  const list = st.skus.filter(x => !q || (x.sku||'').toLowerCase().includes(q) || (x.barcode||'').toLowerCase().includes(q) || (x.name||'').toLowerCase().includes(q));
+  list.sort((a,b) => (b.packed>0) - (a.packed>0));
+  const shown = list.slice(0, 40);
+  return (shown.length ? shown.map(x => `
+        <div onclick="pickPostIssueSku('${String(x.key).replace(/'/g,"\\'")}')" style="padding:9px 11px;border-bottom:1px solid var(--bd);cursor:pointer">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+            <span class="mono" style="font-size:12px;font-weight:700">${_pie(x.sku)}</span>
+            <span style="font-size:11px;white-space:nowrap"><span style="color:var(--green)">정상 ${x.packed}</span>${x.issue?` · <span style="color:var(--red)">이슈 ${x.issue}</span>`:''} <span style="color:var(--t3)">/ 요청 ${x.req}</span></span>
+          </div>
+          <div style="font-size:11px;color:var(--t3);margin-top:2px;line-height:1.4">${_pie(x.barcode)} · ${_pie(x.name)}</div>
+        </div>`).join('') : `<div style="padding:16px;text-align:center;color:var(--t3);font-size:12px">검색 결과가 없습니다</div>`)
+    + (list.length > shown.length ? `<div style="font-size:10.5px;color:var(--t3);padding:6px 11px">상위 ${shown.length}개만 표시 — 검색어를 더 입력하세요 (${list.length}개 중)</div>` : '');
+}
+window.piSearchInput = function(v){ if (!_postIssue) return; _postIssue.q = v; const el = document.getElementById('piList'); if (el) el.innerHTML = _postIssueListHtml(); };
+function renderPostIssuePicker(){
+  const st = _postIssue; if (!st) return;
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px"><i class="ri-flag-2-line" style="color:var(--red)"></i> 이슈 등록 (검수 완료 후)</div>
+    <div style="font-size:11.5px;color:var(--t3);margin-bottom:10px">${_pie(st.oid)} · 이미 정상으로 등록된 제품에서 문제가 발견된 경우 — 등록하면 포장 수량이 줄고 패킹 슬립에 이슈로 반영됩니다.</div>
+    <input id="piSearch" class="fi" placeholder="SKU / 바코드 / 제품명 검색" value="${_pie(st.q)}" oninput="piSearchInput(this.value)" style="margin-bottom:8px">
+    <div id="piList" style="max-height:46vh;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--r)">${_postIssueListHtml()}</div>
+    <div style="margin-top:12px"><button class="btn btn-sm btn-block" onclick="closeModal()">닫기</button></div>`);
+}
+window.pickPostIssueSku = function(key){
+  const st = _postIssue; if (!st) return;
+  const x = st.skus.find(v => String(v.key) === String(key)); if (!x) return;
+  st.sel = x; st.type = x.issue > 0 ? x.issueType : '';
+  const ok0 = Math.max(0, x.packed - 1), is0 = Math.min(x.req, x.issue + 1);
+  openModal(`
+    <div style="font-size:15px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:8px"><i class="ri-flag-2-line" style="color:var(--red)"></i> 이슈 등록</div>
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
+      <span class="mono" style="font-size:11.5px;color:var(--t3);white-space:nowrap;flex-shrink:0;padding-top:2px">${_pie(x.barcode||x.sku)}</span>
+      <span style="font-size:12.5px;line-height:1.5;flex:1"><b>${_pie(x.sku)}</b><br>${_pie(x.name)}</span>
+    </div>
+    <div style="font-size:11.5px;color:var(--t2);background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:8px 10px;margin-bottom:10px;line-height:1.6">
+      현재 기록: 정상 <b style="color:var(--green)">${x.packed}</b> · 이슈 <b style="color:var(--red)">${x.issue}</b> · 요청 <b>${x.req}</b>
+      ${x.issue ? `<br><span style="color:var(--amber)">이미 이슈 ${x.issue}개가 등록되어 있습니다${x.issueBy ? ' ('+_pie(x.issueBy)+')' : ''}${x.issueType ? ' — '+_pie(x.issueType) : ''}. 아래에서 총 수량으로 바꿔 저장하면 기존 이슈에 이어 반영됩니다.</span>` : ''}
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:6px">
+      <div class="fg" style="flex:1"><label class="fl">정상 수량 (OK)</label><input id="piOk" type="number" min="0" max="${x.req}" inputmode="numeric" class="fi" value="${ok0}" oninput="piRecalc()"></div>
+      <div class="fg" style="flex:1"><label class="fl">이슈 수량 (총계)</label><input id="piIssue" type="number" min="0" max="${x.req}" inputmode="numeric" class="fi" value="${is0}" oninput="piRecalc()"></div>
+    </div>
+    <div id="piCheck" style="font-size:11.5px;margin-bottom:10px"></div>
+    <label class="fl">이슈 유형</label>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px" id="piTypes">
+      ${SKU_ISSUE_TYPES.map(t => `<button type="button" class="chip-opt${st.type===t.v?' selected':''}" data-val="${t.v}" onclick="piPickType('${t.v}')">${t.l}</button>`).join('')}
+    </div>
+    <div class="fg"><label class="fl">메모 (선택 · 기타는 필수)</label><input id="piNote" class="fi" placeholder="예: 포장 후 확인 — 뚜껑 파손"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="renderPostIssuePicker()"><i class="ri-arrow-left-line"></i> 목록</button>
+      <button class="btn btn-sm" id="piSave" style="flex:2;justify-content:center;color:#fff;background:var(--red);border-color:var(--red)" onclick="savePostIssue(this)"><i class="ri-save-line"></i> 저장 — 패킹 슬립에 반영</button>
+    </div>`);
+  piRecalc();
+};
+window.piPickType = function(v){
+  if (!_postIssue) return; _postIssue.type = v;
+  document.querySelectorAll('#piTypes .chip-opt').forEach(b => b.classList.toggle('selected', b.dataset.val === v));
+};
+window.piRecalc = function(){
+  const x = _postIssue && _postIssue.sel; if (!x) return;
+  const ok = Math.max(0, Number(document.getElementById('piOk').value) || 0);
+  const is = Math.max(0, Number(document.getElementById('piIssue').value) || 0);
+  const el = document.getElementById('piCheck'); if (!el) return;
+  if (ok + is > x.req) el.innerHTML = `<span style="color:var(--red)">⚠ 정상(${ok}) + 이슈(${is}) = ${ok+is} — 요청수량(${x.req})을 초과할 수 없습니다</span>`;
+  else if (ok + is < x.req) el.innerHTML = `<span style="color:var(--amber)">정상 ${ok} + 이슈 ${is} = ${ok+is} / ${x.req} — ${x.req-ok-is}개는 미처리(SHORT)로 남습니다</span>`;
+  else el.innerHTML = `<span style="color:var(--green)">✓ 정상 ${ok} + 이슈 ${is} = ${x.req} / ${x.req}</span>`;
+};
+window.savePostIssue = async function(btn){
+  const st = _postIssue, x = st && st.sel; if (!x) return;
+  const ok = Math.max(0, Math.floor(Number(document.getElementById('piOk').value) || 0));
+  const is = Math.max(0, Math.floor(Number(document.getElementById('piIssue').value) || 0));
+  const note = (document.getElementById('piNote').value || '').trim();
+  if (ok + is > x.req) { toast(`⚠ 정상(${ok}) + 이슈(${is})가 요청수량(${x.req})을 초과합니다`, 'err'); return; }
+  if (ok === x.packed && is === x.issue) { toast('변경된 내용이 없습니다', 'err'); return; }
+  if (is > 0 && !st.type) { toast('이슈 유형을 선택하세요', 'err'); return; }
+  if (is > 0 && st.type === 'OTHER' && !note) { toast('"기타"는 메모가 필요합니다', 'err'); return; }
+  const who = WS ? WS.worker : CW, d = new Date();
+  const stamp = `[사후등록 ${who} ${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}]`;
+  let finalNote = '';
+  if (is > 0) {
+    const added = is - x.issue;
+    finalNote = (x.issue > 0 && x.issueNote ? '기존: ' + x.issueNote + ' / ' : '') + (note || '') + ' ' + stamp;
+    if (x.issue > 0 && x.issueType && x.issueType !== st.type) finalNote = `기존 ${x.issueType} ${x.issue}개 → 현재 ${st.type} 포함 · ` + finalNote;
+    if (added < 0) finalNote += ' (이슈 수량 감소)';
+  }
+  await withBtnBusy(btn, BTN_BUSY_HTML, async () => {
+    const row = {
+      sku: x.sku, barcode: x.barcode, name: x.name, reqQty: x.req,
+      packedQty: ok, issueType: is > 0 ? st.type : '', issueQty: is, issueNote: finalNote.trim(),
+      masterCase: false, forceCompleted: false, scannedAt: new Date().toISOString(),
+      result: is > 0 ? 'ISSUE' : (ok >= x.req ? 'OK' : 'SHORT')
+    };
+    const fixEntryId = 'FIX' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const out = await apiOp('logInspectionResults', {
+      entryId: fixEntryId, orderId: st.oid, result: is > 0 ? 'ISSUE' : 'PASS',
+      rows: [row], replace: false, reinspect: true, unitType: 'box',
+      worker: who, wpin: WS ? WS.wpin : ''
+    }, 45000);
+    if (!out.net || !out.res || !out.res.ok) {
+      toast('⚠ 저장 실패 — ' + ((out.res && out.res.error) || '네트워크를 확인하고 다시 시도해주세요'), 'err');
+      return;
+    }
+    closeModal();
+    toast(is > 0 ? `✓ 이슈 등록됨: ${x.sku} — 정상 ${ok} · 이슈 ${is}` : `✓ ${x.sku} 정상 ${ok}으로 수정됨`, 'ok');
+    // audit trail (SkuIssues) — best effort, same as the checklist flag
+    if (is > 0) apiOp('logSkuIssue', { orderId: st.oid, entryId: fixEntryId, sku: x.sku, barcode: x.barcode, name: x.name,
+      issueType: st.type, qty: is, note: finalNote.trim(), worker: who, wpin: WS ? WS.wpin : '' }).catch(() => {});
+    try { await loadData(); updateBadges(); renderStageContent(); } catch(_){}
+  });
+};
+
 window.openPostSessionBoxList = async function(oid, focusKey){
   const realEntries = S.works.filter(w => w.oid === oid && w.stage === 'INSP' && w.endT);
   toast('Loading...', '');
@@ -5606,6 +5748,7 @@ function renderInspDoneCard(wrap, oid, prog){
         <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="showOrderProgressResult('${oid}',this)"><i class="ri-price-tag-3-line"></i> Labels</button>
       </div>
       <button class="btn btn-sm btn-block" style="color:var(--purple);border-color:var(--purple-bd);margin-bottom:10px" onclick="openPostSessionBoxList('${oid}')"><i class="ri-archive-2-line"></i> 박스/팔렛 배정 수정</button>
+      <button class="btn btn-sm btn-block" style="color:var(--red);border-color:var(--red-bd);margin-bottom:10px" onclick="openPostIssueModal('${oid}')"><i class="ri-flag-2-line"></i> 이슈 등록 (검수 완료 후)</button>
       <button class="btn ${SBTN[CS]} btn-block" onclick="startWork()"><i class="ri-play-circle-line"></i> Continue inspecting (남은 항목 계속 검수)</button>
     </div>`;
     return;
@@ -5626,6 +5769,7 @@ function renderInspDoneCard(wrap, oid, prog){
            to but didn't actually link to. Putting the button right here,
            where the manager is already looking, removes that hunt. -->
       <button class="btn btn-sm btn-block" style="color:var(--purple);border-color:var(--purple-bd);margin-bottom:8px" onclick="openPostSessionBoxList('${oid}')"><i class="ri-archive-2-line"></i> 박스/팔렛 배정 수정</button>
+      <button class="btn btn-sm btn-block" style="color:var(--red);border-color:var(--red-bd);margin-bottom:8px" onclick="openPostIssueModal('${oid}')"><i class="ri-flag-2-line"></i> 이슈 등록 (검수 완료 후)</button>
       <button class="btn btn-sm" style="color:var(--t3)" onclick="confirmStartReinspect('${oid}')"><i class="ri-add-line"></i> Re-inspect (재검수 시작)</button>
     </div>`;
   reconcileOrderInspSessionsOnce(oid);
