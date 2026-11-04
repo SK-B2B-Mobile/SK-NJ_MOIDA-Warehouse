@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.107</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.108</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -2925,6 +2925,39 @@ window.openQtyEditModal = function(wid, key){
   setTimeout(() => numpadFocus('qtyEditVal'), 0);
 };
 
+
+// v14.108 — keep the box/pallet split in step with a quantity set BY HAND.
+// Scanning writes st.boxScans (which pallet/box each unit went into) as well
+// as st.skuCounts, but the pencil "Set YOUR total" tool and the force-complete
+// top-up changed ONLY skuCounts. A product whose barcode would not scan and
+// was entered by hand therefore had a recorded quantity but no pallet/box:
+// IN00491323 — 13 such products (356 units) were missing from every pallet on
+// the packing slip (pallets held 5,646 of 6,002 units) and the "Check before
+// printing" warning listed them as "Not assigned to any Pallet yet".
+// Rule (same as scanning: what is entered while a box/pallet is selected is IN
+// that box/pallet): extra units go to the box currently selected; when the
+// total is lowered, units come off the highest-numbered boxes first.
+function syncBoxScansToTotal(st, key, total){
+  st.boxScans = st.boxScans || {};
+  total = Math.max(0, Math.round(Number(total) || 0));
+  let assigned = 0;
+  Object.keys(st.boxScans).forEach(n => { assigned += Number((st.boxScans[n] || {})[key]) || 0; });
+  const diff = total - assigned;
+  if (diff > 0) {
+    const b = st.currentBox || 1;
+    st.boxScans[b] = st.boxScans[b] || {};
+    st.boxScans[b][key] = (Number(st.boxScans[b][key]) || 0) + diff;
+  } else if (diff < 0) {
+    let rem = -diff;
+    const ns = Object.keys(st.boxScans).map(Number).filter(n => !isNaN(n) && (Number(st.boxScans[n][key]) || 0) > 0).sort((a, b) => b - a);
+    for (const n of ns) {
+      const q = Number(st.boxScans[n][key]) || 0, t = Math.min(q, rem);
+      if (q - t > 0) st.boxScans[n][key] = q - t; else delete st.boxScans[n][key];
+      rem -= t; if (rem <= 0) break;
+    }
+  }
+}
+
 window.saveQtyEdit = function(wid, key){
   const val = Number(document.getElementById('qtyEditVal')?.value);
   if (isNaN(val) || val < 0) { toast('Enter a valid quantity', 'err'); return; }
@@ -2942,6 +2975,7 @@ window.saveQtyEdit = function(wid, key){
   }
   const isMC = !!document.getElementById('qtyEditMC')?.checked;
   st.skuCounts[key] = Math.round(val);
+  syncBoxScansToTotal(st, key, st.skuCounts[key]);
   st.skuMasterCase = st.skuMasterCase || {};
   if (isMC) st.skuMasterCase[key] = true; else delete st.skuMasterCase[key];
   touchSkuOrder(st, key);
@@ -6980,6 +7014,7 @@ window.proceedToPrintOptions = function(wid){
     preShort.forEach(r => {
       const gap = Math.max(0, r.req - (others[r.key] || 0));
       st.skuCounts[r.key] = gap;
+      syncBoxScansToTotal(st, r.key, gap);
       st.skuForceCompleted[r.key] = true;
       touchSkuOrder(st, r.key);
     });
