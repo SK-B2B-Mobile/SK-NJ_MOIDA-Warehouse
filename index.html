@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.110</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.111</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -7701,7 +7701,7 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
     // here means every caller — single-session print, order-level print,
     // and reprint-from-saved-data — can share this one rendering path.
     const groups = Array.isArray(boxScans)
-      ? boxScans
+      ? boxScans.slice()
       : (boxScans && Object.keys(boxScans).length
           ? Object.keys(boxScans).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b)
               .map(n => ({ label: `${uwCap} ${n}`, items: boxScans[n] }))
@@ -7709,6 +7709,25 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
     const nameByKey = {};
     const skuByKey = {};
     rows.forEach(r => { const k = r.barcode || r.sku; nameByKey[k] = r.name || r.sku || ''; skuByKey[k] = r.sku || ''; });
+    // v14.111 — UNASSIGNED section. Packed units that no pallet/box row covers
+    // (a quantity entered by hand before v14.108, a force-complete top-up…) used
+    // to vanish from the box/pallet breakdown WITHOUT A TRACE: the printed
+    // order total read 6,002 packed while the pallets (and the Excel "Box
+    // Breakdown" sheet) added up to 5,646, and nothing said why (IN00491323:
+    // 13 products, 356 units). They are now listed as their own last group, so
+    // the breakdown always adds up to the packed total and any gap is visible.
+    // Only for the order-level slip (groups arrive as an array of every
+    // worker's pallets, rows are the order totals).
+    if (Array.isArray(boxScans) && groups.length) {
+      const assignedByKey = {};
+      groups.forEach(g => Object.entries(g.items || {}).forEach(([k, q]) => { assignedByKey[k] = (assignedByKey[k] || 0) + (Number(q) || 0); }));
+      const missing = {};
+      rows.forEach(r => {
+        const k = r.barcode || r.sku; const gap = (Number(r.got) || 0) - (assignedByKey[k] || 0);
+        if (k && gap > 0) missing[k] = (missing[k] || 0) + gap;
+      });
+      if (Object.keys(missing).length) groups.push({ label: `UNASSIGNED · 미배정 (no ${uw} number)`, items: missing });
+    }
     if (groups.length) {
       hadBoxSection = true;
       boxGroupCount = groups.length;
@@ -8050,6 +8069,8 @@ function printPackingSlip(w, rows, meta, boxScans, slipMode){
           data.boxGroups.forEach(function(g){
             (g.items || []).forEach(function(it){ boxAOA.push([g.label, it.barcode, it.sku, it.name, it.qty]); });
           });
+          var boxSum = 0; data.boxGroups.forEach(function(g){ (g.items || []).forEach(function(it){ boxSum += Number(it.qty) || 0; }); });
+          boxAOA.push([]); boxAOA.push(['TOTAL', '', '', '', boxSum]);
           var ws3 = XLSX.utils.aoa_to_sheet(boxAOA);
           ws3['!cols'] = [{wch:18},{wch:16},{wch:14},{wch:42},{wch:8}];
           XLSX.utils.book_append_sheet(wb, ws3, 'Box Breakdown');
