@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.108</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.109</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -2511,7 +2511,7 @@ function skuRowHtml(it, st, wid){
         title="Tap to split / edit this SKU's ${uw}s" onclick="event.stopPropagation();openSkuBoxModal('${wid}','${keyEsc}')">${isRare?'<i class="ri-error-warning-line"></i> ':''}${uw} ${t.n} · ${t.q}</span>`;
     }).join('')
     + (unassigned > 0
-      ? `<span style="${tagCss}background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber)" title="Quantity not yet assigned to a ${uw} — tap to assign" onclick="event.stopPropagation();openSkuBoxModal('${wid}','${keyEsc}')"><i class="ri-error-warning-line"></i> Unassigned ${unassigned.toLocaleString()}</span>`
+      ? `<span style="${tagCss}background:var(--red);border:1px solid var(--red);color:#fff" title="Quantity not yet assigned to a ${uw} — tap to assign" onclick="event.stopPropagation();openSkuBoxModal('${wid}','${keyEsc}')"><i class="ri-error-warning-line"></i> Unassigned ${unassigned.toLocaleString()}</span>`
       : '')
     + `<span style="${splitCss}" title="Split this SKU across ${uw}s / edit quantity" onclick="event.stopPropagation();openSkuBoxModal('${wid}','${keyEsc}')">✂ SPLIT</span>`;
   } else if (others > 0) {
@@ -3539,7 +3539,7 @@ function renderPostBoxList(){
   const unassignedSkuCount = st.items.filter(it => it.unassigned > 0).length;
   const totalUnassigned = st.items.reduce((s, it) => s + (it.unassigned || 0), 0);
   const scanBtnHtml = totalUnassigned > 0 ? `
-    <button type="button" class="btn btn-sm" style="width:100%;border:1px dashed var(--amber-bd);background:var(--amber-bg);color:var(--amber);font-weight:800;margin-bottom:12px;justify-content:center;padding:10px" onclick="openBoxScanRecovery('${st.oid}')">
+    <button type="button" class="btn btn-sm" style="width:100%;border:1px dashed var(--red);background:var(--red-bg);color:var(--red);font-weight:800;margin-bottom:12px;justify-content:center;padding:10px" onclick="openBoxScanRecovery('${st.oid}')">
       <i class="ri-camera-line"></i> 미배정 ${unassignedSkuCount.toLocaleString()}개 SKU · ${totalUnassigned.toLocaleString()} QTY — 스캔으로 한번에 배정하기
     </button>` : '';
   // v14.88 — order-wide box ↔ pallet switch + "현재: …" badge, shown above
@@ -3580,7 +3580,8 @@ function renderPostBoxList(){
     ${scanBtnHtml}
     ${skuGroups.map(g => {
       const multi = g.entries.length > 1;
-      return `<div style="padding:9px 2px;border-bottom:1px solid var(--bd)">
+      const hasMiss = g.entries.some(it => it.unassigned > 0);
+      return `<div style="padding:9px ${hasMiss ? '8px' : '2px'};border-bottom:1px solid var(--bd);${hasMiss ? 'background:var(--red-bg);border-left:4px solid var(--red);border-radius:6px;margin-bottom:2px' : ''}">
         <div style="font-family:var(--mono);font-size:12px;font-weight:700">${g.sku||'—'}${g.barcode?` <span style="color:var(--t3);font-weight:500">· ${g.barcode}</span>`:''}</div>
         <div style="font-size:10.5px;color:var(--t3);margin:1px 0 7px">${(g.name||'').replace(/</g,'&lt;')}</div>
         ${g.entries.map(it => {
@@ -3591,12 +3592,12 @@ function renderPostBoxList(){
           // total for a partial one) gets this extra amber tag, alongside
           // whatever blue "already boxed" tags it has. Tapping either kind
           // opens the same per-SKU editor.
-          const missTag = it.unassigned > 0 ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 7px;cursor:pointer;background:var(--amber-bg,rgba(245,158,11,.12));border:1px solid var(--amber-bd,rgba(245,158,11,.4));color:var(--amber)" onclick="openPostSessionBoxModal('${entryIdEsc}','${keyEsc}')"><i class="ri-error-warning-line"></i> 미배정 ${it.unassigned.toLocaleString()}</span>` : '';
+          const missTag = it.unassigned > 0 ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;border-radius:999px;padding:3px 10px;cursor:pointer;background:var(--red);border:1px solid var(--red);color:#fff;box-shadow:0 0 0 2px rgba(239,68,68,.25)" onclick="openPostSessionBoxModal('${entryIdEsc}','${keyEsc}')"><i class="ri-error-warning-line"></i> 미배정 ${it.unassigned.toLocaleString()}</span>` : '';
           return `<div style="margin-bottom:6px">
             ${multi ? `<div style="font-size:9.5px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px"><i class="ri-user-line"></i> ${it.worker} 세션 · 총 ${it.total.toLocaleString()}</div>` : ''}
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:5px">
               <div style="display:flex;gap:4px;flex-wrap:wrap">${it.rows.sort((a,b)=>a.n-b.n).map(r => `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 7px;cursor:pointer;background:${uc.bg};border:1px solid ${uc.bd};color:${uc.c}" onclick="openPostSessionBoxModal('${entryIdEsc}','${keyEsc}')"><i class="${unitIconCls(curU==='mixed'?'box':curU)}"></i> ${unitKo(curU==='mixed'?'box':curU)} ${r.n} · ${r.q}</span>`).join('')}${missTag}</div>
-              ${!multi ? `<span style="font-family:var(--mono);font-weight:800;color:${it.unassigned>0?'var(--amber)':'var(--green)'};font-size:12px">${it.total.toLocaleString()}</span>` : ''}
+              ${!multi ? `<span style="font-family:var(--mono);font-weight:800;color:${it.unassigned>0?'var(--red)':'var(--green)'};font-size:12px">${it.total.toLocaleString()}</span>` : ''}
             </div>
           </div>`;
         }).join('')}
