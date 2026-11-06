@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.111</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.113</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -6866,6 +6866,7 @@ window.confirmInspEnd = function(wid, expQty){
   if (mismatch) {
     reason = document.getElementById('inspReasonSel')?.value || '';
     note = (document.getElementById('inspReasonNote')?.value || '').trim();
+    if (!reason && inspTeammatesActive(wid)) reason = 'Split inspection — my portion done (teammates still scanning)';
     if (!reason) { toast('Select a reason for the mismatch', 'err'); return; }
   }
   const result = mismatch ? 'ISSUE' : 'PASS';
@@ -6912,6 +6913,14 @@ window._onInspReasonChange = function(sel){
   }
 };
 
+// v14.113 — teammates still inspecting the same order (open INSP sessions
+// other than mine) or having already scanned units of it.
+function inspTeammatesActive(wid){
+  const w = S.works.find(x => x.id === wid); if (!w) return false;
+  const open = S.works.some(x => x.oid === w.oid && x.stage === 'INSP' && !x.endT && x.id !== wid);
+  const oth = _liveBaseline[wid] || {};
+  return open || Object.values(oth).some(v => v > 0);
+}
 function openInspEndModalSku(wid, items, st){
   const w = S.works.find(x => x.id === wid); if (!w) return;
   const others = _liveBaseline[wid] || {};
@@ -6925,6 +6934,7 @@ function openInspEndModalSku(wid, items, st){
   const shortRows = rows.filter(r => !r.ok && !r.hasIssue);   // unexplained mismatches — still need a reason
   const issueRows = rows.filter(r => r.hasIssue);              // already explained via per-item flag
   const allClean = shortRows.length === 0 && issueRows.length === 0;
+  const splitMode = shortRows.length > 0 && issueRows.length === 0 && inspTeammatesActive(wid);
 
   const rowsHtml = rows.map(r => {
     const cls = r.hasIssue ? 'issue' : (r.ok ? 'ok' : 'warn');
@@ -6945,15 +6955,15 @@ function openInspEndModalSku(wid, items, st){
     <i class="ri-search-eye-line" style="font-size:28px;color:var(--purple);display:block;margin-bottom:8px"></i>
     <div style="font-size:15px;font-weight:700;margin-bottom:2px">Finish Inspection</div>
     <div style="font-size:12px;color:var(--t2);margin-bottom:12px">${w.oid} · ${w.startT} → now</div>
-    <div id="inspEndSummary" data-orig="${summaryLine.replace(/"/g,'&quot;')}" style="text-align:center;margin-bottom:10px;font-size:13px;font-weight:700;color:${allClean?'var(--green)':'var(--red)'}">
-      ${allClean ? summaryLine : '⚠ ' + summaryLine}
+    <div id="inspEndSummary" data-orig="${summaryLine.replace(/"/g,'&quot;')}" style="text-align:center;margin-bottom:10px;font-size:13px;font-weight:700;color:${allClean?'var(--green)':(splitMode?'var(--blue)':'var(--red)')}">
+      ${allClean ? summaryLine : (splitMode ? '📋 분할 검수 — 내 몫 완료, 남은 '+shortRows.length+' SKU는 다른 작업자가 검수 중' : '⚠ ' + summaryLine)}
     </div>
     <div class="sku-list" style="margin-bottom:14px;text-align:left">${rowsHtml}</div>
     ${shortRows.length ? `<div class="fg" style="text-align:left">
-      <label class="fl">Reason for unexplained mismatch (required)</label>
+      <label class="fl">${splitMode ? 'Finish type (분할 검수)' : 'Reason for unexplained mismatch (required)'}</label>
       <select class="fi" id="inspReasonSel" style="margin-bottom:8px" onchange="_onInspReasonChange(this)">
         <option value="">— Select reason —</option>
-        <option value="Split inspection — my portion done (teammates still scanning)">Split inspection — my portion done (teammates still scanning)</option>
+        <option value="Split inspection — my portion done (teammates still scanning)"${splitMode?' selected':''}>✅ 내 분량 완료 (My portion done) — 나머지는 다른 작업자 검수 중</option>
         <option value="Missing / short items">Missing / short items</option>
         <option value="Extra items found">Extra items found</option>
         <option value="Damaged items">Damaged items</option>
@@ -6962,7 +6972,7 @@ function openInspEndModalSku(wid, items, st){
         <option value="FORCE_COMPLETE">⚡ Force complete — all items actually OK, no time to scan each one</option>
       </select>
       <div id="forceCompleteWarn" style="display:none;font-size:11px;color:var(--amber);margin-bottom:8px"><i class="ri-error-warning-line"></i> This marks every remaining short item as fully received without individually scanning it. Your name and the time go on the packing slip and labels as whoever force-completed it.</div>
-      <div id="inspReasonNoteWrap">
+      <div id="inspReasonNoteWrap"${splitMode?' style="display:none"':''}>
         <textarea class="fi" id="inspReasonNote" rows="2" placeholder="Additional notes..." style="resize:vertical"></textarea>
       </div>
     </div>` : (issueRows.length ? `<div style="font-size:11px;color:var(--t3);text-align:left;margin-bottom:8px"><i class="ri-information-line"></i> ${issueRows.length} item${issueRows.length>1?'s were':' was'} flagged individually (EXP/NF/OOS/etc.) — already recorded, no extra reason needed.</div>` : '')}
