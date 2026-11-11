@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.113</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.115</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -769,20 +769,23 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
       <div id="importPreview"></div>
       <div class="section" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
         <span>Import history <span id="importLogCount" style="font-weight:400;color:var(--t3)"></span></span>
-        <input class="fi" id="importLogSearch" placeholder="Search order #" oninput="renderImportLogView()" style="max-width:220px;font-size:12px;padding:6px 10px">
+        <input class="fi" id="importLogSearch" placeholder="Search order #" oninput="pgReset('imp')" style="max-width:220px;font-size:12px;padding:6px 10px">
       </div>
       <div id="importLog" style="font-size:12px;color:var(--t3)">Loading…</div>
+      <div id="importLogPager"></div>
     </div>
     <div class="card" style="border-color:var(--red-bd)">
       <div class="card-t" style="color:var(--red)"><i class="ri-flag-2-line"></i> Reported issues (EXP · NF · OOS · Damage · Other)</div>
       <p style="font-size:12px;color:var(--t2);margin-bottom:10px">Items flagged during inspection — expired, not found, out of stock, damaged, or other. Every flag is recorded here permanently, even after the checklist is finished.</p>
-      <div class="fg"><input class="fi" id="issueLogSearch" placeholder="Search by order or SKU..." oninput="renderIssueLog()"></div>
+      <div class="fg"><input class="fi" id="issueLogSearch" placeholder="Search by order or SKU..." oninput="pgReset('iss')"></div>
       <div id="issueLog" style="font-size:12px;color:var(--t3)">Loading…</div>
+      <div id="issueLogPager"></div>
     </div>
     <div class="card">
       <div class="card-t"><i class="ri-edit-line" style="color:var(--purple)"></i> Work entries</div>
-      <div class="fg"><input class="fi" id="entrySearch" placeholder="Search by order number or worker..." oninput="renderEntries()"></div>
+      <div class="fg"><input class="fi" id="entrySearch" placeholder="Search by order number or worker..." oninput="pgReset('ent')"></div>
       <div id="entryTable" style="overflow-x:auto"></div>
+      <div id="entryPager"></div>
     </div>
     <div class="g2" style="margin-top:10px">
       <div class="card" style="border-color:var(--amber-bd)">
@@ -9951,8 +9954,8 @@ async function processImportFiles(files){
           const logOut = await apiOp('getImportLog');
           const prior = logOut.net && logOut.res.ok ? (logOut.res.log || []).find(r => r.orderId === parsed.orderId) : null;
           if (prior) {
-            if (!confirm(`${parsed.orderId} was already imported on ${prior.importedAt} (${prior.itemCount} items). Import "${file.name}" again anyway?`)) {
-              skipped.push(file.name + ' (already imported ' + prior.importedAt + ')');
+            if (!confirm(`${parsed.orderId} was already imported on ${fmtLogTime(prior.importedAt)} (${prior.itemCount} items). Import "${file.name}" again anyway?`)) {
+              skipped.push(file.name + ' (already imported ' + fmtLogTime(prior.importedAt) + ')');
               continue;
             }
           }
@@ -10248,6 +10251,50 @@ async function importOneEntry(entryId, btn){
   return true;
 }
 
+// ── v14.115 — shared pager + clean timestamps for the Manager lists ──
+// Sheets turns "2026-11-10 14:20:44" cells into Date objects, which the
+// server then String()s into "Tue Nov 10 2026 14:20:44 GMT-0800 (…)".
+// Show every such value as "11-10 14:20" (and keep plain strings readable).
+const _MON = { Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12' };
+function fmtLogTime(v){
+  const t = String(v == null ? '' : v).trim(); if (!t) return '';
+  let m = t.match(/^\w{3} (\w{3}) (\d{1,2}) (\d{4}) (\d{2}):(\d{2})/);
+  if (m && _MON[m[1]]) return `${_MON[m[1]]}-${m[2].padStart(2,'0')} ${m[4]}:${m[5]}`;
+  m = t.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (m) return `${m[2]}-${m[3]} ${m[4]}:${m[5]}`;
+  return t.replace(/\s*GMT[+-]\d{4}.*$/, '');
+}
+const _pg = { imp:{p:1,n:10}, iss:{p:1,n:10}, ent:{p:1,n:10} };
+const _pgRender = { imp:()=>renderImportLogView(), iss:()=>renderIssueLog(), ent:()=>renderEntries() };
+const _pgEl = { imp:'importLogPager', iss:'issueLogPager', ent:'entryPager' };
+// Returns the slice for the current page and draws the pager bar.
+function pgSlice(key, rows){
+  const st = _pg[key], total = rows.length;
+  const pages = Math.max(1, Math.ceil(total / st.n));
+  if (st.p > pages) st.p = pages;
+  if (st.p < 1) st.p = 1;
+  const from = (st.p - 1) * st.n;
+  const el = document.getElementById(_pgEl[key]);
+  if (el) {
+    el.innerHTML = total <= 10 && st.n === 10 ? '' : `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)">
+        <span style="font-size:11.5px;color:var(--t3)">${total ? (from + 1) + '–' + Math.min(from + st.n, total) : 0} / ${total}</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="btn btn-sm" style="padding:4px 10px" ${st.p<=1?'disabled':''} onclick="pgGo('${key}',-1)">‹ Prev</button>
+          <span class="mono" style="font-size:12px;color:var(--t);min-width:54px;text-align:center">${st.p} / ${pages}</span>
+          <button class="btn btn-sm" style="padding:4px 10px" ${st.p>=pages?'disabled':''} onclick="pgGo('${key}',1)">Next ›</button>
+          <select class="fi" style="width:auto;font-size:12px;padding:4px 8px" onchange="pgSize('${key}',this.value)">
+            ${[10,20,50].map(n => `<option value="${n}"${n===st.n?' selected':''}>${n} / page</option>`).join('')}
+          </select>
+        </div>
+      </div>`;
+  }
+  return rows.slice(from, from + st.n);
+}
+window.pgGo = function(key, d){ _pg[key].p += d; _pgRender[key](); };
+window.pgSize = function(key, n){ _pg[key].n = Number(n) || 10; _pg[key].p = 1; _pgRender[key](); };
+window.pgReset = function(key){ _pg[key].p = 1; _pgRender[key](); };
+
 // ── Import history (server-recorded — survives refresh / other devices) ──
 let _importLogCache = [];
 async function renderImportLog(){
@@ -10264,13 +10311,14 @@ window.renderImportLogView = function(){
   const rows = q ? _importLogCache.filter(r => (r.orderId||'').toUpperCase().includes(q)) : _importLogCache;
   const countEl = document.getElementById('importLogCount');
   if (countEl) countEl.textContent = _importLogCache.length ? `(${rows.length} of ${_importLogCache.length})` : '';
+  const pageRows = pgSlice('imp', rows);
   el.innerHTML = rows.length
     ? `<table class="mgr-tbl"><thead><tr><th>Order</th><th>SKUs</th><th>QTY</th><th>Date / time</th><th></th></tr></thead><tbody>${
-        rows.map(r => `<tr>
+        pageRows.map(r => `<tr>
           <td class="mono" style="font-weight:700;color:var(--t)">${r.orderId}</td>
           <td class="mono" style="color:var(--t)">${r.itemCount}</td>
           <td class="mono" style="color:var(--t)">${(r.qtyTotal ?? r.qty ?? '—')}</td>
-          <td class="mono" style="color:var(--t2)">${r.importedAt}</td>
+          <td class="mono" style="color:var(--t2)">${fmtLogTime(r.importedAt)}</td>
           <td style="text-align:right"><button class="btn btn-sm" style="padding:3px 8px;color:var(--red)" title="Remove this history entry (does not affect the order's pick list)" onclick="deleteImportLogEntry('${r.id}')"><i class="ri-delete-bin-line"></i></button></td>
         </tr>`).join('')
       }</tbody></table>`
@@ -10303,16 +10351,17 @@ window.renderIssueLog = function(){
   const el = document.getElementById('issueLog'); if (!el) return;
   const q = (document.getElementById('issueLogSearch')?.value || '').toUpperCase();
   const rows = q ? _issueLogCache.filter(r => (r.orderId||'').toUpperCase().includes(q) || (r.sku||'').toUpperCase().includes(q)) : _issueLogCache;
+  const pageRows = pgSlice('iss', rows);
   el.innerHTML = rows.length
     ? `<table class="mgr-tbl"><thead><tr><th>Order</th><th>SKU</th><th>Type</th><th>Qty</th><th>Note</th><th>Worker</th><th>Date / time</th></tr></thead><tbody>${
-        rows.map(r => `<tr>
+        pageRows.map(r => `<tr>
           <td class="mono" style="font-weight:700">${r.orderId}</td>
           <td class="mono">${r.sku||'—'}</td>
           <td><span class="badge b-issue" style="font-size:10px;padding:2px 7px">${r.issueType}</span></td>
           <td class="mono">${r.qty||0}</td>
           <td style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.note||'').replace(/"/g,'&quot;')}">${r.note||''}</td>
           <td>${r.worker||''}</td>
-          <td class="mono" style="color:var(--t2)">${r.createdAt||''}</td>
+          <td class="mono" style="color:var(--t2)">${fmtLogTime(r.createdAt)}</td>
         </tr>`).join('')
       }</tbody></table>`
     : `<div style="padding:6px 0">${q ? 'No matching issues' : 'No issues recorded yet'}</div>`;
@@ -10339,7 +10388,10 @@ window.confirmAllImports = async function(btn){
 // ── Work entries (edit / delete) ──
 window.renderEntries = function(){
   const q = (document.getElementById('entrySearch')?.value || '').toUpperCase();
-  const ws = q ? S.works.filter(w => w.oid.toUpperCase().includes(q) || w.w.toUpperCase().includes(q)) : S.works.slice(0, 50);
+  // newest first (copy — never reorder S.works itself)
+  const sorted = S.works.slice().sort((a, b) => String(b.startISO || b.id).localeCompare(String(a.startISO || a.id)));
+  const all = q ? sorted.filter(w => w.oid.toUpperCase().includes(q) || w.w.toUpperCase().includes(q)) : sorted;
+  const ws = pgSlice('ent', all);
   document.getElementById('entryTable').innerHTML = ws.length ?
     `<table class="mgr-tbl"><thead><tr><th>Order</th><th>Worker</th><th>Stage</th><th>Items</th><th>QTY</th><th>Pages</th><th>Pallets</th><th>Result</th><th>Start</th><th>End</th><th>Net</th><th></th></tr></thead><tbody>${
       ws.map(w => {
