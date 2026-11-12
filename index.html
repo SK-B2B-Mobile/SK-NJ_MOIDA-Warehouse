@@ -581,7 +581,7 @@ html,body{font-family:var(--font);background:var(--bg);color:var(--t);min-height
   <header class="hdr">
     <div>
       <div class="hdr-brand">STYLEKOREAN_NJ / MOIDA</div>
-      <div class="hdr-credit">Built by David Kim · 2026 · v14.115</div>
+      <div class="hdr-credit">Built by David Kim · 2026 · v14.116</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-clock" id="clock"></div>
@@ -9622,7 +9622,12 @@ function parsePickListText(rawText){
 // result is VERIFIED against the PDF's own TOTAL row before anything can be
 // imported. Pure function of positioned text, so it can be tested outside a
 // browser (pages = [{items:[{str,x,y,w,h}]}], y measured downward).
-const PL_STOCK_RE = /^\d[\d,]*\(\d+\)$/;
+// v14.116 — the Stock cell is "qty(picked)", but when the cell is too narrow
+// for a big number the PDF wraps it onto two lines ("2260(226" + "0)", or
+// "3,500(2,2" + "60)"). Only the FIRST piece may anchor a row, so accept an
+// unclosed head too — otherwise that row loses its anchor and its quantity
+// gets mixed into the next row (IM00240210: 3500 read as 2900).
+const PL_STOCK_RE = /^\d[\d,]*\((?:[\d,]+\)|[\d,]*)$/;
 const PL_RACK_RE  = /^[A-Z]{1,4}-[A-Za-z0-9]+(-[A-Za-z0-9]+)*$/;
 const PL_HEADER_WORDS = new Set(['SKU','Product','name','UPC','bar','code','Imov','Invc','Request','Rack','Stock',"Q'ty","Q'ty(pick","Q'ty)"]);
 function plWords(items){
@@ -9676,8 +9681,11 @@ function parsePickListGeometry(pages){
     geoPrev = geo;
 
     const totalW = ws.find(w => w.t === 'TOTAL' && w.x0 < 260 && w.y > geo.headerBottom);
-    const isTotalTok = w => totalW && Math.abs(w.y - totalW.y) < 4;
-    const stocks = ws.filter(w => PL_STOCK_RE.test(w.t) && w.x0 >= geo.stockLeft - 24 && w.y > geo.headerBottom && !isTotalTok(w))
+    // the TOTAL row's own (possibly wrapped) stock cell sits up to ~one line
+    // above/below the word TOTAL — none of it may become a row anchor.
+    const isTotalTok = w => totalW && Math.abs(w.y - totalW.y) < 4;           // same line as TOTAL
+    const nearTotal  = w => totalW && w.y > totalW.y - 9 && w.y < totalW.y + 14;  // incl. wrapped stock cell
+    const stocks = ws.filter(w => PL_STOCK_RE.test(w.t) && w.x0 >= geo.stockLeft - 24 && w.y > geo.headerBottom && !nearTotal(w))
                      .sort((a, b) => a.y - b.y);
     if (totalW) {
       const half0 = (geo.rc - geo.ic) / 2;
